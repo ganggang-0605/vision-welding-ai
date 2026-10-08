@@ -1,0 +1,4 @@
+joint_type,thickness_min_mm,thickness_max_mm,process,position,current_a,voltage_v,speed_cm_min
+FILLET,6,12,FCAW,FLAT,220-260,26-30,30-40
+FILLET,12,20,FCAW,FLAT,250-290,28-32,25-35
+BUTT_V,10,20,FCAW,FLAT,200-240,25-29,20-30

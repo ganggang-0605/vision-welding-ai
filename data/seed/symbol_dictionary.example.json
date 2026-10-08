@@ -1,0 +1,8 @@
+{
+  "workspace": "example-shipyard",
+  "entries": [
+    { "code": "FW", "type": "text", "meaning": "필렛 용접 (Fillet Weld)", "aliases": ["F/W"] },
+    { "code": "BV", "type": "text", "meaning": "V형 맞대기 용접 (Butt V-groove)", "aliases": [] },
+    { "code": "▲", "type": "symbol", "meaning": "현장 용접 표시", "aliases": [] }
+  ]
+}

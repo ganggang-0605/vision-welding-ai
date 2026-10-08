@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VisionWeldingRobotOutput",
+  "description": "승인된 작업 결과를 로봇 제어·용접 프로그램에 전달하기 위한 JSON",
+  "type": "object",
+  "required": ["job_id", "created_at", "assembly_path", "marking", "welding_condition", "confidence", "approved"],
+  "properties": {
+    "job_id": { "type": "string" },
+    "workspace_id": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "assembly_path": { "type": "string", "examples": ["A1/L1/M2/S1/P-1"] },
+    "marking": {
+      "type": "object",
+      "properties": {
+        "raw_text": { "type": "string" },
+        "symbols": { "type": "array", "items": { "type": "string" } },
+        "interpretation": { "type": "string" }
+      }
+    },
+    "welding_condition": {
+      "type": "object",
+      "properties": {
+        "joint_type": { "type": "string" },
+        "process": { "type": "string" },
+        "position": { "type": "string" },
+        "current_a": { "type": "string" },
+        "voltage_v": { "type": "string" },
+        "speed_cm_min": { "type": "string" }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "properties": {
+        "visual": { "type": "number", "minimum": 0, "maximum": 100 },
+        "db_consistency": { "type": "number", "minimum": 0, "maximum": 100 },
+        "vlm_reasoning": { "type": "number", "minimum": 0, "maximum": 100 },
+        "overall": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "needs_review": { "type": "array", "items": { "type": "string" } },
+    "approved": { "type": "boolean" },
+    "approved_by": { "type": "string" }
+  }
+}

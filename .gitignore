@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Models / data
+weights/
+*.pt
+*.onnx
+data/raw/
+data/uploads/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

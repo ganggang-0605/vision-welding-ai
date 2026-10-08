@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+sqlalchemy
+python-multipart
+opencv-python-headless
+numpy
+pillow
+# 인식 (필요 시 주석 해제)
+# paddleocr
+# transformers   # TrOCR
+# ultralytics    # YOLO
+# VLM
+# anthropic
+# openai
+# google-genai
+pytest
