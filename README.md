@@ -68,9 +68,10 @@
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
 | GET | `/health` | 상태 확인 → `{"status": "ok"}` |
-| GET | `/me` | 현재 사용자 `{id, name, email}` — 인증 전까지 고정 데모 사용자 |
-| GET | `/workspaces` | 워크스페이스 목록 — 시드(`demo`, `personal`) 다음에 새로 만든 워크스페이스가 생성 순 |
-| POST | `/workspaces` | 워크스페이스 생성 (201). `kind`: `personal`(기본) \| `team`, 현재 사용자가 소유자(`owner`). `dictionary_source`: `empty`(기본) \| `copy` + `copy_from_workspace_id` → 해당 사전 복사 |
+| GET | `/me` | 현재 사용자 `{id, name, email}` — `X-User-Id` 헤더의 사용자 (없으면 데모 사용자, 모르는 id 면 401) |
+| GET | `/users` | 데모 사용자 전체 목록 (시드 순) — "계정 추가하기"에서 고를 계정. 로그인이 없어서 있는 임시 API |
+| GET | `/workspaces` | 현재 사용자가 **멤버인** 워크스페이스 목록 — 시드(폴더 이름순) 다음에 새로 만든 워크스페이스가 생성 순 |
+| POST | `/workspaces` | 워크스페이스 생성 (201). `kind`: `personal`(기본) \| `team`, 현재 사용자(`X-User-Id`)가 소유자(`owner`). `dictionary_source`: `empty`(기본) \| `copy` + `copy_from_workspace_id` → 해당 사전 복사 |
 | GET | `/workspaces/{workspace_id}` | 워크스페이스 조회 — `kind`, `member_count`(소유자 포함) 포함 |
 | PATCH | `/workspaces/{workspace_id}` | 부분 수정 (`name`, `description`, `kind`). `team` → `personal` 은 멤버가 1명일 때만 (아니면 409) |
 | GET | `/workspaces/{workspace_id}/members` | 멤버 목록 `{user_id, name, email, role, joined_at}` — 소유자 먼저, 그다음 가입 순 |
@@ -91,19 +92,23 @@
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
+- **데모 다중 계정** (Notion 식 계정 전환): 요청 헤더 `X-User-Id: <user_id>` 가 로그인 세션을 대신해 현재 사용자를 고릅니다.
+  헤더가 없거나 비어 있으면 데모 사용자(`user_demo`), `GET /users` 에 없는 id 면 401 입니다.
+  시드 계정: `user_demo`(데모 사용자: `demo`, `personal`), `user_park`(박지훈: `demo`, `park`), `user_choi`(최서연: `demo`).
 - 워크스페이스 종류: `personal`(개인) → 멤버 초대 시 `team`(팀). 직접 `PATCH` 로 바꿀 수도 있습니다 (팀 → 개인은 멤버 1명일 때만).
 - 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(호선)에 속합니다.
   예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
 - 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
-- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
-- 인증은 아직 없습니다 (TODO) — 고정 데모 사용자(`GET /me`)가 현재 사용자를 대신하며, 멤버 목록은 있지만 권한 검사는 하지 않습니다.
+- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
+- 인증은 아직 없습니다 (TODO) — `X-User-Id` 헤더는 데모용일 뿐 누구나 아무 계정으로 요청할 수 있습니다.
+  워크스페이스 목록만 멤버로 거르고, 그 밖의 경로는 권한 검사를 하지 않습니다 (id 를 알면 누구나 접근, TODO 권한).
 
 ## 디렉터리 구조
 
 ```
 backend/
   app/
-    api/            # REST API (FastAPI) — users(/me) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
+    api/            # REST API (FastAPI) — users(/me, /users) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
     schemas.py      # API 스키마 (Pydantic) — 프론트엔드와 공유하는 계약
     store.py        # 임시 인메모리 저장소 (실제 DB 로 교체 예정)
     pipeline/
@@ -117,13 +122,14 @@ backend/
   tests/
 data/seed/
   welding_standards.csv   # 표준 용접 기준 (공통)
-  users.json              # 사용자 + current_user_id (인증 전 고정 데모 사용자)
+  users.json              # 데모 사용자 + current_user_id (X-User-Id 헤더가 없을 때의 사용자)
   workspaces/<workspace_id>/
     workspace.json, members.json, symbol_dictionary.json  # 워크스페이스(kind)·멤버·문자/기호 사전(없으면 빈 사전)
     projects/<project_id>/                                # 프로젝트(호선) — 폴더 이름이 id
       project.json, assembly_tree.csv, jobs.json          # 트리·작업 파일은 없으면 빈 것으로 봄
   # demo: 팀(멤버 3명) — hull_3201(조립 트리·데모 작업 3건), hull_3202(빈 호선)
-  # personal: 개인 — practice("연습용 호선", 빈 호선)
+  # park: 개인(박지훈) — hull_3301("3301호선", 빈 호선)
+  # personal: 개인(데모 사용자) — practice("연습용 호선", 빈 호선)
 schemas/            # 로봇 출력 JSON 스키마
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
@@ -142,8 +148,8 @@ uvicorn app.main:app --reload
 ```
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-시작 시 데모 사용자, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·3202호선, 데모 작업 3건)와
-개인 워크스페이스 `personal`("개인 워크스페이스")이 시드됩니다.
+시작 시 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·3202호선, 데모 작업 3건)와
+개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드됩니다.
 
 테스트: `cd backend && python -m pytest -q`
 

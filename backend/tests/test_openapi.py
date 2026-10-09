@@ -62,3 +62,10 @@ def test_error_responses_documented():
                                ("patch", "/workspaces/{workspace_id}", "409"),
                                ("post", "/workspaces/{workspace_id}/members", "409")]:
         assert _error_schema(path, method, code) == ERROR_DETAIL
+    for method, path in [("get", "/me"), ("get", "/workspaces"), ("post", "/workspaces")]:
+        assert _error_schema(path, method, "401") == ERROR_DETAIL, (method, path)
+
+
+def test_user_id_header_documented():
+    params = OPENAPI["paths"]["/me"]["get"]["parameters"]
+    assert [(p["name"], p["in"], p.get("required", False)) for p in params] == [("x-user-id", "header", False)]

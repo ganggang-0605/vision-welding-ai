@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Vision Welding AI", lifespan=lifespan)
-app.include_router(users.router, prefix="/me", tags=["users"])
+app.include_router(users.router, tags=["users"])  # /me, /users
 app.include_router(workspaces.router, prefix="/workspaces", tags=["workspaces"])
 app.include_router(projects.router, prefix="/workspaces/{workspace_id}/projects", tags=["projects"])
 app.include_router(jobs.router, prefix="/workspaces/{workspace_id}/jobs", tags=["jobs"])
