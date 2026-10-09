@@ -102,8 +102,8 @@ def test_review_reinterpret_adds_revision(client):
 def test_review_manual(client):
     _upload(client)
     client.post(f"{JOB}/analyze")
-    condition = {"joint_type": "FILLET", "process": "FCAW", "position": "FLAT",
-                 "current_a": "220-260", "voltage_v": "26-30", "speed_cm_min": "30-40"}
+    condition = {"joint_type": "FILLET", "process": "GMAW", "position": "2F",
+                 "current_a": "420-440", "voltage_v": "35-37", "speed_cm_min": "60"}
     res = client.post(f"{JOB}/review", json={"action": "manual", "values": {
         "interpretation": "3F 용접장 각장 5.5mm",
         "welding_condition": condition,

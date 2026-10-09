@@ -15,11 +15,11 @@
       },
       "welding_condition": {
         "joint_type": "FILLET",
-        "process": "FCAW",
-        "position": "FLAT",
-        "current_a": "220-260",
-        "voltage_v": "26-30",
-        "speed_cm_min": "30-40"
+        "process": "GMAW",
+        "position": "2F",
+        "current_a": "420-440",
+        "voltage_v": "35-37",
+        "speed_cm_min": "60"
       },
       "confidence": {
         "visual": 68,
@@ -78,11 +78,11 @@
       },
       "welding_condition": {
         "joint_type": "FILLET",
-        "process": "FCAW",
-        "position": "FLAT",
-        "current_a": "220-260",
-        "voltage_v": "26-30",
-        "speed_cm_min": "30-40"
+        "process": "GMAW",
+        "position": "2F",
+        "current_a": "420-440",
+        "voltage_v": "35-37",
+        "speed_cm_min": "60"
       },
       "confidence": {
         "visual": 97,
@@ -134,11 +134,11 @@
       },
       "welding_condition": {
         "joint_type": "FILLET",
-        "process": "FCAW",
-        "position": "FLAT",
-        "current_a": "220-260",
-        "voltage_v": "26-30",
-        "speed_cm_min": "30-40"
+        "process": "GMAW",
+        "position": "2F",
+        "current_a": "420-440",
+        "voltage_v": "35-37",
+        "speed_cm_min": "60"
       },
       "confidence": {
         "visual": 90,

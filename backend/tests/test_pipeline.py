@@ -11,8 +11,8 @@ from app.store import get_store
 
 IMAGE = np.zeros((1080, 1920, 3), np.uint8)
 WELDING = {
-    "joint_type": "FILLET", "thickness_mm": 10, "process": "FCAW", "position": "FLAT",
-    "current_a": "220-260", "voltage_v": "26-30", "speed_cm_min": "30-40", "standard_matched": True, "source": "manual",
+    "joint_type": "FILLET", "thickness_mm": 10, "process": "GMAW", "position": "2F",
+    "current_a": "420-440", "voltage_v": "35-37", "speed_cm_min": "60", "standard_matched": True, "source": "manual",
 }
 
 

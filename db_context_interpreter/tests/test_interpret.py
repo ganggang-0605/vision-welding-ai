@@ -162,7 +162,7 @@ def test_one_line_is_split_into_markings():
     assert result["part"]["assembly_path"] == "A1/L1/M2/S1/P-1" and result["part"]["ref_ids"] == ["t1"]
     assert [(m["raw"], m["code"], m["ref_ids"]) for m in result["dictionary_matches"]] == [
         ("FW", "FW", ["t1"]), ("t=10", None, ["t1"])]
-    assert result["welding_condition"]["current_a"] == "220-260" and result["welding_condition"]["ref_ids"] == ["t1"]
+    assert result["welding_condition"]["current_a"] == "420-440" and result["welding_condition"]["ref_ids"] == ["t1"]
 
 
 def test_leg_lengths_on_one_line():
@@ -209,7 +209,7 @@ def test_exact_reading_wins_over_fix():
 
 def test_corrected_line_is_split_too():
     result = run(vision_with([("PI FVV", 0.6)]), corrections=[{"target": "t1", "value": "P-1 FW t=10"}])
-    assert result["welding_condition"]["current_a"] == "220-260"
+    assert result["welding_condition"]["current_a"] == "420-440"
     assert result["conflicts"] == []  # 작업자가 고친 값은 확인된 것
 
 
@@ -248,10 +248,46 @@ def test_no_part():
 
 # ── 용접 기준 ──
 
-@pytest.mark.parametrize("thickness, current", [("t=8", "220-260"), ("T12", "250-290"), ("20t", "250-290")])
-def test_standard_row_by_thickness(thickness, current):
+# 기준표: data/seed/welding_standards.csv (다이도 특수강 溶接施工, 판 두께별 값 — data/seed/SOURCES.md)
+
+@pytest.mark.parametrize("thickness, position, current, assumed", [
+    ("t=10", "2F", "420-440", False),  # 10mm는 2F 행만 있음
+    ("T12", "1F", "450-480", False),   # 12mm는 1F 행만 있음
+    ("t=8", "2F", "420-440", True),    # 8mm는 1F · 2F 둘 다 → 자세 표기가 없으면 2F + 경고
+])
+def test_standard_row_by_thickness(thickness, position, current, assumed):
     result = run(vision_with([("FW", 0.9), (thickness, 0.9)]))
-    assert result["welding_condition"]["current_a"] == current
+    wc = result["welding_condition"]
+    assert (wc["position"], wc["current_a"], wc["process"], wc["standard_matched"]) == (position, current, "GMAW", True)
+    assert ("standard_conflict" in types(result)) == assumed
+
+
+def test_thickness_not_in_table():
+    """기준표는 판 두께별 값이라 사이 두께(7mm)는 지어내지 않고 작업자 확인"""
+    result = run(vision_with([("FW", 0.9), ("t=7", 0.9)]))
+    assert result["welding_condition"] is None
+    (conflict,) = [c for c in result["conflicts"] if c["type"] == "standard_conflict"]
+    assert conflict["severity"] == "error" and "3.2, 4.5, 6, 8, 10, 12" in conflict["message"]
+
+
+@pytest.mark.parametrize("marking, position, current", [
+    ("V6", "2F", "420-440"),   # V = 2F 용접장 각장
+    ("PB", "2F", "420-440"),   # 수평수직필릿 자세 (AWS 2F)
+    ("PA", "1F", "300-350"),   # 아래보기자세 (AWS 1F·1G) → 필렛이면 1F
+])
+def test_position_from_dictionary(marking, position, current):
+    """사전 항목의 뜻에 적힌 자세로 기준 행을 고름 (경고 없음)"""
+    result = run(vision_with([("FW", 0.9), (marking, 0.9), ("t=8", 0.9)]))
+    assert (result["welding_condition"]["position"], result["welding_condition"]["current_a"]) == (position, current)
+    assert "standard_conflict" not in types(result)
+    assert "t2" in result["welding_condition"]["ref_ids"]
+
+
+def test_position_without_standard():
+    """F = 3F 용접장 각장인데 기준표에 3F 행이 없음 → 다른 자세로 바꾸지 않고 작업자 확인"""
+    result = run(vision_with([("F5.5", 0.9), ("t=8", 0.9)]))
+    assert result["welding_condition"] is None
+    assert any(c["type"] == "standard_conflict" and "3F" in c["message"] for c in result["conflicts"])
 
 
 def test_thickness_out_of_range():
@@ -272,7 +308,8 @@ def test_corrected_text_is_used():
     result = run(corrections=[{"target": "t2", "value": "BV", "previous": "FW"}])
     m = next(m for m in result["dictionary_matches"] if m["ref_ids"] == ["t2"])
     assert (m["raw"], m["code"], m["score"]) == ("BV", "BV", 1.0)
-    assert result["welding_condition"]["joint_type"] == "BUTT_V"
+    assert result["welding_condition"] is None  # 기준표에 V형 맞대기(BUTT_V) 행이 없음
+    assert any(c["type"] == "standard_conflict" and "BUTT_V" in c["message"] for c in result["conflicts"])
 
 
 def test_corrected_meaning_and_no_conflict():
