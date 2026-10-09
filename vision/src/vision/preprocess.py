@@ -1,4 +1,4 @@
-"""a. 전처리: OpenCV(작은 사진 키우기·노이즈 제거·대비 보정), 이후 필요하면 Retinexformer(조도)·UVDoc(곡면)·SIHR(반사)
+"""a. 전처리: OpenCV(작은 사진 키우기·노이즈 제거, 대비 보정은 기본 꺼짐), 이후 필요하면 Retinexformer(조도)·UVDoc(곡면)·SIHR(반사)
 
 보정한 이미지에서 찾은 위치는 to_original 행렬로 원본 좌표로 되돌림 (VisionResult의 bbox·polygon은 원본 기준).
 """
@@ -17,7 +17,7 @@ class PreprocessConfig:
     max_upscale: float = 8.0
     denoise: bool = True  # 키우는 사진에만, 키우기 전에 (작은 사진의 압축 잡음이 커지지 않게, 큰 사진은 느려서 생략)
     denoise_h: int = 5
-    clahe: bool = True  # 대비 보정 (어두운 실내, 녹·오염)
+    clahe: bool = False  # 대비 보정 — 비교에서 steel-ocr은 나빠지고(금속 결이 강조돼 b→6) MPSC는 변화 없어 끔
     clahe_clip: float = 2.0
 
 

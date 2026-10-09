@@ -52,14 +52,14 @@ def test_to_text_detections_converts_paddleocr_result():
 
 
 def test_preprocess_upscales_small_image_and_maps_back():
-    """작은 사진은 긴 변 1280px로 키우고(노이즈 제거 → 키우기 → 대비 보정), 찾은 위치는 원본 좌표로 되돌림"""
+    """작은 사진은 긴 변 1280px로 키우고(노이즈 제거 → 키우기), 찾은 위치는 원본 좌표로 되돌림"""
     from vision.preprocess import preprocess, to_original_coords
 
     small = np.full((240, 320, 3), 128, np.uint8)
     clean, prep, to_original = preprocess(small)
 
     assert clean.shape[:2] == (960, 1280)
-    assert [s["name"] for s in prep["steps"]] == ["denoise", "upscale", "clahe"]
+    assert [s["name"] for s in prep["steps"]] == ["denoise", "upscale"]
     assert 0 < prep["correction_strength"] <= 1
     found = [{"text": "F5.5", "bbox": [400, 400, 800, 600], "polygon": [[400, 400], [800, 400], [800, 600], [400, 600]]}]
     mapped = to_original_coords(found, to_original, 320, 240)
@@ -72,5 +72,5 @@ def test_preprocess_keeps_large_image_size(image):
 
     clean, prep, to_original = preprocess(image)  # 1920×1080: 키우지 않음
     assert clean.shape == image.shape
-    assert [s["name"] for s in prep["steps"]] == ["clahe"]
+    assert prep == {"correction_strength": 0, "steps": []}
     assert np.allclose(to_original, np.eye(3))

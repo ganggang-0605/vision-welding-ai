@@ -68,7 +68,7 @@ backend/.venv/bin/python vision/tools/eval_ocr.py --mode rec
 
 ```bash
 backend/.venv/bin/python vision/tools/remote_eval.py              # 10장 시험, 예산 상한 $5
-backend/.venv/bin/python vision/tools/remote_eval.py --limit 0     # 110장 전체
+backend/.venv/bin/python vision/tools/remote_eval.py --eval "--prep none"   # 110장 전체 (--limit 없으면 전체)
 ```
 
 - 2026-10-09 시험 (10장): 전체 4분(설치·데이터 받기 포함, 평가 26초), 비용 $0.16. 컨테이너는 CPU 4개·메모리 15GB, GPU 없음
