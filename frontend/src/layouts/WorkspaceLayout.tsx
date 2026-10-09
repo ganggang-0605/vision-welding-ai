@@ -1,6 +1,6 @@
 import {
   BookOpen,
-  Boat,
+  Cube,
   CaretRight,
   Gear,
   House,
@@ -9,6 +9,7 @@ import {
   MagnifyingGlass,
   Plus,
   Ruler,
+  SidebarSimple,
   TreeStructure,
   UserPlus,
 } from '@phosphor-icons/react'
@@ -31,7 +32,19 @@ import { useAccounts } from '../lib/accounts'
 import { DEFAULT_WORKSPACE_ID, paths, rememberWorkspaceId } from '../lib/paths'
 import styles from './WorkspaceLayout.module.css'
 
-const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K'
+const IS_APPLE = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const SEARCH_SHORTCUT = IS_APPLE ? '⌘K' : 'Ctrl K'
+const SIDEBAR_SHORTCUT = IS_APPLE ? '⌘\\' : 'Ctrl \\'
+const SIDEBAR_COLLAPSED_KEY = 'vwa:sidebar-collapsed'
+
+/** 데스크톱 사이드바를 접어 둔 상태는 이 브라우저에 기억한다 (노션처럼 다시 열어도 그대로). */
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
 
 /**
  * 워크스페이스 화면 공통 레이아웃: 노션처럼 왼쪽 사이드바(워크스페이스 전환, 프로젝트 트리) + 본문(<Outlet />).
@@ -44,6 +57,8 @@ export function WorkspaceLayout() {
   const { activeId } = useAccounts()
   const sidebarId = useId()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // 데스크톱(768px 이상)에서 사이드바를 접었는지. 휴대폰에서는 sidebarOpen(서랍)만 쓴다.
+  const [collapsed, setCollapsed] = useState(readCollapsed)
   const [searchOpen, setSearchOpen] = useState(false)
 
   const workspace = useAsync((signal) => getWorkspace(workspaceId, signal), [workspaceId])
@@ -66,13 +81,24 @@ export function WorkspaceLayout() {
   }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
-  // ⌘K / Ctrl+K: 검색 열기·닫기, Esc: 모바일 사이드바 닫기
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))
+    } catch {
+      // 기억하지 못해도 이번 방문 동안은 동작한다.
+    }
+  }, [collapsed])
+
+  // ⌘K / Ctrl+K: 검색 열기·닫기, ⌘\ / Ctrl+\: 사이드바 접기·펴기, Esc: 모바일 사이드바 닫기
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setSidebarOpen(false)
         setSearchOpen((value) => !value)
+      } else if ((event.metaKey || event.ctrlKey) && event.key === '\\') {
+        event.preventDefault()
+        setCollapsed((value) => !value)
       } else if (event.key === 'Escape') {
         setSidebarOpen(false)
       }
@@ -90,7 +116,7 @@ export function WorkspaceLayout() {
   if (!activeId) return <Navigate replace to={paths.login()} />
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-collapsed={collapsed}>
       <a className="skip-link" href="#main">
         본문으로 건너뛰기
       </a>
@@ -118,7 +144,18 @@ export function WorkspaceLayout() {
       {sidebarOpen && <div className={styles.backdrop} aria-hidden="true" onClick={() => setSidebarOpen(false)} />}
 
       <aside id={sidebarId} className={styles.sidebar} data-open={sidebarOpen} onClick={closeSidebarOnLink}>
-        <WorkspaceSwitcher workspaceId={workspaceId} workspace={current} />
+        <div className={styles.sidebarTop}>
+          <WorkspaceSwitcher workspaceId={workspaceId} workspace={current} />
+          <button
+            type="button"
+            className={styles.collapseButton}
+            onClick={() => setCollapsed(true)}
+            title={`사이드바 닫기 (${SIDEBAR_SHORTCUT})`}
+          >
+            <SidebarSimple size={17} aria-hidden="true" />
+            <span className="visually-hidden">사이드바 닫기</span>
+          </button>
+        </div>
 
         {!notFound && (
           <nav className={styles.nav} aria-label="워크스페이스 메뉴">
@@ -140,9 +177,9 @@ export function WorkspaceLayout() {
 
             <div className={styles.sectionHead}>
               <h2 className={styles.sectionTitle}>작업</h2>
-              <Link className={styles.sectionAction} to={paths.newProject(workspaceId)} title="새 호선">
+              <Link className={styles.sectionAction} to={paths.newProject(workspaceId)} title="새 블록">
                 <Plus size={14} weight="bold" aria-hidden="true" />
-                <span className="visually-hidden">새 호선</span>
+                <span className="visually-hidden">새 블록</span>
               </Link>
             </div>
             {projects.error !== undefined ? (
@@ -151,7 +188,7 @@ export function WorkspaceLayout() {
               <p className={styles.navHint}>불러오는 중</p>
             ) : projectList.length === 0 ? (
               <Link className={styles.navHint} to={paths.newProject(workspaceId)}>
-                첫 호선을 추가해 보세요
+                첫 블록을 추가해 보세요
               </Link>
             ) : (
               <ProjectTree
@@ -196,6 +233,18 @@ export function WorkspaceLayout() {
           <BackendStatus />
         </footer>
       </aside>
+
+      {collapsed && (
+        <button
+          type="button"
+          className={styles.expandButton}
+          onClick={() => setCollapsed(false)}
+          title={`사이드바 열기 (${SIDEBAR_SHORTCUT})`}
+        >
+          <SidebarSimple size={18} aria-hidden="true" />
+          <span className="visually-hidden">사이드바 열기</span>
+        </button>
+      )}
 
       <main id="main" className={styles.main} tabIndex={-1}>
         {notFound ? (
@@ -287,7 +336,7 @@ function ProjectTree({ workspaceId, projects, activeProjectId }: ProjectTreeProp
                 <span className="visually-hidden">{project.name} 펼치기</span>
               </button>
               <NavLink to={paths.project(workspaceId, project.id)} className={styles.treeLink} end>
-                <Boat aria-hidden="true" />
+                <Cube aria-hidden="true" />
                 <span className={styles.ellipsis}>{project.name}</span>
               </NavLink>
             </div>

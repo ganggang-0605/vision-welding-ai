@@ -13,13 +13,13 @@
 ## 주요 기능
 
 서비스는 Notion 처럼 **워크스페이스 단위**로 동작합니다. 워크스페이스(조선소·공정 하나)는 **개인**(기본) 또는 **팀**이며,
-개인 워크스페이스에 멤버를 초대하면 팀 워크스페이스로 바뀝니다. 워크스페이스 안에는 호선(선박) 하나를 뜻하는 **프로젝트**가 있고,
+개인 워크스페이스에 멤버를 초대하면 팀 워크스페이스로 바뀝니다. 워크스페이스 안에는 블록(배 전체가 아닐 수도 있는 조립 단위) 하나를 뜻하는 **프로젝트**가 있고,
 **조립 트리와 작업은 프로젝트에 속합니다**. **문자/기호 사전**은 워크스페이스 단위로 프로젝트들이 함께 쓰고,
 **표준 용접 기준**은 모든 워크스페이스가 공유하는 공통(읽기 전용) 데이터입니다. 검색·내보내기는 워크스페이스 안에서 이뤄집니다.
 
 1. **워크스페이스 & 문자/기호 체계 등록** — 조선소·공정별 자체 문자/기호 체계를 직접 등록·수정해 어떤 현장이든 이식
    (새 워크스페이스는 빈 사전으로 시작하거나 기존 워크스페이스의 사전을 복사)
-2. **작업 생성 & 이미지 입력** — 프로젝트(호선)를 골라 작업 단위로 이미지를 촬영·첨부, 같은 워크스페이스의 과거 작업과 연결
+2. **작업 생성 & 이미지 입력** — 프로젝트(블록)를 골라 작업 단위로 이미지를 촬영·첨부, 같은 워크스페이스의 과거 작업과 연결
 3. **표기 정보 해석**
    - **[1단계] 시각 인식**: 전처리(노이즈·오염·스크래치 제거) → 문자는 OCR, 기호·그림은 YOLO
    - **[2단계] DB 기반 맥락 해석**: VLM이 1단계 결과를 용접 기준 DB · 문자/기호 DB · 조립 경로 DB와 대조
@@ -31,7 +31,7 @@
 
 ![조립 트리](docs/images/assembly-tree.webp)
 
-데모 워크스페이스(`demo`) 3201호선(`hull_3201`)의 조립 트리 — [`data/seed/workspaces/demo/projects/hull_3201/assembly_tree.csv`](data/seed/workspaces/demo/projects/hull_3201/assembly_tree.csv)
+데모 워크스페이스(`demo`) A1 블록(`block_a1`)의 조립 트리 — [`data/seed/workspaces/demo/projects/block_a1/assembly_tree.csv`](data/seed/workspaces/demo/projects/block_a1/assembly_tree.csv)
 
 | node_id | parent_id | level | path |
 | --- | --- | --- | --- |
@@ -78,7 +78,7 @@
 | POST | `/workspaces/{workspace_id}/members` | 멤버 초대 `{"name", "email"}` (201, `role: member`). 같은 이메일(대소문자 무시)의 사용자가 있으면 재사용. 개인 워크스페이스는 팀으로 전환. 이미 멤버면 409, 이메일에 `@` 가 없으면 422 |
 | GET · POST | `/workspaces/{workspace_id}/symbols` | 문자/기호 사전 목록 · 항목 추가 (201) |
 | PATCH · DELETE | `/workspaces/{workspace_id}/symbols/{symbol_id}` | 항목 부분 수정 · 삭제 (204) |
-| GET · POST | `/workspaces/{workspace_id}/projects` | 프로젝트(호선) 목록(생성 순) · 생성 (201, 빈 조립 트리) |
+| GET · POST | `/workspaces/{workspace_id}/projects` | 프로젝트(블록) 목록(생성 순) · 생성 (201, 빈 조립 트리) |
 | GET | `/workspaces/{workspace_id}/projects/{project_id}` | 프로젝트 조회 |
 | GET | `/workspaces/{workspace_id}/projects/{project_id}/assembly-tree` | 프로젝트의 조립 트리 노드 목록 |
 | GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
@@ -96,7 +96,7 @@
   헤더가 없거나 비어 있으면 데모 사용자(`user_demo`), `GET /users` 에 없는 id 면 401 입니다.
   시드 계정: `user_demo`(데모 사용자: `demo`, `personal`), `user_park`(박지훈: `demo`, `park`), `user_choi`(최서연: `demo`).
 - 워크스페이스 종류: `personal`(개인) → 멤버 초대 시 `team`(팀). 직접 `PATCH` 로 바꿀 수도 있습니다 (팀 → 개인은 멤버 1명일 때만).
-- 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(호선)에 속합니다.
+- 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(블록)에 속합니다.
   예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
 - 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
 - **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
@@ -125,11 +125,11 @@ data/seed/
   users.json              # 데모 사용자 + current_user_id (X-User-Id 헤더가 없을 때의 사용자)
   workspaces/<workspace_id>/
     workspace.json, members.json, symbol_dictionary.json  # 워크스페이스(kind)·멤버·문자/기호 사전(없으면 빈 사전)
-    projects/<project_id>/                                # 프로젝트(호선) — 폴더 이름이 id
+    projects/<project_id>/                                # 프로젝트(블록) — 폴더 이름이 id
       project.json, assembly_tree.csv, jobs.json          # 트리·작업 파일은 없으면 빈 것으로 봄
-  # demo: 팀(멤버 3명) — hull_3201(조립 트리·데모 작업 3건), hull_3202(빈 호선)
-  # park: 개인(박지훈) — hull_3301("3301호선", 빈 호선)
-  # personal: 개인(데모 사용자) — practice("연습용 호선", 빈 호선)
+  # demo: 팀(멤버 3명) — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
+  # park: 개인(박지훈) — block_b1("B1 블록", 빈 블록)
+  # personal: 개인(데모 사용자) — practice("연습용 블록", 빈 블록)
 schemas/            # 로봇 출력 JSON 스키마
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
@@ -148,7 +148,7 @@ uvicorn app.main:app --reload
 ```
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-시작 시 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·3202호선, 데모 작업 3건)와
+시작 시 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·A2 블록, 데모 작업 3건)와
 개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드됩니다.
 
 테스트: `cd backend && python -m pytest -q`

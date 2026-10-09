@@ -4,7 +4,7 @@ import type { Project, User, Workspace } from '../api/types'
 /** WorkspaceLayout 이 <Outlet context> 로 내려주는 값 */
 export interface WorkspaceOutletContext {
   workspace: Workspace
-  /** 이 워크스페이스의 프로젝트(호선) 목록. 사이드바와 같은 값이다. */
+  /** 이 워크스페이스의 프로젝트(블록) 목록. 사이드바와 같은 값이다. */
   projects: Project[]
   /** 현재 사용자 (불러오기 전이면 undefined) */
   me: User | undefined

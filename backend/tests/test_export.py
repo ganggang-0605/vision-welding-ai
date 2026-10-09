@@ -70,7 +70,7 @@ def test_export_approved_job(client):
     assert body == {
         "job_id": "job_demo_p2",
         "workspace_id": "demo",
-        "project_id": "hull_3201",
+        "project_id": "block_a1",
         "created_at": job["created_at"],
         "assembly_path": "A1/L1/M2/S1/P-2",
         "marking": job["marking"],
@@ -101,7 +101,7 @@ def test_export_requires_approval(client, job_id):
 
 
 def test_export_draft_conflict(client):
-    job = client.post(JOBS, json={"name": "초안", "project_id": "hull_3201"}).json()
+    job = client.post(JOBS, json={"name": "초안", "project_id": "block_a1"}).json()
     assert client.get(f"{JOBS}/{job['id']}/export").status_code == 409
 
 
@@ -112,12 +112,12 @@ def test_export_after_approve(client):
     body = res.json()
     assert_robot_output(body)
     assert (body["approved"], body["approved_by"]) == (True, "김용접")
-    assert body["project_id"] == "hull_3201"
+    assert body["project_id"] == "block_a1"
     assert body["welding_condition"]["joint_type"] == "BUTT_V"
 
 
 def test_to_robot_json_rejects_incomplete_job():
-    job = Job(id="job_x", workspace_id="demo", project_id="hull_3201", name="빈 작업", status="approved",
+    job = Job(id="job_x", workspace_id="demo", project_id="block_a1", name="빈 작업", status="approved",
               created_at=datetime.fromisoformat("2026-10-09T00:00:00Z"), approved_by="김용접")
     with pytest.raises(ValueError, match="marking"):
         to_robot_json(job)

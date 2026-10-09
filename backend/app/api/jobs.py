@@ -1,6 +1,6 @@
 """2~5. 작업 생성, 이미지 해석, 작업자 확인, 결과 관리 (검색·승인·로봇 JSON) — /workspaces/{workspace_id}/jobs
 
-작업은 프로젝트(호선)에 속하지만(project_id) 경로는 워크스페이스 하위다 — 워크스페이스 전체 검색 + ?project_id= 필터.
+작업은 프로젝트(블록)에 속하지만(project_id) 경로는 워크스페이스 하위다 — 워크스페이스 전체 검색 + ?project_id= 필터.
 """
 from typing import Annotated
 

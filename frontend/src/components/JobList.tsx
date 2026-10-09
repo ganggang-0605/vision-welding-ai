@@ -10,7 +10,7 @@ import { StatusLabel } from './StatusLabel'
 interface JobListProps {
   workspaceId: string
   jobs: Job[]
-  /** 있으면 조립 경로 앞에 프로젝트(호선) 이름도 보여 준다 (여러 프로젝트를 섞어 보여 줄 때). */
+  /** 있으면 조립 경로 앞에 프로젝트(블록) 이름도 보여 준다 (여러 프로젝트를 섞어 보여 줄 때). */
   projects?: Project[]
 }
 

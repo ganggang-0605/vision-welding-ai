@@ -1,4 +1,4 @@
-import { CaretDown, Cube } from '@phosphor-icons/react'
+import { CaretDown, Square } from '@phosphor-icons/react'
 import type { CSSProperties } from 'react'
 import type { AssemblyNode } from '../api/types'
 import { getAssemblyTree } from '../api/projects'
@@ -11,7 +11,7 @@ import { paths } from '../lib/paths'
 import { ASSEMBLY_LEVEL_LABEL, ASSEMBLY_LEVELS } from '../lib/labels'
 import styles from './AssemblyTreePage.module.css'
 
-/** 와이어프레임 3b — 조립 트리 (프로젝트(호선)별, 파인더 목록처럼 단계별 들여쓰기) */
+/** 와이어프레임 3b — 조립 트리 (프로젝트(블록)별, 파인더 목록처럼 단계별 들여쓰기) */
 export function AssemblyTreePage() {
   const workspace = useWorkspace()
   const project = useProject()
@@ -24,7 +24,7 @@ export function AssemblyTreePage() {
         title="조립 트리"
         description="블록에서 부재까지 조립 순서예요. 인식한 부재가 여기 있는지로 해석을 검증해요."
       />
-      <AsyncView state={tree} isEmpty={(nodes) => nodes.length === 0} empty="이 호선에는 아직 조립 경로가 없어요. 도면에서 가져오는 기능은 준비 중이에요.">
+      <AsyncView state={tree} isEmpty={(nodes) => nodes.length === 0} empty="이 블록에는 아직 조립 경로가 없어요. 도면에서 가져오는 기능은 준비 중이에요.">
         {(nodes) => (
           <ul className={styles.tree} aria-label="조립 트리">
             {sortByPath(nodes).map((node) => {
@@ -37,7 +37,7 @@ export function AssemblyTreePage() {
                   title={node.path}
                 >
                   {isPart ? (
-                    <Cube className={styles.icon} size={15} aria-hidden="true" />
+                    <Square className={styles.icon} size={13} aria-hidden="true" />
                   ) : (
                     <CaretDown className={styles.icon} size={13} weight="bold" aria-hidden="true" />
                   )}

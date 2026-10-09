@@ -60,8 +60,8 @@ def test_park_seed_workspace(client):
     assert (ws["name"], ws["kind"], ws["member_count"]) == ("박지훈의 워크스페이스", "personal", 1)
     assert [(m["user_id"], m["role"]) for m in client.get("/workspaces/park/members").json()] == [("user_park", "owner")]
     [project] = client.get("/workspaces/park/projects").json()
-    assert (project["id"], project["name"]) == ("hull_3301", "3301호선")
-    assert client.get("/workspaces/park/projects/hull_3301/assembly-tree").json() == []
+    assert (project["id"], project["name"]) == ("block_b1", "B1 블록")
+    assert client.get("/workspaces/park/projects/block_b1/assembly-tree").json() == []
     assert client.get("/workspaces/park/jobs").json() == []
 
 

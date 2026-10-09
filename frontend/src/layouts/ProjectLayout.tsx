@@ -6,7 +6,7 @@ import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { paths } from '../lib/paths'
 
 /**
- * 프로젝트(호선) 화면 공통: 주소의 :projectId 를 워크스페이스의 프로젝트 목록에서 찾아 하위 페이지에 넘긴다.
+ * 프로젝트(블록) 화면 공통: 주소의 :projectId 를 워크스페이스의 프로젝트 목록에서 찾아 하위 페이지에 넘긴다.
  * 목록은 WorkspaceLayout 이 이미 불러왔으므로 따로 요청하지 않는다. 페이지에서는 useProject().
  */
 export function ProjectLayout() {
@@ -19,8 +19,8 @@ export function ProjectLayout() {
       <div className="page">
         <PageHeader
           breadcrumb={[{ label: '홈', to: paths.workspaceHome(context.workspace.id) }, { label: projectId }]}
-          title="호선을 찾을 수 없어요"
-          description={`'${projectId}' 호선이 이 워크스페이스에 없어요.`}
+          title="블록을 찾을 수 없어요"
+          description={`'${projectId}' 블록이 이 워크스페이스에 없어요.`}
         />
         <Link className="btn btn--primary" to={paths.workspaceHome(context.workspace.id)}>
           홈으로

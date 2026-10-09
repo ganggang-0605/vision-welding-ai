@@ -6,7 +6,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { paths } from '../lib/paths'
 
-/** 새 프로젝트(호선). 만든 뒤 사이드바 목록을 다시 불러오고 그 프로젝트로 이동한다. */
+/** 새 프로젝트(블록). 만든 뒤 사이드바 목록을 다시 불러오고 그 프로젝트로 이동한다. */
 export function NewProjectPage() {
   const { workspace, reloadProjects } = useWorkspaceContext()
   const navigate = useNavigate()
@@ -36,22 +36,22 @@ export function NewProjectPage() {
   return (
     <div className="page page--narrow">
       <PageHeader
-        breadcrumb={[{ label: workspace.name, to: paths.workspaceHome(workspace.id) }, { label: '새 호선' }]}
-        title="새 호선"
-        description="작업과 조립 트리는 호선별로 따로 관리하고, 문자·기호 사전은 워크스페이스 전체가 함께 써요."
+        breadcrumb={[{ label: workspace.name, to: paths.workspaceHome(workspace.id) }, { label: '새 블록' }]}
+        title="새 블록"
+        description="작업과 조립 트리는 블록별로 따로 관리하고, 문자·기호 사전은 워크스페이스 전체가 함께 써요."
       />
 
       <form className="form" onSubmit={onSubmit}>
         <div className="field">
           <label htmlFor={ids.name} className="field-label">
-            호선 이름
+            블록 이름
           </label>
           <input
             id={ids.name}
             className="input"
             required
             maxLength={100}
-            placeholder="예: 3203호선"
+            placeholder="예: A3 블록"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
@@ -63,7 +63,7 @@ export function NewProjectPage() {
           <input
             id={ids.description}
             className="input"
-            placeholder="선택. 예: 174K LNG 운반선"
+            placeholder="선택. 예: 선미부 상갑판"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
@@ -73,7 +73,7 @@ export function NewProjectPage() {
 
         <p className="button-row">
           <button type="submit" className="btn btn--primary" disabled={submitting || !name.trim()}>
-            {submitting ? '만드는 중' : '호선 만들기'}
+            {submitting ? '만드는 중' : '블록 만들기'}
           </button>
           <Link className="btn btn--plain" to={paths.workspaceHome(workspace.id)}>
             취소

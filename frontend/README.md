@@ -40,10 +40,10 @@ npm run dev
 
 ## 라우트
 
-노션처럼 **워크스페이스 → 프로젝트(호선) → 작업** 순서로 들어갑니다.
+노션처럼 **워크스페이스 → 프로젝트(블록) → 작업** 순서로 들어갑니다.
 
 - **워크스페이스**: 개인(기본값) 또는 팀. 개인 워크스페이스에 팀원을 초대하면 팀 워크스페이스로 바뀝니다. 문자·기호 사전과 멤버가 워크스페이스에 속합니다.
-- **프로젝트**: 호선(선박) 하나. 조립 트리와 작업이 프로젝트에 속합니다.
+- **프로젝트**: 블록 하나 (배 전체가 아닐 수도 있는 조립 단위). 조립 트리와 작업이 프로젝트에 속합니다.
 - **표준 용접 기준**: 모든 워크스페이스가 함께 쓰는 공통(읽기 전용) 데이터.
 
 | 경로 | 페이지 (`src/pages/`) | 와이어프레임 | 내용 |
@@ -51,14 +51,14 @@ npm run dev
 | `/` | | | 지금 계정이 마지막으로 연 워크스페이스로 리다이렉트 (처음이면 `/w/demo`, 계정이 없으면 `/login`) |
 | `/login` (`?mode=add`) | `LoginPage` | | 계정 고르기·계정 추가하기. 로그인 전까지 비밀번호 없이 데모 계정(`GET /users`) 중 하나로 들어감 |
 | `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 1단계 혼자 / 팀과 함께(기본값 개인) → 2단계 이름·설명·사전 시작 방식. 팀이면 만든 뒤 멤버 초대로 이동. **사이드바 없는 단독 화면** |
-| `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(호선) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
+| `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(블록) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
 | (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 워크스페이스의 모든 프로젝트에서 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
 | `/w/:workspaceId/settings` | `WorkspaceSettingsPage` | | 설정과 멤버: 이름·설명, 사용 방식(개인/팀), 화면 모드(시스템/라이트/다크, 이 브라우저에만 저장), 멤버 목록·초대 (`#members`) |
 | `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
 | `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 표준 용접 기준 표 (읽기 전용) |
-| `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(호선) |
+| `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(블록) |
 | `/w/:workspaceId/p/:projectId` | `ProjectPage` | 1 작업 목록 | 확인 필요 안내 + 작업 목록 (이름·조립 경로·상태·용접 조건·신뢰도·날짜), 상태 필터(`?status=`) |
-| `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 호선의 블록 → 대조립 → 중조립 → 소조립 → 부재 |
+| `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 블록의 조립 경로 (블록 → 대조립 → 중조립 → 소조립 → 부재) |
 | `/w/:workspaceId/p/:projectId/jobs/new` | `NewJobPage` | 4 현장 촬영 = 새 작업 | 모바일 촬영(`<input type="file" accept="image/*" capture="environment">`) → 작업 생성 → 업로드 → 해석 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId` | `JobResultPage` | 5 해석 결과 | 인식한 표기, 신뢰도, 추천 용접 조건, 판단 근거. 해석 전이면 '해석 시작' |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId/review` | `JobReviewPage` | 6 작업자 확인 | 확인할 항목, 맥락 덧붙여 다시 해석 / 직접 입력 |
@@ -76,11 +76,11 @@ npm run dev
 - 맨 위 **워크스페이스 전환 메뉴** (노션과 같은 구성): 지금 워크스페이스, 설정·팀원 초대·계정 추가하기, 로그인한 **계정마다** 워크스페이스 목록과 새 워크스페이스, 모든 계정에서 로그아웃. 다른 계정의 워크스페이스를 누르면 그 계정으로 바뀝니다.
   - 로그인한 계정 목록과 지금 계정은 `src/lib/accounts.ts`가 브라우저에 저장하고, API 요청마다 `X-User-Id` 헤더로 보냅니다 (TODO 인증: 실제 로그인 세션으로 교체).
 - 검색 ⌘K, 홈
-- **작업**: 호선 목록. 펼치면 작업 목록·조립 트리. 보고 있는 호선은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 호선.
+- **작업**: 블록 목록. 펼치면 작업 목록·조립 트리. 보고 있는 블록은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 블록.
 - **워크스페이스**: 문자·기호 사전, 용접 기준, 설정과 멤버
 - 맨 아래 팀원 초대, 서버 연결이 끊겼을 때만 뜨는 안내
 
-현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.
+현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. 데스크톱에서는 사이드바 위쪽의 닫기 버튼(마우스를 올리면 보임)이나 **⌘\\ / Ctrl+\\**로 사이드바를 접고 펼 수 있고, 접은 상태는 브라우저에 기억합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.
 
 ## API 클라이언트
 
@@ -210,7 +210,7 @@ frontend/
     ├── hooks/
     │   ├── useAsync.ts       #   로딩·오류 상태 훅
     │   ├── useWorkspace.ts   #   현재 워크스페이스·프로젝트 목록·사용자 (레이아웃 Outlet context)
-    │   ├── useProject.ts     #   현재 프로젝트(호선)
+    │   ├── useProject.ts     #   현재 프로젝트(블록)
     │   ├── useRequiredParam.ts
     │   ├── useDebouncedValue.ts
     │   └── useObjectUrl.ts   #   사진 미리보기 URL

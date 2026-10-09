@@ -10,7 +10,7 @@
   "properties": {
     "job_id": { "type": "string" },
     "workspace_id": { "type": "string" },
-    "project_id": { "type": "string", "description": "프로젝트(호선) id", "examples": ["hull_3201"] },
+    "project_id": { "type": "string", "description": "프로젝트(블록) id", "examples": ["block_a1"] },
     "created_at": { "type": "string", "format": "date-time" },
     "assembly_path": { "type": "string", "examples": ["A1/L1/M2/S1/P-1"] },
     "marking": {

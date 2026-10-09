@@ -1,6 +1,6 @@
 /**
  * 라우트 정의 (React Router 데이터 라우터).
- * 워크스페이스 → 프로젝트(호선) → 작업 순서로 주소가 깊어진다. 화면 ↔ 와이어프레임 대응은 frontend/README.md 의 '라우트' 표 참고.
+ * 워크스페이스 → 프로젝트(블록) → 작업 순서로 주소가 깊어진다. 화면 ↔ 와이어프레임 대응은 frontend/README.md 의 '라우트' 표 참고.
  */
 import { createBrowserRouter, redirect } from 'react-router'
 import { ProjectLayout } from './layouts/ProjectLayout'
