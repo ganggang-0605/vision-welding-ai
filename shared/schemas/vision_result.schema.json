@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/vision_result.schema.json",
+  "title": "VisionResult",
+  "description": "[1단계] 시각 인식 출력 (이미지 한 장). 생산: 1단계 / 소비: 2단계, 3단계, GUI",
+  "type": "object",
+  "required": ["image_id", "image_size", "preprocess", "texts", "symbols"],
+  "additionalProperties": false,
+  "properties": {
+    "image_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "image_size": { "$ref": "common.schema.json#/$defs/ImageSize" },
+    "preprocess": { "$ref": "#/$defs/Preprocess" },
+    "texts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TextDetection" },
+      "description": "문자 인식 결과. 위→아래, 왼→오른 읽는 순서로 정렬"
+    },
+    "symbols": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SymbolDetection" }
+    },
+    "models": {
+      "type": "object",
+      "description": "결과를 만든 모델과 버전 (재현·디버깅용)",
+      "additionalProperties": { "type": "string" },
+      "examples": [{ "ocr": "paddleocr-3.7.0", "detector": "yolox-s" }]
+    },
+    "elapsed_ms": { "type": "integer", "minimum": 0 }
+  },
+  "$defs": {
+    "PreprocessStepName": {
+      "type": "string",
+      "enum": ["clahe", "denoise", "perspective", "retinexformer", "uvdoc", "sihr"],
+      "description": "대비 보정 / 노이즈 제거 / 원근 보정 / 조도 보정 / 곡면 펴기 / 반사 제거"
+    },
+    "Preprocess": {
+      "type": "object",
+      "required": ["correction_strength", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "correction_strength": {
+          "$ref": "common.schema.json#/$defs/Probability",
+          "description": "전체 보정 강도 0~1. 클수록 원본을 많이 바꿨다는 뜻 → 3단계에서 시각 인식 신뢰도를 깎는 근거"
+        },
+        "steps": {
+          "type": "array",
+          "description": "실제로 적용한 보정만, 적용 순서대로",
+          "items": {
+            "type": "object",
+            "required": ["name", "strength"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "$ref": "#/$defs/PreprocessStepName" },
+              "strength": { "$ref": "common.schema.json#/$defs/Probability" }
+            }
+          }
+        },
+        "preprocessed_image_uri": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "보정된 이미지 (GUI 전후 비교용, 선택)"
+        }
+      }
+    },
+    "TextDetection": {
+      "type": "object",
+      "required": ["id", "text", "prob", "bbox", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/TextId" },
+        "text": { "type": "string", "minLength": 1, "description": "가장 가능성 높은 읽기" },
+        "prob": { "$ref": "common.schema.json#/$defs/Probability" },
+        "bbox": { "$ref": "common.schema.json#/$defs/BBox" },
+        "polygon": { "$ref": "common.schema.json#/$defs/Polygon" },
+        "style": { "$ref": "common.schema.json#/$defs/TextStyle" },
+        "source": {
+          "type": "string",
+          "enum": ["paddleocr", "parseq", "trocr"],
+          "description": "최종 text를 낸 모델"
+        },
+        "char_probs": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/Probability" },
+          "description": "글자별 확률. text 길이와 같아야 함 (어느 글자가 불확실한지 GUI에 표시)"
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 5,
+          "description": "유사 문자 후보 (확률 내림차순, 첫 번째는 text와 같음). 확률이 낮을 때만 채움 → 2단계 DB 대조, 작업자 확인 화면에서 씀",
+          "items": {
+            "type": "object",
+            "required": ["text", "prob"],
+            "additionalProperties": false,
+            "properties": {
+              "text": { "type": "string", "minLength": 1 },
+              "prob": { "$ref": "common.schema.json#/$defs/Probability" }
+            }
+          }
+        }
+      }
+    },
+    "SymbolDetection": {
+      "type": "object",
+      "required": ["id", "label", "prob", "bbox", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/SymbolId" },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "워크스페이스 문자/기호 DB의 code. 사전에 없는 기호는 \"unknown\""
+        },
+        "prob": { "$ref": "common.schema.json#/$defs/Probability" },
+        "bbox": { "$ref": "common.schema.json#/$defs/BBox" },
+        "source": { "type": "string", "enum": ["yolox", "groundingdino", "vlm"] },
+        "candidates": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["label", "prob"],
+            "additionalProperties": false,
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "prob": { "$ref": "common.schema.json#/$defs/Probability" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

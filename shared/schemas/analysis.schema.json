@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/analysis.schema.json",
+  "title": "Analysis",
+  "description": "이미지 한 장의 표기 정보 해석 결과 (1→2→3단계 묶음). run_pipeline의 반환값. 백엔드가 이 결과로 Job(backend/app/schemas.py)의 marking·welding_condition·confidence·evidence·needs_review를 채움",
+  "type": "object",
+  "required": ["schema_version", "analysis_id", "workspace_id", "project_id", "job_id", "image_id", "revision", "created_at", "vision", "context", "confidence"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "analysis_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "workspace_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.workspace_id" },
+    "project_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.project_id (호선). 조립 트리가 프로젝트에 속함" },
+    "job_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.id" },
+    "image_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "같은 이미지의 몇 번째 해석인지. 작업자 확인(ReviewRequest)으로 재해석·직접 해석할 때마다 1씩 증가"
+    },
+    "created_at": { "$ref": "common.schema.json#/$defs/Timestamp" },
+    "vision": { "$ref": "vision_result.schema.json" },
+    "context": { "$ref": "context_result.schema.json" },
+    "confidence": {
+      "description": "3단계 결과. 3단계 개발 전에는 null",
+      "anyOf": [{ "$ref": "confidence_report.schema.json" }, { "type": "null" }]
+    },
+    "corrections": {
+      "type": "array",
+      "description": "작업자가 직접 고친 항목. ReviewRequest(action=manual).values의 키가 target, 값이 value",
+      "items": { "$ref": "#/$defs/Correction" }
+    }
+  },
+  "$defs": {
+    "Correction": {
+      "description": "작업자가 고친 항목. value가 previous와 같으면 '맞다고 확인'한 것",
+      "type": "object",
+      "required": ["target", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "$ref": "common.schema.json#/$defs/ReviewTarget" },
+        "value": {
+          "description": "t*·s*: 올바른 글자·기호 code / part: 조립 경로 / welding_condition: 용접 조건 객체",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "context_result.schema.json#/$defs/WeldingCondition" }
+          ]
+        },
+        "previous": { "description": "고치기 전 값 (기록용)" }
+      }
+    }
+  }
+}

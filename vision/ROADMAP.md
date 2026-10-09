@@ -7,6 +7,8 @@
 
 ## 1. 범위와 출력 형식
 
+> 정식 출력 형식은 [`shared/schemas/vision_result.schema.json`](../shared/schemas/vision_result.schema.json)입니다. 아래 표는 요약이며, 다르면 스키마가 기준입니다.
+
 | 구성 | 파일 | 출력 |
 | --- | --- | --- |
 | a. 전처리 | `backend/app/pipeline/preprocess/denoise.py` | `(보정된 이미지, 보정 강도 0~1)` |

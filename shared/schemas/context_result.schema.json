@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/context_result.schema.json",
+  "title": "ContextResult",
+  "description": "[2단계] DB 기반 맥락 해석 출력. 입력: VisionResult + 워크스페이스 문자/기호 사전 + 프로젝트 조립 트리 + 공통 용접 기준 (+ 작업자 맥락). 생산: 2단계 / 소비: 3단계, 백엔드(Job 필드 채우기)",
+  "type": "object",
+  "required": [
+    "dictionary_matches",
+    "part",
+    "welding_condition",
+    "conflicts",
+    "vlm"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "user_context": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "재해석 때 작업자가 추가한 맥락 (없으면 null)"
+    },
+    "dictionary_matches": {
+      "type": "array",
+      "description": "문자/기호 사전 대조 결과. 1단계 인식 결과 하나 이상을 사전 항목 하나에 대응",
+      "items": {
+        "$ref": "#/$defs/DictionaryMatch"
+      }
+    },
+    "part": {
+      "$ref": "#/$defs/Part"
+    },
+    "welding_condition": {
+      "description": "용접 기준 DB로 판별한 조건. 판별 못 하면 null",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WeldingCondition"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conflicts": {
+      "type": "array",
+      "description": "DB 불일치 항목 → 3단계 DB 정합성, GUI 작업자 확인 화면",
+      "items": {
+        "$ref": "#/$defs/Conflict"
+      }
+    },
+    "vlm": {
+      "description": "VLM 맥락 해석. VLM을 끈 경우 null",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VlmResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "DictionaryMatch": {
+      "type": "object",
+      "required": [
+        "ref_ids",
+        "raw",
+        "code",
+        "meaning",
+        "match",
+        "score"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          },
+          "minItems": 1
+        },
+        "raw": {
+          "type": "string",
+          "description": "대조에 쓴 읽기 (1단계 text/label 또는 후보 중 하나)"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "매칭된 사전 code (SymbolEntry.code). 없으면 null"
+        },
+        "meaning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "match": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "alias",
+            "candidate",
+            "fuzzy",
+            "vlm",
+            "none"
+          ],
+          "description": "exact 그대로 일치 / alias 별칭 일치 / candidate 1단계 후보 중 하나가 일치 / fuzzy 유사 일치 / vlm 사전에 없지만 VLM이 해석 / none 해석 못 함"
+        },
+        "score": {
+          "$ref": "common.schema.json#/$defs/Probability"
+        }
+      }
+    },
+    "Part": {
+      "description": "조립 경로 대조 결과 (Job.project_id 프로젝트의 조립 트리)",
+      "type": "object",
+      "required": [
+        "node_id",
+        "assembly_path",
+        "level",
+        "found_in_tree",
+        "ref_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "examples": [
+            "P-1"
+          ]
+        },
+        "assembly_path": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/AssemblyPath"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Job.assembly_path로 들어감"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/AssemblyLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "found_in_tree": {
+          "type": "boolean",
+          "description": "조립 트리에 실제로 있는 부재인지 → 3단계 DB 정합성"
+        },
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          }
+        }
+      }
+    },
+    "WeldingCondition": {
+      "type": "object",
+      "required": [
+        "joint_type",
+        "process",
+        "position",
+        "current_a",
+        "voltage_v",
+        "speed_cm_min",
+        "standard_matched",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "joint_type": {
+          "type": "string"
+        },
+        "thickness_mm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "process": {
+          "type": "string"
+        },
+        "position": {
+          "type": "string"
+        },
+        "current_a": {
+          "$ref": "common.schema.json#/$defs/RangeValue"
+        },
+        "voltage_v": {
+          "$ref": "common.schema.json#/$defs/RangeValue"
+        },
+        "speed_cm_min": {
+          "$ref": "common.schema.json#/$defs/RangeValue"
+        },
+        "standard_matched": {
+          "type": "boolean",
+          "description": "공통 표준 용접 기준(GET /welding-standards)의 한 행과 충돌 없이 일치하는지"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "standard_db",
+            "vlm",
+            "manual"
+          ],
+          "description": "standard_db 기준표 조회 / vlm VLM 추론 / manual 작업자 직접 입력"
+        }
+      },
+      "description": "Job.welding_condition의 6개 필드 + 판별 근거(thickness_mm, standard_matched, source)"
+    },
+    "Conflict": {
+      "type": "object",
+      "required": [
+        "type",
+        "severity",
+        "message",
+        "ref_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "dictionary_unmatched",
+            "part_not_in_tree",
+            "standard_conflict",
+            "ocr_vlm_mismatch",
+            "ambiguous_reading"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "작업자에게 보여 줄 설명"
+        },
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          }
+        }
+      }
+    },
+    "VlmResult": {
+      "type": "object",
+      "required": [
+        "provider",
+        "model",
+        "interpretation",
+        "reading",
+        "token_prob",
+        "consistency",
+        "runs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "$ref": "common.schema.json#/$defs/VlmProvider"
+        },
+        "model": {
+          "type": "string",
+          "examples": [
+            "claude-opus-5-5"
+          ]
+        },
+        "interpretation": {
+          "type": "string",
+          "description": "자연어 해석 한두 문장 → Job.marking.interpretation"
+        },
+        "reading": {
+          "description": "VLM이 이미지에서 직접 읽은 글자·기호 → 3단계 OCR↔VLM 교차 검증",
+          "type": "object",
+          "required": [
+            "texts",
+            "symbols"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "texts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "text",
+                  "ref_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref_id": {
+                    "anyOf": [
+                      {
+                        "$ref": "common.schema.json#/$defs/TextId"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "대응하는 1단계 결과. 1단계가 놓친 표기면 null"
+                  }
+                }
+              }
+            },
+            "symbols": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "label",
+                  "ref_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref_id": {
+                    "anyOf": [
+                      {
+                        "$ref": "common.schema.json#/$defs/SymbolId"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "token_prob": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Probability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "출력 토큰 확률. 제공하지 않는 모델(Claude 등)은 null"
+        },
+        "consistency": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Probability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "같은 입력으로 runs번 추론했을 때 해석이 일치한 비율. runs가 1이면 null"
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

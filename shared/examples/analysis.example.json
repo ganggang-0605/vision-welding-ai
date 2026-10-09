@@ -1,0 +1,274 @@
+{
+  "schema_version": "1.0",
+  "analysis_id": "an_0001",
+  "workspace_id": "demo",
+  "project_id": "hull_3201",
+  "job_id": "job_0001",
+  "image_id": "img_0001",
+  "revision": 1,
+  "created_at": "2026-10-09T13:00:07+09:00",
+  "vision": {
+    "image_id": "img_0001",
+    "image_size": {
+      "width": 1920,
+      "height": 1080
+    },
+    "preprocess": {
+      "correction_strength": 0.35,
+      "steps": [
+        {
+          "name": "clahe",
+          "strength": 0.4
+        },
+        {
+          "name": "perspective",
+          "strength": 0.3
+        }
+      ]
+    },
+    "texts": [
+      {
+        "id": "t1",
+        "text": "P-1",
+        "prob": 0.97,
+        "bbox": [
+          412,
+          288,
+          598,
+          362
+        ],
+        "style": "stamped",
+        "source": "paddleocr",
+        "char_probs": [
+          0.98,
+          0.97,
+          0.96
+        ]
+      },
+      {
+        "id": "t2",
+        "text": "FW",
+        "prob": 0.62,
+        "bbox": [
+          640,
+          300,
+          742,
+          360
+        ],
+        "style": "handwritten",
+        "source": "trocr",
+        "char_probs": [
+          0.64,
+          0.97
+        ],
+        "candidates": [
+          {
+            "text": "FW",
+            "prob": 0.62
+          },
+          {
+            "text": "EW",
+            "prob": 0.24
+          }
+        ]
+      },
+      {
+        "id": "t3",
+        "text": "t=10",
+        "prob": 0.91,
+        "bbox": [
+          420,
+          390,
+          560,
+          440
+        ],
+        "style": "stencil",
+        "source": "paddleocr",
+        "char_probs": [
+          0.9,
+          0.93,
+          0.95,
+          0.92
+        ]
+      }
+    ],
+    "symbols": [
+      {
+        "id": "s1",
+        "label": "▲",
+        "prob": 0.88,
+        "bbox": [
+          780,
+          295,
+          840,
+          355
+        ],
+        "source": "yolox"
+      }
+    ],
+    "models": {
+      "ocr": "paddleocr-3.7.0",
+      "handwriting": "trocr-base-handwritten",
+      "detector": "yolox-s"
+    },
+    "elapsed_ms": 840
+  },
+  "context": {
+    "user_context": null,
+    "dictionary_matches": [
+      {
+        "ref_ids": [
+          "t2"
+        ],
+        "raw": "FW",
+        "code": "FW",
+        "meaning": "필렛 용접 (Fillet Weld)",
+        "match": "exact",
+        "score": 0.62
+      },
+      {
+        "ref_ids": [
+          "s1"
+        ],
+        "raw": "▲",
+        "code": "▲",
+        "meaning": "현장 용접 표시",
+        "match": "exact",
+        "score": 0.88
+      },
+      {
+        "ref_ids": [
+          "t3"
+        ],
+        "raw": "t=10",
+        "code": null,
+        "meaning": "판 두께 10mm",
+        "match": "vlm",
+        "score": 0.8
+      }
+    ],
+    "part": {
+      "node_id": "P-1",
+      "assembly_path": "A1/L1/M2/S1/P-1",
+      "level": "PART",
+      "found_in_tree": true,
+      "ref_ids": [
+        "t1"
+      ]
+    },
+    "welding_condition": {
+      "joint_type": "FILLET",
+      "thickness_mm": 10,
+      "process": "FCAW",
+      "position": "FLAT",
+      "current_a": "220-260",
+      "voltage_v": "26-30",
+      "speed_cm_min": "30-40",
+      "standard_matched": true,
+      "source": "standard_db"
+    },
+    "conflicts": [
+      {
+        "type": "dictionary_unmatched",
+        "severity": "info",
+        "message": "'t=10'은 문자/기호 사전에 없어 VLM 해석(판 두께 10mm)을 사용함",
+        "ref_ids": [
+          "t3"
+        ]
+      }
+    ],
+    "vlm": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "interpretation": "부재 P-1(A1/L1/M2/S1/P-1), 필렛 용접, 판 두께 10mm, 현장 용접",
+      "reading": {
+        "texts": [
+          {
+            "text": "P-1",
+            "ref_id": "t1"
+          },
+          {
+            "text": "FW",
+            "ref_id": "t2"
+          },
+          {
+            "text": "t=10",
+            "ref_id": "t3"
+          }
+        ],
+        "symbols": [
+          {
+            "label": "▲",
+            "ref_id": "s1"
+          }
+        ]
+      },
+      "token_prob": null,
+      "consistency": 1.0,
+      "runs": 3
+    }
+  },
+  "confidence": {
+    "visual": 62,
+    "db_consistency": 92,
+    "vlm_reasoning": 90,
+    "overall": 62,
+    "threshold": 80,
+    "passed": false,
+    "factors": {
+      "visual": {
+        "recognition_prob": 0.62,
+        "correction_strength": 0.35,
+        "ocr_vlm_agreement": 1.0
+      },
+      "db_consistency": {
+        "dictionary_match_rate": 0.67,
+        "part_found": true,
+        "standard_conflicts": 0
+      },
+      "vlm_reasoning": {
+        "token_prob": null,
+        "consistency": 1.0
+      }
+    },
+    "evidence": [
+      {
+        "layer": "visual",
+        "message": "손글씨 'FW' 인식 확률 62%로 낮음",
+        "ref_ids": [
+          "t2"
+        ]
+      },
+      {
+        "layer": "visual",
+        "message": "OCR과 VLM 읽기 4건 모두 일치"
+      },
+      {
+        "layer": "db_consistency",
+        "message": "부재 P-1이 조립 트리 A1/L1/M2/S1/P-1에 존재",
+        "ref_ids": [
+          "t1"
+        ]
+      },
+      {
+        "layer": "db_consistency",
+        "message": "FILLET · 판 두께 10mm가 표준 용접 기준과 충돌 없음"
+      },
+      {
+        "layer": "vlm_reasoning",
+        "message": "3회 추론 해석 모두 일치"
+      }
+    ],
+    "needs_review": [
+      {
+        "target": "t2",
+        "reason": "low_visual_confidence",
+        "message": "손글씨 표기 'FW' 확인 필요",
+        "candidates": [
+          "FW",
+          "EW"
+        ]
+      }
+    ]
+  }
+}
