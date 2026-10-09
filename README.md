@@ -171,7 +171,9 @@ data/seed/
     workspace.json, members.json, symbol_dictionary.json  # 워크스페이스(kind)·멤버·문자/기호 사전(없으면 빈 사전)
     projects/<project_id>/                                # 프로젝트(블록) — 폴더 이름이 id
       project.json, assembly_tree.csv, jobs.json          # 트리·작업 파일은 없으면 빈 것으로 봄
-  # demo: 팀(멤버 3명) — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
+  # demo: 팀(멤버 3명) "HD현대중공업 · 울산 1도크" — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
+  # samho: 팀(데모 사용자·박지훈) "HD현대삼호 · 영암 2도크" — block_s1(빈 블록). 사전은 demo 와 같고 FW 만 플래시버트 용접
+  #   조선소 이름은 시연용 가정이고, 사전·조립 트리·작업은 지어낸 목데이터
   # park: 개인(박지훈) — block_b1("B1 블록", 빈 블록)
   # personal: 개인(데모 사용자) — practice("연습용 블록", 빈 블록)
 data/annotations/   # [1단계] 현장 사진 정답 라벨
@@ -202,7 +204,7 @@ uv 없이 하려면 `brew install python@3.12` 후 `python3.12 -m venv .venv && 
 > 이미 깨졌으면 `chflags -R nohidden .venv` 로 숨김 속성을 지우세요.
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-처음 켤 때 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", A1·A2 블록, 데모 작업 3건)와
+처음 켤 때 데모 사용자 3명, 팀 워크스페이스 `demo`("HD현대중공업 · 울산 1도크", A1·A2 블록, 데모 작업 3건)·`samho`("HD현대삼호 · 영암 2도크", S1 블록 — 같은 FW 가 플래시버트 용접인 사전)와
 개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드되고 `backend/vision_welding.db` 에 저장됩니다.
 켤 때 OCR 모델을 백그라운드로 미리 불러 둡니다 (`PRELOAD_MODELS=0` 이면 끔 — 첫 해석이 모델 로드로 1분 가까이 걸림).
 

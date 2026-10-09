@@ -47,8 +47,8 @@ def test_unknown_user_401(client, method, path, kwargs):
 
 
 @pytest.mark.parametrize("user_id, expected", [
-    ("user_demo", ["demo", "personal"]),
-    ("user_park", ["demo", "park"]),
+    ("user_demo", ["demo", "personal", "samho"]),
+    ("user_park", ["demo", "park", "samho"]),
     ("user_choi", ["demo"]),
 ])
 def test_workspaces_filtered_by_member(client, user_id, expected):

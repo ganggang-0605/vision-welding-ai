@@ -159,7 +159,7 @@ def test_team_to_personal_conflict_with_members(client):
     assert res.status_code == 409
     assert "멤버" in res.json()["detail"]
     ws = client.get("/workspaces/demo").json()
-    assert (ws["name"], ws["kind"], ws["member_count"]) == ("데모 조선소 · 1도크", "team", 3)
+    assert (ws["name"], ws["kind"], ws["member_count"]) == ("HD현대중공업 · 울산 1도크", "team", 3)
     # team 으로 두는 수정은 된다
     assert client.patch("/workspaces/demo", json={"kind": "team", "name": "1도크"}).json()["name"] == "1도크"
 
