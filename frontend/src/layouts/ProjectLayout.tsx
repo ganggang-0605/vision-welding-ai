@@ -19,8 +19,8 @@ export function ProjectLayout() {
       <div className="page">
         <PageHeader
           breadcrumb={[{ label: '홈', to: paths.workspaceHome(context.workspace.id) }, { label: projectId }]}
-          title="프로젝트를 찾을 수 없어요"
-          description={`'${projectId}' 프로젝트가 이 워크스페이스에 없어요.`}
+          title="호선을 찾을 수 없어요"
+          description={`'${projectId}' 호선이 이 워크스페이스에 없어요.`}
         />
         <Link className="btn btn--primary" to={paths.workspaceHome(context.workspace.id)}>
           홈으로

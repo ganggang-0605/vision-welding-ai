@@ -3,8 +3,8 @@
 ⚠️ 실제 DB 로 교체하기 전까지 쓰는 임시 구현이다. 데이터는 프로세스 메모리에만 있어
 서버를 재시작하면 data/seed 의 초기 상태(팀 워크스페이스 "demo", 개인 워크스페이스 "personal")로 돌아간다.
 TODO: SQLAlchemy(requirements 에 포함) 기반 DB 로 교체 — 라우터는 Store 메서드만 쓰므로 이 모듈만 바꾸면 된다.
-TODO(인증): 로그인 없음 — 시드의 current_user_id(데모 사용자)가 모든 요청의 현재 사용자다.
-  멤버 목록은 있지만 권한 검사는 하지 않아 누구나 모든 워크스페이스에 접근할 수 있다.
+TODO(인증): 로그인 없음 — 요청 헤더 X-User-Id 가 데모 사용자를 고르고(없으면 시드의 current_user_id),
+  워크스페이스 목록만 그 사용자가 멤버인 것으로 거른다. 그 밖의 권한 검사는 없어 누구나 모든 워크스페이스에 접근할 수 있다.
 
 - 워크스페이스별 데이터(멤버, 문자/기호 사전, 프로젝트, 작업)는 workspace_id 를 키로 하는 dict 에 둔다.
 - 조립 트리는 프로젝트(호선)별 — assembly_trees[workspace_id][project_id]. 작업은 project_id 필드로 프로젝트에 속한다.
@@ -92,8 +92,15 @@ class Store:
         self._lock = threading.RLock()
 
     # ── 사용자 ──
-    def current_user(self) -> User:
-        """TODO(인증): 로그인 전까지는 시드의 고정 데모 사용자"""
+    def list_users(self) -> list[User]:
+        """시드 순서 (초대로 만든 사용자는 그 뒤에)"""
+        return list(self.users.values())
+
+    def get_user(self, user_id: str) -> User | None:
+        return self.users.get(user_id)
+
+    def default_user(self) -> User:
+        """TODO(인증): X-User-Id 헤더가 없을 때의 현재 사용자 — 시드의 current_user_id (데모 사용자)"""
         return self.users[self.current_user_id]
 
     def find_user_by_email(self, email: str) -> User | None:
@@ -101,9 +108,12 @@ class Store:
         return next((u for u in self.users.values() if u.email.casefold() == needle), None)
 
     # ── 워크스페이스 ──
-    def list_workspaces(self) -> list[Workspace]:
-        """추가된 순서 — 시드(폴더 이름순: demo, personal) 다음에 새로 만든 워크스페이스가 생성 순으로 온다."""
-        return list(self.workspaces.values())
+    def list_workspaces(self, member_id: str | None = None) -> list[Workspace]:
+        """추가된 순서 — 시드(폴더 이름순) 다음에 새로 만든 워크스페이스가 생성 순으로 온다.
+
+        member_id 가 있으면 그 사용자가 멤버인 워크스페이스만.
+        """
+        return [w for w in self.workspaces.values() if member_id is None or member_id in self.members[w.id]]
 
     def get_workspace(self, workspace_id: str) -> Workspace | None:
         return self.workspaces.get(workspace_id)
@@ -301,7 +311,7 @@ def _subdirs(path: Path) -> list[Path]:
 
 
 def load_seed(store: Store, seed_dir: Path = SEED_DIR) -> Store:
-    """data/seed 를 읽어 공통 데이터(사용자, 용접 기준)와 시드 워크스페이스(demo, personal)를 채운다.
+    """data/seed 를 읽어 공통 데이터(사용자, 용접 기준)와 시드 워크스페이스(demo, park, personal)를 채운다.
 
     사용자: users.json — {"current_user_id": ..., "users": [User, ...]}
     워크스페이스: workspaces/<workspace_id>/{workspace.json, members.json, symbol_dictionary.json(없으면 빈 사전)}

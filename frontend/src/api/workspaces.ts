@@ -1,5 +1,5 @@
 /** 워크스페이스, 멤버, 워크스페이스별 문자/기호 사전 API */
-import { apiFetch, apiPath, jsonInit } from './client'
+import { apiFetch, apiPath, asUser, jsonInit } from './client'
 import type {
   Member,
   MemberInvite,
@@ -11,11 +11,9 @@ import type {
   WorkspaceUpdate,
 } from './types'
 
-// TODO(인증): 로그인·멤버 기능이 생기면 내가 속한 워크스페이스만 내려오도록 바뀐다.
-
-/** GET /workspaces */
-export function listWorkspaces(signal?: AbortSignal): Promise<Workspace[]> {
-  return apiFetch<Workspace[]>('/workspaces', { signal })
+/** GET /workspaces — 계정(X-User-Id)이 멤버인 워크스페이스만. userId 를 주면 그 계정으로 묻는다. */
+export function listWorkspaces(signal?: AbortSignal, userId?: string): Promise<Workspace[]> {
+  return apiFetch<Workspace[]>('/workspaces', userId ? asUser(userId, { signal }) : { signal })
 }
 
 /** POST /workspaces → 201. copy 인데 원본이 없으면 404, id 가 빠지면 422 */

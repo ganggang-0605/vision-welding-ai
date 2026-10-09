@@ -9,6 +9,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useAsync } from '../hooks/useAsync'
 import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { MEMBER_ROLE_LABEL } from '../lib/labels'
+import { THEME_OPTIONS, useThemePreference } from '../lib/theme'
 import styles from './WorkspaceSettingsPage.module.css'
 
 /**
@@ -38,6 +39,7 @@ export function WorkspaceSettingsPage() {
 
       <GeneralSection key={workspace.id} workspace={workspace} onSaved={reloadWorkspace} />
       <KindSection workspace={workspace} onChanged={onChanged} />
+      <AppearanceSection />
 
       <section ref={membersRef} id="members" className={`section ${styles.anchor}`} aria-labelledby="members-title">
         <h2 id="members-title" className="section-title">
@@ -64,6 +66,33 @@ export function WorkspaceSettingsPage() {
         <InviteForm workspace={workspace} onInvited={onChanged} />
       </section>
     </div>
+  )
+}
+
+/** 화면 모드. 워크스페이스가 아니라 이 브라우저에 저장되는 내 설정이다. */
+function AppearanceSection() {
+  const [preference, setPreference] = useThemePreference()
+  return (
+    <section className="section" aria-labelledby="appearance-title">
+      <h2 id="appearance-title" className="section-title">
+        화면 모드
+      </h2>
+      <div className="segmented" role="group" aria-label="화면 모드">
+        {THEME_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={preference === option.value}
+            onClick={() => setPreference(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <p className="field-hint">
+        {preference === 'system' ? '맥·휴대폰의 라이트/다크 설정을 따라가요. ' : ''}이 브라우저에만 적용돼요.
+      </p>
+    </section>
   )
 }
 
@@ -143,7 +172,7 @@ function GeneralSection({ workspace, onSaved }: { workspace: Workspace; onSaved:
 
 const KIND_OPTIONS: { value: WorkspaceKind; label: string; description: string }[] = [
   { value: 'personal', label: '개인', description: '혼자 쓰는 워크스페이스예요.' },
-  { value: 'team', label: '팀', description: '멤버와 함께 써요. 프로젝트와 사전을 같이 보고 고쳐요.' },
+  { value: 'team', label: '팀', description: '멤버와 함께 써요. 호선과 사전을 같이 보고 고쳐요.' },
 ]
 
 function KindSection({ workspace, onChanged }: { workspace: Workspace; onChanged: () => void }) {

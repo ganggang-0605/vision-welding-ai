@@ -48,11 +48,12 @@ npm run dev
 
 | 경로 | 페이지 (`src/pages/`) | 와이어프레임 | 내용 |
 | --- | --- | --- | --- |
-| `/` | | | 마지막으로 연 워크스페이스로 리다이렉트 (처음이면 `/w/demo`, `localStorage`에 기억) |
+| `/` | | | 지금 계정이 마지막으로 연 워크스페이스로 리다이렉트 (처음이면 `/w/demo`, 계정이 없으면 `/login`) |
+| `/login` (`?mode=add`) | `LoginPage` | | 계정 고르기·계정 추가하기. 로그인 전까지 비밀번호 없이 데모 계정(`GET /users`) 중 하나로 들어감 |
 | `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 1단계 혼자 / 팀과 함께(기본값 개인) → 2단계 이름·설명·사전 시작 방식. 팀이면 만든 뒤 멤버 초대로 이동. **사이드바 없는 단독 화면** |
 | `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(호선) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
 | (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 워크스페이스의 모든 프로젝트에서 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
-| `/w/:workspaceId/settings` | `WorkspaceSettingsPage` | | 설정과 멤버: 이름·설명, 사용 방식(개인/팀), 멤버 목록·초대 (`#members`) |
+| `/w/:workspaceId/settings` | `WorkspaceSettingsPage` | | 설정과 멤버: 이름·설명, 사용 방식(개인/팀), 화면 모드(시스템/라이트/다크, 이 브라우저에만 저장), 멤버 목록·초대 (`#members`) |
 | `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
 | `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 표준 용접 기준 표 (읽기 전용) |
 | `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(호선) |
@@ -72,9 +73,10 @@ npm run dev
 
 ### 사이드바 (노션 사이드바 구성)
 
-- 맨 위 **워크스페이스 전환 메뉴**: 지금 워크스페이스(개인/팀, 멤버 수)와 설정·초대 버튼, 내 계정의 워크스페이스 목록, 새 워크스페이스. 로그인 전이라 계정은 `GET /me`의 데모 사용자 하나입니다 (TODO 인증: 다른 계정 추가·전환).
+- 맨 위 **워크스페이스 전환 메뉴** (노션과 같은 구성): 지금 워크스페이스, 설정·팀원 초대·계정 추가하기, 로그인한 **계정마다** 워크스페이스 목록과 새 워크스페이스, 모든 계정에서 로그아웃. 다른 계정의 워크스페이스를 누르면 그 계정으로 바뀝니다.
+  - 로그인한 계정 목록과 지금 계정은 `src/lib/accounts.ts`가 브라우저에 저장하고, API 요청마다 `X-User-Id` 헤더로 보냅니다 (TODO 인증: 실제 로그인 세션으로 교체).
 - 검색 ⌘K, 홈
-- **프로젝트**: 호선 목록. 펼치면 작업·조립 트리. 보고 있는 프로젝트는 자동으로 펼쳐집니다. 제목 옆 `+`로 새 프로젝트.
+- **작업**: 호선 목록. 펼치면 작업 목록·조립 트리. 보고 있는 호선은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 호선.
 - **워크스페이스**: 문자·기호 사전, 용접 기준, 설정과 멤버
 - 맨 아래 팀원 초대, 서버 연결이 끊겼을 때만 뜨는 안내
 
@@ -88,7 +90,7 @@ npm run dev
 | --- | --- |
 | `api/client.ts` | `apiFetch<T>()`, `ApiError`(`status`, `detail`), `isApiError(err, 501)`, `jsonInit()`, 경로 인코딩 태그 `apiPath`, `getHealth()` |
 | `api/types.ts` | 계약 모델 — `User`, `Member`, `Workspace`(`kind`, `member_count`), `Project`, `SymbolEntry`, `AssemblyNode`, `Job`(`project_id`), `RobotOutput` … (필드명 snake_case, id는 문자열) |
-| `api/users.ts` | `getMe` (로그인 전까지 데모 사용자) |
+| `api/users.ts` | `getMe` · `listUsers` (로그인 전까지 데모 계정). 다른 계정으로 보낼 때는 `client.ts`의 `asUser(userId)` |
 | `api/workspaces.ts` | `listWorkspaces` · `createWorkspace` · `getWorkspace` · `updateWorkspace` · `listMembers` · `inviteMember` · `listSymbols` · `createSymbol` · `updateSymbol` · `deleteSymbol` |
 | `api/projects.ts` | `listProjects` · `createProject` · `getProject` · `getAssemblyTree(workspaceId, projectId)` |
 | `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `analyzeJob` · `reviewJob` · `approveJob` · `exportJob` |
@@ -228,6 +230,8 @@ frontend/
     │   └── WorkspaceSwitcher.tsx (+ .module.css) # 워크스페이스 전환 메뉴
     ├── lib/
     │   ├── paths.ts          #   화면 URL 생성 (paths.job(...) 등), 마지막 워크스페이스 기억
+    │   ├── accounts.ts       #   로그인한 데모 계정·지금 계정 (X-User-Id 헤더)
+    │   ├── theme.ts          #   화면 모드 (시스템/라이트/다크), index.html 인라인 스크립트와 같은 키
     │   ├── labels.ts         #   상태·단계·종류·이음 형태·자세 한국어 라벨
     │   ├── format.ts         #   날짜(목록용 짧은 날짜 포함)·신뢰도 표시
     │   ├── errors.ts         #   API 오류 → 화면 문장

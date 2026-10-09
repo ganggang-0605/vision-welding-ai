@@ -2,11 +2,20 @@
 
 워크스페이스는 개인(personal) 또는 팀(team). 개인 워크스페이스에 멤버를 초대하면 팀으로 바뀐다.
 프로젝트(호선)·조립 트리는 api/projects.py, 작업은 api/jobs.py.
-TODO(인증): 로그인 없음 — 고정 데모 사용자가 현재 사용자다. 권한 검사 없이 누구나 모든 워크스페이스를 조회·수정할 수 있다.
+TODO(인증): 로그인 없음 — X-User-Id 헤더(없으면 데모 사용자)가 현재 사용자다. 목록(GET /workspaces)만 멤버로 거르고,
+TODO(권한): 그 밖의 경로는 권한 검사 없이 누구나 모든 워크스페이스를 조회·수정할 수 있다.
 """
 from fastapi import APIRouter, HTTPException
 
-from app.api.deps import NOT_FOUND, CurrentUserDep, StoreDep, WorkspaceDep, error_response, get_workspace
+from app.api.deps import (
+    NOT_FOUND,
+    UNKNOWN_USER,
+    CurrentUserDep,
+    StoreDep,
+    WorkspaceDep,
+    error_response,
+    get_workspace,
+)
 from app.schemas import (
     Member,
     MemberInvite,
@@ -22,15 +31,18 @@ from app.store import MemberAlreadyExists, WorkspaceKindConflict
 router = APIRouter()
 
 
-@router.get("")
-def list_workspaces(store: StoreDep) -> list[Workspace]:
-    """시드(demo, personal) 다음에 새로 만든 워크스페이스가 생성 순으로 온다."""
-    return store.list_workspaces()
+@router.get("", responses=UNKNOWN_USER)
+def list_workspaces(store: StoreDep, user: CurrentUserDep) -> list[Workspace]:
+    """현재 사용자(X-User-Id)가 멤버인 워크스페이스만 — 시드(폴더 이름순) 다음에 새로 만든 워크스페이스가 생성 순.
+
+    TODO(권한): 목록만 거른다. 다른 워크스페이스 경로는 id 만 알면 누구나 접근할 수 있다.
+    """
+    return store.list_workspaces(member_id=user.id)
 
 
-@router.post("", status_code=201, responses=NOT_FOUND)
+@router.post("", status_code=201, responses={**NOT_FOUND, **UNKNOWN_USER})
 def create_workspace(body: WorkspaceCreate, store: StoreDep, user: CurrentUserDep) -> Workspace:
-    """현재 사용자가 소유자(owner) 멤버가 된다 (kind 기본값 "personal").
+    """현재 사용자(X-User-Id)가 소유자(owner) 멤버가 된다 (kind 기본값 "personal").
 
     dictionary_source="copy" 면 copy_from_workspace_id 의 문자/기호 사전을 복제 (없는 워크스페이스면 404)
     """

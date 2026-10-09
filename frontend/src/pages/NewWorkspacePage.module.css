@@ -135,3 +135,11 @@
   margin: -48px 0 16px -8px;
   color: var(--accent);
 }
+
+/* 어느 계정에 만드는지 (전환 메뉴의 계정별 '새 워크스페이스') */
+.account {
+  margin: -16px 0 24px;
+  font-size: 0.8125rem;
+  text-align: center;
+  color: var(--secondary);
+}

@@ -36,9 +36,9 @@ export function NewProjectPage() {
   return (
     <div className="page page--narrow">
       <PageHeader
-        breadcrumb={[{ label: workspace.name, to: paths.workspaceHome(workspace.id) }, { label: '새 프로젝트' }]}
-        title="새 프로젝트"
-        description="호선 하나가 프로젝트 하나예요. 작업과 조립 트리는 호선별로 따로 관리하고, 문자·기호 사전은 워크스페이스 전체가 함께 써요."
+        breadcrumb={[{ label: workspace.name, to: paths.workspaceHome(workspace.id) }, { label: '새 호선' }]}
+        title="새 호선"
+        description="작업과 조립 트리는 호선별로 따로 관리하고, 문자·기호 사전은 워크스페이스 전체가 함께 써요."
       />
 
       <form className="form" onSubmit={onSubmit}>
@@ -73,7 +73,7 @@ export function NewProjectPage() {
 
         <p className="button-row">
           <button type="submit" className="btn btn--primary" disabled={submitting || !name.trim()}>
-            {submitting ? '만드는 중' : '프로젝트 만들기'}
+            {submitting ? '만드는 중' : '호선 만들기'}
           </button>
           <Link className="btn btn--plain" to={paths.workspaceHome(workspace.id)}>
             취소

@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AI 기반 용접 작업 분석 서비스" />
     <title>Vision Welding AI</title>
+    <script>
+      // 저장해 둔 화면 모드를 첫 그림 전에 적용한다 (src/lib/theme.ts 와 같은 키).
+      try {
+        const theme = localStorage.getItem('vwa:theme')
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

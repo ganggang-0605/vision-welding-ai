@@ -13,7 +13,7 @@ import {
   UserPlus,
 } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useState, type MouseEvent } from 'react'
-import { Link, NavLink, Outlet, useParams } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, useParams } from 'react-router'
 import { isApiError } from '../api/client'
 import { listProjects } from '../api/projects'
 import type { Project } from '../api/types'
@@ -27,6 +27,7 @@ import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
 import { useAsync } from '../hooks/useAsync'
 import { useRequiredParam } from '../hooks/useRequiredParam'
 import type { WorkspaceOutletContext } from '../hooks/useWorkspace'
+import { useAccounts } from '../lib/accounts'
 import { DEFAULT_WORKSPACE_ID, paths, rememberWorkspaceId } from '../lib/paths'
 import styles from './WorkspaceLayout.module.css'
 
@@ -40,13 +41,15 @@ const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : '
 export function WorkspaceLayout() {
   const workspaceId = useRequiredParam('workspaceId')
   const { projectId } = useParams()
+  const { activeId } = useAccounts()
   const sidebarId = useId()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 
   const workspace = useAsync((signal) => getWorkspace(workspaceId, signal), [workspaceId])
   const projects = useAsync((signal) => listProjects(workspaceId, signal), [workspaceId])
-  const me = useAsync((signal) => getMe(signal), [])
+  // 계정을 바꾸면(전환 메뉴) 현재 사용자를 다시 불러온다.
+  const me = useAsync((signal) => getMe(signal), [activeId])
   // useAsync 는 다시 불러오는 동안 직전 값을 유지하므로, 워크스페이스를 바꾼 직후에는 이전 워크스페이스 값을 쓰지 않는다.
   const current = workspace.data?.id === workspaceId ? workspace.data : undefined
   const projectList = projects.data?.every((project) => project.workspace_id === workspaceId) ? projects.data : undefined
@@ -54,8 +57,8 @@ export function WorkspaceLayout() {
   const notFound = !workspace.loading && isApiError(workspace.error, 404)
 
   useEffect(() => {
-    if (current) rememberWorkspaceId(current.id)
-  }, [current])
+    if (current && activeId) rememberWorkspaceId(activeId, current.id)
+  }, [current, activeId])
 
   const openSearch = useCallback(() => {
     setSidebarOpen(false)
@@ -82,6 +85,9 @@ export function WorkspaceLayout() {
   const closeSidebarOnLink = (event: MouseEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest('a')) setSidebarOpen(false)
   }
+
+  // 모든 계정에서 로그아웃했으면 계정 고르기로.
+  if (!activeId) return <Navigate replace to={paths.login()} />
 
   return (
     <div className={styles.shell}>
@@ -112,7 +118,7 @@ export function WorkspaceLayout() {
       {sidebarOpen && <div className={styles.backdrop} aria-hidden="true" onClick={() => setSidebarOpen(false)} />}
 
       <aside id={sidebarId} className={styles.sidebar} data-open={sidebarOpen} onClick={closeSidebarOnLink}>
-        <WorkspaceSwitcher workspaceId={workspaceId} workspace={current} me={me.data} />
+        <WorkspaceSwitcher workspaceId={workspaceId} workspace={current} />
 
         {!notFound && (
           <nav className={styles.nav} aria-label="워크스페이스 메뉴">
@@ -133,10 +139,10 @@ export function WorkspaceLayout() {
             </ul>
 
             <div className={styles.sectionHead}>
-              <h2 className={styles.sectionTitle}>프로젝트</h2>
-              <Link className={styles.sectionAction} to={paths.newProject(workspaceId)} title="새 프로젝트">
+              <h2 className={styles.sectionTitle}>작업</h2>
+              <Link className={styles.sectionAction} to={paths.newProject(workspaceId)} title="새 호선">
                 <Plus size={14} weight="bold" aria-hidden="true" />
-                <span className="visually-hidden">새 프로젝트</span>
+                <span className="visually-hidden">새 호선</span>
               </Link>
             </div>
             {projects.error !== undefined ? (
@@ -290,7 +296,7 @@ function ProjectTree({ workspaceId, projects, activeProjectId }: ProjectTreeProp
                 <li>
                   <NavLink to={paths.project(workspaceId, project.id)} end className={styles.navItem}>
                     <ListBullets aria-hidden="true" />
-                    작업
+                    작업 목록
                   </NavLink>
                 </li>
                 <li>
