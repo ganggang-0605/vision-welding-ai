@@ -36,3 +36,16 @@ def test_load_image_roundtrip(image):
     assert ok and load_image(encoded.tobytes()).shape == image.shape
     with pytest.raises(ValueError):
         load_image(b"not an image")
+
+
+def test_to_text_detections_converts_paddleocr_result():
+    """PaddleOCR 결과(꼭짓점 4개, 실수 좌표) → bbox·polygon 정수 좌표, 빈 글자 제외 (id는 recognize가 붙임)"""
+    from vision.ocr import to_text_detections
+
+    polys = [[[412.4, 288.6], [598, 288.6], [598, 362], [412.4, 362]], [[0, 0], [5, 0], [5, 5], [0, 5]]]
+    result = to_text_detections(["P-1", " "], [0.97123, 0.5], polys)
+
+    assert result == [{
+        "text": "P-1", "prob": 0.9712, "bbox": [412, 289, 598, 362],
+        "polygon": [[412, 289], [598, 289], [598, 362], [412, 362]], "source": "paddleocr",
+    }]

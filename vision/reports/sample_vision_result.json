@@ -1,0 +1,49 @@
+{
+  "image_id": "steel_test_0787",
+  "image_size": {
+    "width": 4032,
+    "height": 3024
+  },
+  "preprocess": {
+    "correction_strength": 0.0,
+    "steps": []
+  },
+  "texts": [
+    {
+      "id": "t1",
+      "text": "B15630N-16",
+      "prob": 0.9969,
+      "bbox": [
+        82,
+        945,
+        3821,
+        1685
+      ],
+      "polygon": [
+        [
+          104,
+          945
+        ],
+        [
+          3821,
+          1077
+        ],
+        [
+          3799,
+          1685
+        ],
+        [
+          82,
+          1553
+        ]
+      ],
+      "source": "paddleocr"
+    }
+  ],
+  "symbols": [],
+  "models": {
+    "ocr_det": "PP-OCRv6_small_det",
+    "ocr_rec": "PP-OCRv6_medium_rec"
+  },
+  "elapsed_ms": 2740
+}

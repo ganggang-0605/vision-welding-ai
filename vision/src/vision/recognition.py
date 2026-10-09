@@ -3,7 +3,8 @@ import time
 
 import numpy as np
 
-from vision.ocr import recognize_text
+from vision.ocr import DEFAULT_CONFIG as OCR_CONFIG
+from vision.ocr import models_available, recognize_text
 from vision.preprocess import preprocess
 from vision.symbols import detect_symbols
 
@@ -21,7 +22,7 @@ def recognize(image: np.ndarray, image_id: str) -> dict:
         "preprocess": prep,
         "texts": assign_ids(texts, "t"),
         "symbols": assign_ids(symbols, "s"),
-        "models": {},  # TODO: 연결한 모델 이름·버전 (예: {"ocr": "paddleocr-3.7.0", "detector": "yolox-s"})
+        "models": OCR_CONFIG.models() if models_available() else {},  # TODO: 기호 검출기 연결 시 추가
         "elapsed_ms": int((time.perf_counter() - start) * 1000),
     }
 

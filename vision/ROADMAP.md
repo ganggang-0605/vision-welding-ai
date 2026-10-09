@@ -5,6 +5,18 @@
 
 ---
 
+## 0. PAC 과제에서 1단계가 할 일
+
+README의 [셀 형태와 각장](../README.md#셀-형태와-각장-pac-과제) 기준입니다.
+
+| 과제 | 1단계에서 할 일 | 해당 Phase |
+| --- | --- | --- |
+| **수기 각장 F·V·S** (예: `F5.5`) | 손글씨 `F`·`V`·`S` + 숫자·소수점을 읽음 → `texts`. 허용 글자 `F V S 0~9 .`로 후처리 | Phase 1 (기본 OCR), Phase 4 (손글씨 강화·허용 글자) |
+| **셀 좌·우 끝 형태** (`slit`, `slot`, `collar_front`, `collar_back`, `scallop`) | 셀 끝 형태를 검출 → `symbols`의 label로 출력, 좌·우는 위치로 구분 | Phase 3 (기호 검출 클래스로 추가) |
+
+- [ ] 셀 형태를 `VisionResult.symbols`로 낼지, 별도 필드를 둘지 팀과 합의 (현재 `shared/schemas/vision_result.schema.json`에는 셀 형태 필드가 없고, `Job.cell`은 백엔드 계약에만 있음)
+- [ ] 과제 안내의 셀 예시 사진·각장 손글씨 사진 확보 → `data/annotations/`
+
 ## 1. 범위와 출력 형식
 
 > 정식 출력 형식은 [`shared/schemas/vision_result.schema.json`](../shared/schemas/vision_result.schema.json)입니다. 아래 표는 요약이며, 다르면 스키마가 기준입니다.
@@ -83,9 +95,11 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 > 프로젝트의 가장 큰 위험 요소는 데이터입니다. 현재 저장소에 샘플 사진이 없으므로 Phase 0은 줄이지 않습니다.
 
 ### Phase 1 · 문자 인식 기본 버전 + 평가 스크립트
-- [ ] `ocr.py`에 PaddleOCR 연결, 출력 형식대로 반환
-- [ ] 평가 스크립트: 글자 단위 오류율(CER), 표기 단위 정확도, 사진당 처리 시간
-- [ ] 2단계·3단계 담당에게 실제 OCR 결과 샘플 전달
+- [x] `ocr.py`에 PaddleOCR 연결, 출력 형식대로 반환 (`recognize()`가 `VisionResult` 생성, 모델 미설치 시 빈 결과)
+- [x] 평가 스크립트: 글자 단위 오류율(CER), 표기 단위 정확도, 사진당 처리 시간 (`vision/tools/eval_ocr.py`)
+- [x] steel-ocr 기준 성능 측정: CER 0.374, 표기 완전 일치 10.7% ([`reports/phase1_baseline.md`](reports/phase1_baseline.md))
+- [ ] 조선소 표기 사진으로 다시 측정 (`eval_ocr.py --dataset annotations`, Phase 0 사진 수집 후)
+- [ ] 2단계·3단계 담당에게 실제 OCR 결과 샘플 전달 ([`reports/sample_vision_result.json`](reports/sample_vision_result.json) 준비됨)
 - **완료 기준:** 원본 사진 → 글자·확률·위치 출력, 평가 숫자 확인 가능
 
 > 이 결과물이 나오면 2단계 팀원이 실제 데이터로 작업할 수 있으므로 **가장 먼저 넘겨야 할 산출물**입니다.
@@ -113,8 +127,10 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 - [ ] synthtiger로 부재 번호 형식(예: `P-1`, `A1/L1/M2`)의 글자 이미지 합성, straug로 증강
 - [ ] PARSeq 추가 학습 → PaddleOCR 인식기와 정확도 비교, 더 나은 쪽 채택
 - [ ] 손글씨로 보이거나 확률이 낮은 글자 영역만 잘라 TrOCR로 재인식
-- [ ] 확률이 낮은 글자에 유사 문자 후보(`candidates`) 붙이기 (0/O, 8/B, 1/I/l, 5/S 등)
-- [ ] 확률 보정 점검: 확률 0.9로 나온 결과가 실제로 90% 정도 맞는지 확인하고 필요하면 조정
+- [ ] steel-ocr 학습용 잘라낸 글자(349개)로 인식기 추가 학습 — Phase 1에서 `b→6`, `S→5` 오류가 많았음
+- [ ] 워크스페이스별 허용 글자 후처리 — steel-ocr에서 표기 완전 일치 10.7% → 26.2%
+- [ ] 확률이 낮은 글자에 유사 문자 후보(`candidates`) 붙이기 (0/O, 8/B, 1/I/l, 5/S, b/6 등)
+- [ ] 확률 보정: Phase 1에서 확률 0.9 이상 표기 중 완전히 맞은 것이 16%뿐 — 3단계에 넘기기 전에 반드시 조정
 - **완료 기준:** 평가 세트에서 Phase 1 대비 정확도 향상 확인, 낮은 확률 결과에 후보 목록 포함
 
 ### Phase 5 · 통합과 시연 준비
