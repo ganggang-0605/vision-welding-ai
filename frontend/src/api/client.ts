@@ -1,3 +1,5 @@
+import { getActiveAccountId } from '../lib/accounts'
+
 /** API 기본 경로. 기본값 '/api' 는 Vite 개발 서버가 백엔드로 프록시한다. */
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
 
@@ -27,6 +29,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
   const headers = new Headers(init?.headers)
   if (!headers.has('Accept')) headers.set('Accept', 'application/json')
+  // 로그인 전 데모 계정 (TODO 인증). 특정 계정으로 보내려면 호출하는 쪽에서 직접 넣는다 (asUser()).
+  const accountId = getActiveAccountId()
+  if (!headers.has(USER_HEADER) && accountId) headers.set(USER_HEADER, accountId)
 
   const res = await fetch(url, { ...init, headers })
   const body = await res.text()
@@ -46,6 +51,16 @@ function parseDetail(body: string): unknown {
   } catch {
     return undefined
   }
+}
+
+/** 요청을 보내는 데모 계정 헤더 (백엔드 CurrentUserDep 가 읽는다) */
+const USER_HEADER = 'X-User-Id'
+
+/** 지금 쓰는 계정이 아닌 다른 로그인 계정으로 보낼 때 (예: 전환 메뉴에서 계정별 워크스페이스 목록) */
+export function asUser(userId: string, init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers)
+  headers.set(USER_HEADER, userId)
+  return { ...init, headers }
 }
 
 /** JSON 본문을 보내는 요청의 RequestInit */

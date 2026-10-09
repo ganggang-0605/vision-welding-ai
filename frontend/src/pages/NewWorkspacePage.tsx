@@ -2,10 +2,12 @@ import { CaretLeft, Check, TreeStructure } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { DictionarySource, WorkspaceKind } from '../api/types'
+import { getMe } from '../api/users'
 import { createWorkspace, listWorkspaces } from '../api/workspaces'
 import { ErrorNotice } from '../components/Notice'
 import { PageHeader } from '../components/PageHeader'
 import { useAsync } from '../hooks/useAsync'
+import { useAccounts } from '../lib/accounts'
 import { paths } from '../lib/paths'
 import styles from './NewWorkspacePage.module.css'
 
@@ -17,7 +19,10 @@ import styles from './NewWorkspacePage.module.css'
 export function NewWorkspacePage() {
   const navigate = useNavigate()
   const ids = { name: useId(), description: useId(), source: useId() }
-  const workspaces = useAsync((signal) => listWorkspaces(signal), [])
+  const { activeId } = useAccounts()
+  // 전환 메뉴에서 고른 계정에 만든다 (그 계정이 소유자가 된다).
+  const me = useAsync((signal) => getMe(signal), [activeId])
+  const workspaces = useAsync((signal) => listWorkspaces(signal), [activeId])
 
   const [step, setStep] = useState<'kind' | 'details'>('kind')
   const [kind, setKind] = useState<WorkspaceKind>('personal')
@@ -60,6 +65,7 @@ export function NewWorkspacePage() {
           title="어떻게 쓸 건가요?"
           description="나중에 설정에서 바꿀 수 있어요. 혼자 쓰다가 팀원을 초대하면 팀 워크스페이스가 돼요."
         />
+        {me.data && <p className={styles.account}>{me.data.email} 계정에 만들어요</p>}
         <form
           className="form"
           onSubmit={(event) => {

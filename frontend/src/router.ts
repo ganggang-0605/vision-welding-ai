@@ -5,11 +5,13 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import { ProjectLayout } from './layouts/ProjectLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
-import { paths, readLastWorkspaceId } from './lib/paths'
+import { getActiveAccountId } from './lib/accounts'
+import { DEFAULT_WORKSPACE_ID, paths, readLastWorkspaceId } from './lib/paths'
 import { AssemblyTreePage } from './pages/AssemblyTreePage'
 import { JobResultPage } from './pages/JobResultPage'
 import { JobReviewPage } from './pages/JobReviewPage'
 import { JobSummaryPage } from './pages/JobSummaryPage'
+import { LoginPage } from './pages/LoginPage'
 import { NewJobPage } from './pages/NewJobPage'
 import { NewProjectPage } from './pages/NewProjectPage'
 import { NewWorkspacePage } from './pages/NewWorkspacePage'
@@ -27,9 +29,14 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        // 노션처럼 마지막으로 연 워크스페이스로 바로 들어간다.
-        loader: () => redirect(paths.workspaceHome(readLastWorkspaceId())),
+        // 노션처럼 지금 계정이 마지막으로 연 워크스페이스로 바로 들어간다. 로그인한 계정이 없으면 계정 고르기.
+        loader: () => {
+          const accountId = getActiveAccountId()
+          if (!accountId) return redirect(paths.login())
+          return redirect(paths.workspaceHome(readLastWorkspaceId(accountId) ?? DEFAULT_WORKSPACE_ID))
+        },
       },
+      { path: '/login', Component: LoginPage },
       { path: '/workspaces/new', Component: NewWorkspacePage },
       {
         path: '/w/:workspaceId',

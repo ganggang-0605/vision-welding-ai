@@ -1,0 +1,90 @@
+/* 가운데 한 줄짜리 계정 고르기 (워크스페이스 만들기와 같은 틀) */
+.screen {
+  display: grid;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 96px 16px 72px;
+}
+
+.appIcon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  border-radius: 15px;
+  color: var(--bg);
+  background: var(--label);
+}
+
+.screen :global(.page-header) {
+  text-align: center;
+}
+
+.screen :global(.page-title-row) {
+  justify-content: center;
+}
+
+.screen :global(.page-desc) {
+  margin-inline: auto;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 0;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+li + li .account {
+  border-top: 1px solid var(--separator);
+}
+
+.account:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--secondary);
+  background: var(--fill-strong);
+}
+
+.text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+
+.email {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+
+.chevron {
+  flex: none;
+  color: var(--tertiary);
+}
+
+.back {
+  justify-self: center;
+  margin-top: 16px;
+}
