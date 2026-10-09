@@ -237,6 +237,24 @@ class Job(ApiModel):
     needs_review: list[str] = []
 
 
+class JobImage(ApiModel):
+    """작업에 올린 사진 한 장. 파일은 GET /workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/file"""
+
+    image_id: str
+    job_id: str
+    filename: str
+    content_type: str
+    width: int    # 원본 픽셀 크기 — 1단계 bbox 좌표의 기준
+    height: int
+    created_at: UtcDatetime
+
+
+class AnalyzeRequest(ApiModel):
+    """POST .../analyze 본문 (생략 가능). image_id 를 빼면 가장 최근에 올린 사진을 해석한다."""
+
+    image_id: str | None = None
+
+
 class JobCreate(ApiModel):
     name: NonEmptyStr
     project_id: NonEmptyStr  # 같은 워크스페이스의 프로젝트만 (아니면 422)

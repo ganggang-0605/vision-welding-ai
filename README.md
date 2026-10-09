@@ -96,9 +96,11 @@
 | GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
 | POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 필수 — 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}` | 작업 조회 |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 이미지 업로드 (multipart `file`) — **501 미구현** |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 표기 정보 해석 — **501 미구현** |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 (`reinterpret` \| `manual`) — **501 미구현** |
+| POST · GET | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 사진 올리기 (multipart `file`, 201 `{image_id, filename, content_type, width, height, created_at}`, 20MB 넘으면 413, 이미지가 아니면 422) · 올린 순서 목록 |
+| GET | `/workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/file` | 올린 사진 파일 그대로 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진. 사진이 없으면 409 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 → 가장 최근 Analysis 에서 2단계부터 다시 해석(revision + 1). `reinterpret` + `context` \| `manual` + `values`(키: `t*`·`s*`·`v*`·`part`·`interpretation`·`welding_condition`, 그리고 Job 에 바로 반영하는 `cell`·`leg_lengths`). 해석 전이면 409, 잘못된 값이면 422 |
+| GET | `/workspaces/{workspace_id}/jobs/{job_id}/analyses` | 해석 결과([`analysis.schema.json`](shared/schemas/analysis.schema.json)) 전체, 만든 순서 — 사진 위 bbox·후보 표시용 |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "..."}` → `approved`. `awaiting_approval`·`needs_review` 가 아니면 409 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`shared/schemas/robot_output.schema.json`](shared/schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
@@ -111,7 +113,8 @@
 - 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(블록)에 속합니다.
   예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
 - 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
-- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
+- 다시 해석(`analyze`·`review`)하면 이전 승인은 무효가 됩니다 (`approved_at`·`approved_by` 비움). 단계 패키지에 실제 모델이 없으면 결과가 비어 `needs_review` 가 됩니다.
+- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 돌아갑니다. 올린 사진·해석 결과도 메모리에만 있습니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
 - 인증은 아직 없습니다 (TODO) — `X-User-Id` 헤더는 데모용일 뿐 누구나 아무 계정으로 요청할 수 있습니다.
   워크스페이스 목록만 멤버로 거르고, 그 밖의 경로는 권한 검사를 하지 않습니다 (id 를 알면 누구나 접근, TODO 권한).
 

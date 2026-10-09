@@ -181,20 +181,7 @@ def test_jobs_isolated_per_workspace(client):
     assert _names(client.get(JOBS)) == [P3, P2, P1]
 
 
-# ── 해석 파이프라인 (미구현) ──
-
-@pytest.mark.parametrize("action, kwargs", [
-    ("images", {"files": {"file": ("marking.jpg", b"\xff\xd8\xff", "image/jpeg")}}),
-    ("analyze", {}),
-    ("review", {"json": {"action": "reinterpret", "context": "8 이 아니라 6 입니다"}}),
-    ("review", {"json": {"action": "manual", "values": {"raw_text": "F/W 6"}}}),
-])
-def test_pipeline_not_implemented(client, action, kwargs):
-    res = client.post(f"{JOBS}/job_demo_p1/{action}", **kwargs)
-    assert res.status_code == 501
-    assert "구현" in res.json()["detail"]
-    assert client.post(f"{JOBS}/nope/{action}", **kwargs).status_code == 404
-
+# ── 해석 파이프라인 (사진·해석·작업자 확인 흐름은 test_analysis_api.py) ──
 
 @pytest.mark.parametrize("action, kwargs", [
     ("images", {}),                                   # file 누락

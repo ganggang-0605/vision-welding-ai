@@ -58,7 +58,7 @@ def test_error_responses_documented():
     assert _error_schema("/workspaces", "post", "404") == ERROR_DETAIL  # 복사할 사전의 워크스페이스
     jobs = "/workspaces/{workspace_id}/jobs/{job_id}"
     for method, path, code in [("post", f"{jobs}/approve", "409"), ("get", f"{jobs}/export", "409"),
-                               ("post", f"{jobs}/analyze", "501"),
+                               ("post", f"{jobs}/analyze", "409"), ("post", f"{jobs}/review", "409"),
                                ("patch", "/workspaces/{workspace_id}", "409"),
                                ("post", "/workspaces/{workspace_id}/members", "409")]:
         assert _error_schema(path, method, code) == ERROR_DETAIL

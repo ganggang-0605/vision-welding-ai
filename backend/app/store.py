@@ -27,6 +27,7 @@ from app.schemas import (
     AssemblyNode,
     Job,
     JobCreate,
+    JobImage,
     JobStatus,
     Member,
     Project,
@@ -88,6 +89,11 @@ class Store:
         self.projects: dict[str, dict[str, Project]] = {}
         self.assembly_trees: dict[str, dict[str, list[AssemblyNode]]] = {}  # workspace_id → project_id → 노드
         self.jobs: dict[str, dict[str, Job]] = {}
+        # 작업에 올린 사진과 해석 결과 (Analysis, shared/schemas/analysis.schema.json) — job_id 가 키
+        # TODO: 사진 파일은 지금 메모리에만 둔다. 실제 DB 로 바꿀 때 data/uploads/ 나 오브젝트 스토리지로 옮긴다.
+        self.images: dict[str, list[JobImage]] = {}
+        self.image_data: dict[str, bytes] = {}  # image_id → 파일 바이트
+        self.analyses: dict[str, list[dict]] = {}
         self.welding_standards: list[WeldingStandard] = []
         self._lock = threading.RLock()
 
@@ -291,6 +297,33 @@ class Store:
             return self.save_job(
                 job.model_copy(update={"status": "approved", "approved_at": utcnow(), "approved_by": approved_by})
             )
+
+
+    # ── 사진 · 해석 결과 (Analysis) ──
+    def add_image(self, job: Job, filename: str, content_type: str, data: bytes, width: int, height: int) -> JobImage:
+        image = JobImage(image_id=new_id("img"), job_id=job.id, filename=filename, content_type=content_type,
+                         width=width, height=height, created_at=utcnow())
+        with self._lock:
+            self.image_data[image.image_id] = data
+            self.images.setdefault(job.id, []).append(image)
+        return image
+
+    def list_images(self, job_id: str) -> list[JobImage]:
+        """올린 순서 (가장 최근이 마지막)"""
+        return list(self.images.get(job_id, []))
+
+    def get_image(self, job_id: str, image_id: str) -> tuple[JobImage, bytes] | None:
+        image = next((i for i in self.images.get(job_id, []) if i.image_id == image_id), None)
+        return (image, self.image_data[image_id]) if image else None
+
+    def add_analysis(self, job_id: str, analysis: dict) -> dict:
+        with self._lock:
+            self.analyses.setdefault(job_id, []).append(analysis)
+        return analysis
+
+    def list_analyses(self, job_id: str) -> list[dict]:
+        """만든 순서 (사진마다 revision 1, 작업자 확인마다 revision + 1). Job 에는 가장 최근 것이 반영돼 있다"""
+        return list(self.analyses.get(job_id, []))
 
 
 def _searchable(job: Job) -> list[str]:

@@ -2,7 +2,7 @@
 
 각 단계는 저장소 루트의 같은 이름 폴더에 있는 독립 패키지이고, 여기서는 DB 조회 · 호출 순서 · Analysis 조립만 한다.
 단계 사이 데이터 형식은 shared/schemas (Analysis = analysis.schema.json).
-TODO: 이미지 업로드·Analysis 저장 방식이 정해지면 api/jobs.py 의 analyze·review(지금 501)에서 호출
+api/jobs.py 의 analyze·review 가 호출한다 (사진·Analysis 는 지금 store 메모리에 저장).
 """
 import os
 from collections.abc import Iterable
@@ -14,7 +14,7 @@ from db_context_interpreter import interpret
 from vision import recognize
 from vw_shared import is_ref, schema_errors, semantic_errors, to_job_fields
 
-from app.schemas import Job, ReviewRequest
+from app.schemas import Job, ReviewRequest, WeldingStandard
 from app.store import Store, new_id
 
 SCHEMA_VERSION = "1.1"
@@ -80,6 +80,15 @@ def build_context_input(
             for r in related if r is not None
         ],
     }
+
+
+def manual_welding_condition(value: dict, standards: list[WeldingStandard]) -> dict:
+    """GUI 가 보낸 Job 모양 용접 조건(6개 필드) → Correction 의 2단계 WeldingCondition (source=manual).
+    standard_matched 는 공통 표준 용접 기준의 한 행과 6개 값이 모두 같은지로 정한다 (판 두께는 모름)."""
+    fields = ("joint_type", "process", "position", "current_a", "voltage_v", "speed_cm_min")
+    condition = {key: value.get(key) for key in fields}
+    matched = any(all(getattr(row, key) == condition[key] for key in fields) for row in standards)
+    return {**condition, "thickness_mm": value.get("thickness_mm"), "standard_matched": matched, "source": "manual"}
 
 
 def merge_corrections(existing: list[dict], values: Iterable[tuple[str, object]], previous: dict) -> list[dict]:
