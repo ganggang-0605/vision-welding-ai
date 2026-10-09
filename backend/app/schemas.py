@@ -249,6 +249,20 @@ class JobImage(ApiModel):
     created_at: UtcDatetime
 
 
+class PipelineStatus(ApiModel):
+    """해석 파이프라인 연결 상태 (GET /pipeline/status). API 키 값은 담지 않는다."""
+
+    ocr_available: bool                # [1단계] PaddleOCR 설치됨 (pip install -e "vision[models]")
+    ocr_models: dict[str, str]         # 검출·인식 모델 이름 (설치 안 됐으면 빈 객체)
+    symbol_detector_available: bool    # [1단계] 기호 검출기(YOLOX) 연결
+    vlm_provider: str | None           # [2단계] .env VLM_PROVIDER (끄면 null)
+    vlm_model: str | None
+    vlm_runs: int
+    vlm_sdk_installed: bool            # provider SDK 설치됨 (pip install -e "db_context_interpreter[vlm]")
+    vlm_api_key_set: bool              # provider API 키가 .env 에 채워져 있음 (값은 돌려주지 않음)
+    confidence_threshold: float        # [3단계] .env CONFIDENCE_THRESHOLD
+
+
 class AnalyzeRequest(ApiModel):
     """POST .../analyze 본문 (생략 가능). image_id 를 빼면 가장 최근에 올린 사진을 해석한다."""
 

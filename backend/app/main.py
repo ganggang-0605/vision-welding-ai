@@ -7,7 +7,7 @@ from fastapi import FastAPI
 # 저장소 루트의 .env (API 키 · VLM_PROVIDER · CONFIDENCE_THRESHOLD). 이미 설정된 환경 변수가 우선
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
-from app.api import jobs, projects, standards, users, workspaces
+from app.api import jobs, projects, standards, status, users, workspaces
 from app.store import get_store
 
 
@@ -23,6 +23,7 @@ app.include_router(workspaces.router, prefix="/workspaces", tags=["workspaces"])
 app.include_router(projects.router, prefix="/workspaces/{workspace_id}/projects", tags=["projects"])
 app.include_router(jobs.router, prefix="/workspaces/{workspace_id}/jobs", tags=["jobs"])
 app.include_router(standards.router, prefix="/welding-standards", tags=["welding-standards"])
+app.include_router(status.router, tags=["pipeline"])  # /pipeline/status
 
 
 @app.get("/health")

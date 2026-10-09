@@ -104,6 +104,7 @@
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "..."}` → `approved`. `awaiting_approval`·`needs_review` 가 아니면 409 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`shared/schemas/robot_output.schema.json`](shared/schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
+| GET | `/pipeline/status` | 해석 파이프라인 연결 상태 — 1단계 OCR 모델 설치 여부·모델 이름, 기호 검출기 연결, 2단계 VLM provider·모델·추론 횟수·SDK 설치·API 키 설정 여부(키 값은 돌려주지 않음), 3단계 통과 기준 |
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
 - **데모 다중 계정** (Notion 식 계정 전환): 요청 헤더 `X-User-Id: <user_id>` 가 로그인 세션을 대신해 현재 사용자를 고릅니다.
