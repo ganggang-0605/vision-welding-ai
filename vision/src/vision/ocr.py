@@ -24,6 +24,10 @@ class OcrConfig:
     rec_model_dir: str | None = None
     det_limit_side_len: int = 1280  # 긴 변을 이 크기로 줄여 검출 (원본 4000px 그대로면 느리고 큰 글씨를 쪼갬)
     det_limit_type: str = "max"
+    # 검출 상자 점수 기준 (PaddleOCR 파이프라인 기본 0.6, 모델 자체 설정 0.45) — 검출기 v3는 운영측 손글씨 F 줄(예시 1·2)에
+    # 0.50·0.51을 줘서 0.6이면 찾고도 버림. 0.5: 운영측 표기 찾기 76% → 95%, steel-ocr·MPSC 50장은 글자 오류율이 같거나 낮아짐
+    # (정답 밖 상자는 늘어남 36 → 50 · 31 → 50, 원격 평가 2026-10-10)
+    det_box_thresh: float | None = 0.5
     use_textline_orientation: bool = True  # 뒤집힌(180°) 글자 줄 보정 — 쌓아 둔 부재는 표기가 거꾸로 찍히는 경우가 많음
     # Linux CPU 가속(oneDNN). paddlepaddle 3.3.1 + PP-OCRv6 검출 모델은 켜면 Linux에서 바로 오류가 나서 끔 (Mac은 원래 안 씀)
     enable_mkldnn: bool = False
@@ -78,6 +82,7 @@ def _engine(config: OcrConfig):
         text_recognition_model_dir=config.rec_model_dir,
         text_det_limit_side_len=config.det_limit_side_len,
         text_det_limit_type=config.det_limit_type,
+        text_det_box_thresh=config.det_box_thresh,
         use_textline_orientation=config.use_textline_orientation,
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,

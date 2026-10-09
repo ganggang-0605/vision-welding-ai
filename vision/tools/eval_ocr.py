@@ -256,6 +256,7 @@ def main() -> int:
     parser.add_argument("--det-model-dir", help='추가 학습한 검출 모델 폴더 ("official" = 공식 모델)')
     parser.add_argument("--rec-model-dir", help='추가 학습한 인식 모델 폴더 ("official" = 공식 모델)')
     parser.add_argument("--limit-side", type=int, help="검출 전 긴 변 크기")
+    parser.add_argument("--box-thresh", type=float, help="검출 상자 점수 기준 (기본: PaddleOCR 파이프라인 0.6)")
     parser.add_argument("--orientation", action="store_true", help="뒤집힌 글자 줄 보정 켜기")
     parser.add_argument("--zoom", action="store_true", help="확대 재판독 켜기")
     parser.add_argument("--charset", help="허용 글자 후처리: steel-ocr 또는 글자 목록 파일(한 줄에 한 글자)")
@@ -271,6 +272,8 @@ def main() -> int:
     for field, value in (("det_model_dir", args.det_model_dir), ("rec_model_dir", args.rec_model_dir)):
         if value:
             config = replace(config, **{field: None if value == "official" else str(Path(value).resolve())})
+    if args.box_thresh is not None:
+        config = replace(config, det_box_thresh=args.box_thresh)
     if args.orientation:
         config = replace(config, use_textline_orientation=True)
     if args.zoom:
