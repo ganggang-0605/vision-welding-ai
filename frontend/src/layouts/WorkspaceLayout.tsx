@@ -160,17 +160,17 @@ export function WorkspaceLayout() {
           <nav className={styles.nav} aria-label="워크스페이스 메뉴">
             <ul className={styles.navList}>
               <li>
+                <NavLink end to={paths.workspaceHome(workspaceId)} className={styles.navItem}>
+                  <House aria-hidden="true" />
+                  워크스페이스 홈
+                </NavLink>
+              </li>
+              <li>
                 <button type="button" className={styles.searchField} onClick={openSearch} aria-haspopup="dialog">
                   <MagnifyingGlass size={15} aria-hidden="true" />
                   검색
                   <kbd className="kbd">{SEARCH_SHORTCUT}</kbd>
                 </button>
-              </li>
-              <li>
-                <NavLink end to={paths.workspaceHome(workspaceId)} className={styles.navItem}>
-                  <House aria-hidden="true" />
-                  워크스페이스 홈
-                </NavLink>
               </li>
             </ul>
 

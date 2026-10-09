@@ -165,9 +165,10 @@
 }
 
 /* 맥 사이드바 위쪽의 검색 칸 모양 */
+/* 워크스페이스 홈 아래 — 이 워크스페이스 안(블록 · 작업)을 찾는다 */
 .searchField {
   gap: 6px;
-  margin-bottom: 8px;
+  margin-top: 8px;
   color: var(--tertiary);
   background: var(--fill-strong);
 }
