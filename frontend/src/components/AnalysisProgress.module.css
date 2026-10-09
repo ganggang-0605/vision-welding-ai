@@ -1,0 +1,83 @@
+/* 해석 중 진행 막대 (JobFrame 위쪽) */
+.progress {
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--fill);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
+.track {
+  overflow: hidden;
+  height: 6px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--fill-strong);
+}
+
+.bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-text);
+  transition: width 0.3s linear;
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--tertiary);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step[data-state='done'] {
+  color: var(--secondary);
+}
+
+.step[data-state='current'] {
+  font-weight: 600;
+  color: var(--label);
+}
+
+.number {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

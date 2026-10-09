@@ -28,6 +28,7 @@ from app.db.sqlite import Database, database_path
 from app.db.symbol_dictionary import load_symbols
 from app.db.welding_standards import load_standards
 from app.schemas import (
+    AnalysisStage,
     AssemblyNode,
     Job,
     JobCreate,
@@ -363,8 +364,8 @@ class Store:
             self._put("jobs", f"{job.workspace_id}/{job.id}", job)
         return job
 
-    def start_analysis(self, workspace_id: str, job_id: str) -> Job | None:
-        """해석을 시작하며 상태를 analyzing 으로 (이미 해석 중이면 JobStatusConflict). 없는 작업이면 None.
+    def start_analysis(self, workspace_id: str, job_id: str, stage: AnalysisStage = "vision") -> Job | None:
+        """해석을 시작하며 상태를 analyzing 으로, 첫 단계는 stage (이미 해석 중이면 JobStatusConflict). 없는 작업이면 None.
         끝나면 호출한 쪽이 결과를 save_job 하거나 실패를 finish_failed_analysis 로 남긴다"""
         with self._lock:
             job = self.get_job(workspace_id, job_id)
@@ -372,11 +373,20 @@ class Store:
                 return None
             if job.status == "analyzing":
                 raise JobStatusConflict(job.status)
-            return self.save_job(job.model_copy(update={"status": "analyzing", "analysis_error": None}))
+            return self.save_job(job.model_copy(update={
+                "status": "analyzing", "analysis_error": None, "analysis_stage": stage, "analysis_stage_at": utcnow(),
+            }))
+
+    def set_analysis_stage(self, workspace_id: str, job_id: str, stage: AnalysisStage) -> None:
+        """해석 중인 작업의 지금 단계 (해석이 이미 끝났으면 무시)"""
+        with self._lock:
+            job = self.get_job(workspace_id, job_id)
+            if job is not None and job.status == "analyzing" and job.analysis_stage != stage:
+                self.save_job(job.model_copy(update={"analysis_stage": stage, "analysis_stage_at": utcnow()}))
 
     def finish_failed_analysis(self, job: Job, error: str) -> Job:
         """해석 실패 → 해석 전 상태(job)로 돌리고 이유를 남김"""
-        return self.save_job(job.model_copy(update={"analysis_error": error}))
+        return self.save_job(job.model_copy(update={"analysis_error": error, "analysis_stage": None, "analysis_stage_at": None}))
 
     def approve_job(self, workspace_id: str, job_id: str, approved_by: str, acknowledge_review: bool = False) -> Job | None:
         """승인 대기 상태, 또는 작업자가 확인 항목을 봤다고 표시한(acknowledge_review) 확인 필요 상태만 승인한다.

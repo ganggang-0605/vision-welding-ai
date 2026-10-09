@@ -15,7 +15,7 @@ P1, P2, P3 = "A1-P1 부재 표기", "A1-P2 부재 표기", "A1-P3 부재 표기"
 JOB_KEYS = {
     "id", "workspace_id", "project_id", "name", "status", "assembly_path", "related_job_ids", "created_at",
     "approved_at", "approved_by", "marking", "welding_condition", "cell", "leg_lengths", "confidence", "evidence",
-    "needs_review", "analysis_error",
+    "needs_review", "analysis_error", "analysis_stage", "analysis_stage_at",
 }
 
 

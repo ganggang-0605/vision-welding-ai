@@ -6,7 +6,7 @@ api/jobs.py 의 analyze·review 가 호출한다 (사진·Analysis 는 지금 st
 """
 import os
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
 import cv2
@@ -17,10 +17,16 @@ from vision import recognize
 from vision.preprocess import preprocess
 from vw_shared import is_ref, schema_errors, semantic_errors, to_job_fields
 
-from app.schemas import Job, ReviewRequest, WeldingStandard
+from app.schemas import AnalysisStage, Job, ReviewRequest, WeldingStandard
 from app.store import Store, new_id
 
 SCHEMA_VERSION = "1.1"
+# 단계가 바뀔 때 부르는 함수 (api/jobs.py 가 작업의 analysis_stage 에 남겨 GUI 진행 표시에 씀)
+OnStage = Callable[[AnalysisStage], None]
+
+
+def _no_stage(stage: AnalysisStage) -> None:
+    pass
 
 
 class AnalysisError(ValueError):
@@ -36,12 +42,14 @@ def confidence_threshold() -> float:
     return float(os.environ.get("CONFIDENCE_THRESHOLD", 80))
 
 
-def analyze_image(store: Store, job: Job, image: np.ndarray, image_id: str) -> dict:
+def analyze_image(store: Store, job: Job, image: np.ndarray, image_id: str, on_stage: OnStage = _no_stage) -> dict:
     """새 사진 해석 (revision 1) → Analysis. 1단계 전처리(작은 사진 키우기 · 노이즈 제거)를 거친 사진은 저장해 두고
     화면(GET .../images/{image_id}/preprocessed)에서 OCR 이 본 사진으로 보여 준다"""
+    on_stage("vision")
     vision = recognize(image, image_id)
     keep_preprocessed(store, job, image_id, image)
-    return _interpret(store, job, vision, revision=1, user_context=None, corrections=[], previous=None, image=image)
+    return _interpret(store, job, vision, revision=1, user_context=None, corrections=[], previous=None, image=image,
+                      on_stage=on_stage)
 
 
 def keep_preprocessed(store: Store, job: Job, image_id: str, image: np.ndarray) -> None:
@@ -54,7 +62,7 @@ def keep_preprocessed(store: Store, job: Job, image_id: str, image: np.ndarray) 
         store.set_preprocessed(job.id, image_id, encoded.tobytes())
 
 
-def review_analysis(store: Store, job: Job, previous: dict, review: ReviewRequest) -> dict:
+def review_analysis(store: Store, job: Job, previous: dict, review: ReviewRequest, on_stage: OnStage = _no_stage) -> dict:
     """작업자 확인 → 1단계 결과와 ID는 그대로 두고 2단계부터 다시 해석 (revision + 1) → Analysis
 
     reinterpret: context 를 맥락으로 추가 / manual: values 를 작업자 수정(corrections)으로 추가
@@ -66,13 +74,14 @@ def review_analysis(store: Store, job: Job, previous: dict, review: ReviewReques
     else:
         corrections = merge_corrections(corrections, (review.values or {}).items(), previous)
     return _interpret(store, job, previous["vision"], revision=previous["revision"] + 1,
-                      user_context=user_context, corrections=corrections, previous=previous)
+                      user_context=user_context, corrections=corrections, previous=previous, on_stage=on_stage)
 
 
 def job_with_analysis(job: Job, analysis: dict) -> Job:
     """Analysis 를 반영한 Job (status · assembly_path · marking · welding_condition · cell · leg_lengths · confidence ·
     evidence · needs_review). 저장은 호출한 쪽에서 store.save_job"""
-    return Job.model_validate({**job.model_dump(), **to_job_fields(analysis), "analysis_error": None})
+    return Job.model_validate({**job.model_dump(), **to_job_fields(analysis),
+                               "analysis_error": None, "analysis_stage": None, "analysis_stage_at": None})
 
 
 def build_context_input(
@@ -178,11 +187,14 @@ def _record_vlm(context: dict) -> None:
 def _interpret(
     store: Store, job: Job, vision: dict, *, revision: int,
     user_context: str | None, corrections: list[dict], previous: dict | None, image: np.ndarray | None = None,
+    on_stage: OnStage = _no_stage,
 ) -> dict:
+    on_stage("context")
     context_input = build_context_input(store, job, user_context=user_context, corrections=corrections, previous=previous)
     context = interpret(vision, context_input, image=stage2_image(store, job, vision["image_id"], image),
                         previous_vlm=previous["context"]["vlm"] if previous else None)
     _record_vlm(context)
+    on_stage("confidence")
     confidence = score(vision, context, corrections, confidence_threshold())
     analysis = {
         "schema_version": SCHEMA_VERSION,

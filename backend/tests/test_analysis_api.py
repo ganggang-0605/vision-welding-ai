@@ -181,6 +181,42 @@ def test_failed_analysis_restores_status_and_explains(client, monkeypatch):
     assert client.get(f"{JOB}/analyses").json() == []
 
 
+def test_analysis_reports_stages(client, fresh_store, monkeypatch):
+    """해석 중에는 지금 단계(analysis_stage)가 1 → 2 → 3단계로 바뀌고(진행 표시), 끝나면 비어 있음"""
+    stages = []
+    set_stage = fresh_store.set_analysis_stage
+
+    def record(workspace_id, job_id, stage):
+        set_stage(workspace_id, job_id, stage)
+        job = fresh_store.get_job(workspace_id, job_id)
+        stages.append((job.analysis_stage, job.analysis_stage_at is not None))
+
+    monkeypatch.setattr(fresh_store, "set_analysis_stage", record)
+    _upload(client)
+    res = client.post(f"{JOB}/analyze")
+    assert (res.json()["analysis_stage"], res.json()["analysis_stage_at"] is not None) == ("vision", True)
+    assert stages == [("vision", True), ("context", True), ("confidence", True)]
+    job = client.get(JOB).json()
+    assert job["analysis_stage"] is job["analysis_stage_at"] is None
+
+    stages.clear()
+    res = client.post(f"{JOB}/review", json={"action": "reinterpret", "context": "다시"})
+    assert res.json()["analysis_stage"] == "context"  # 작업자 확인은 2단계부터
+    assert [stage for stage, _ in stages] == ["context", "confidence"]
+
+
+def test_failed_analysis_clears_stage(client, monkeypatch):
+    import app.api.jobs as jobs_api
+
+    def broken(*args):
+        raise RuntimeError("실패")
+
+    monkeypatch.setattr(jobs_api, "analyze_image", broken)
+    _upload(client)
+    job = _analyze(client)
+    assert job["analysis_stage"] is job["analysis_stage_at"] is None
+
+
 def test_approve_blocked_while_analyzing(client, fresh_store):
     fresh_store.start_analysis("demo", "job_demo_p3")
     res = client.post(f"{JOBS}/job_demo_p3/approve", json={"approved_by": "김용접"})

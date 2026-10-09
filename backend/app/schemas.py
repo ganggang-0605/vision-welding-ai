@@ -22,6 +22,8 @@ SymbolKind = Literal["text", "symbol"]
 AssemblyLevel = Literal["BLOCK", "LARGE", "MID", "SUB", "PART"]
 JobStatus = Literal["draft", "analyzing", "needs_review", "awaiting_approval", "approved"]
 ReviewAction = Literal["reinterpret", "manual"]
+# 해석 중(analyzing) 지금 도는 단계: [1단계] 시각 인식 → [2단계] DB·VLM 맥락 해석 → [3단계] 신뢰도 산출
+AnalysisStage = Literal["vision", "context", "confidence"]
 
 
 class ApiModel(BaseModel):
@@ -237,6 +239,9 @@ class Job(ApiModel):
     needs_review: list[str] = []
     # 마지막 해석(analyze · review)이 실패한 이유. 상태는 해석 전으로 돌아감. 다음 해석이 성공하면 null
     analysis_error: str | None = None
+    # 해석 중(analyzing)일 때만: 지금 단계와 그 단계를 시작한 시각 (GUI 진행 표시). 해석이 끝나면 null
+    analysis_stage: AnalysisStage | None = None
+    analysis_stage_at: UtcDatetime | None = None
 
 
 class JobImage(ApiModel):

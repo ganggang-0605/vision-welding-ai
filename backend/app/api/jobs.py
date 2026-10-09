@@ -18,13 +18,14 @@ from app.api.deps import NOT_FOUND, StoreDep, WorkspaceDep, error_response
 from app.export.robot_json import to_robot_json
 from app.pipeline import (
     AnalysisError,
+    OnStage,
     analyze_image,
     job_with_analysis,
     manual_welding_condition,
     merge_corrections,
     review_analysis,
 )
-from app.schemas import AnalyzeRequest, ApproveRequest, Job, JobCreate, JobImage, JobStatus, ReviewRequest, RobotOutput
+from app.schemas import AnalysisStage, AnalyzeRequest, ApproveRequest, Job, JobCreate, JobImage, JobStatus, ReviewRequest, RobotOutput
 from app.store import JobStatusConflict, MissingForApproval, ReviewNotAcknowledged, Store
 
 log = logging.getLogger(__name__)
@@ -138,8 +139,8 @@ def analyze_job(job: JobDep, store: StoreDep, background: BackgroundTasks, body:
     found = store.get_image(job.id, image_id)
     if found is None:
         raise HTTPException(404, f"사진을 찾을 수 없습니다: {image_id}")
-    started = _start(store, job)
-    background.add_task(_run, store, job, lambda: analyze_image(store, job, load_image(found[1]), image_id))
+    started = _start(store, job, "vision")
+    background.add_task(_run, store, job, lambda on_stage: analyze_image(store, job, load_image(found[1]), image_id, on_stage))
     return started
 
 
@@ -165,8 +166,8 @@ def review_job(job: JobDep, body: ReviewRequest, store: StoreDep, background: Ba
         body = body.model_copy(update={"values": values})
         if errors := correction_errors(previous, values):
             raise HTTPException(422, f"고친 값을 반영할 수 없습니다: {'; '.join(errors)}")
-    started = _start(store, job)
-    background.add_task(_run, store, job, lambda: review_analysis(store, job, previous, body))
+    started = _start(store, job, "context")  # 1단계 결과는 그대로 두고 2단계부터
+    background.add_task(_run, store, job, lambda on_stage: review_analysis(store, job, previous, body, on_stage))
     return started
 
 
@@ -183,9 +184,9 @@ def correction_errors(previous: dict, values: dict) -> list[str]:
     return errors
 
 
-def _start(store: Store, job: Job) -> Job:
+def _start(store: Store, job: Job, stage: AnalysisStage) -> Job:
     try:
-        started = store.start_analysis(job.workspace_id, job.id)
+        started = store.start_analysis(job.workspace_id, job.id, stage)
     except JobStatusConflict as e:
         raise HTTPException(409, "이미 해석 중입니다. 끝난 뒤에 다시 해 주세요") from e
     if started is None:
@@ -193,10 +194,11 @@ def _start(store: Store, job: Job) -> Job:
     return started
 
 
-def _run(store: Store, before: Job, interpret: Callable[[], dict]) -> None:
-    """백그라운드 해석: 성공하면 Analysis 저장 + Job 반영, 실패하면 해석 전 상태(before)로 돌리고 이유를 남김"""
+def _run(store: Store, before: Job, interpret: Callable[[OnStage], dict]) -> None:
+    """백그라운드 해석: 단계가 바뀔 때마다 작업의 analysis_stage 를 바꾸고(진행 표시),
+    성공하면 Analysis 저장 + Job 반영, 실패하면 해석 전 상태(before)로 돌리고 이유를 남김"""
     try:
-        analysis = interpret()
+        analysis = interpret(lambda stage: store.set_analysis_stage(before.workspace_id, before.id, stage))
         updated = job_with_analysis(before, analysis)
     except AnalysisError as e:  # 단계 구현이 shared 스키마·규칙과 어긋남
         log.error("해석 결과가 공통 스키마와 맞지 않음 (%s): %s", before.id, e)

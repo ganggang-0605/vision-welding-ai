@@ -200,7 +200,13 @@ export interface Job {
   needs_review: string[]
   /** 마지막 해석(analyze · review)이 실패한 이유. 상태는 해석 전으로 돌아감. 다음 해석이 성공하면 null */
   analysis_error: string | null
+  /** 해석 중(analyzing)일 때만: 지금 단계와 그 단계를 시작한 시각 (진행 표시). 해석이 끝나면 null */
+  analysis_stage: AnalysisStage | null
+  analysis_stage_at: DateTimeString | null
 }
+
+/** [1단계] 시각 인식 → [2단계] DB·VLM 맥락 해석 → [3단계] 신뢰도 산출 */
+export type AnalysisStage = 'vision' | 'context' | 'confidence'
 
 /** 작업에 올린 사진 한 장. 파일은 jobImageUrl() */
 export interface JobImage {

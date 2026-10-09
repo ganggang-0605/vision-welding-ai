@@ -73,7 +73,7 @@ npm run dev
 - 작업 화면 5·6·7은 `components/JobFrame`(작업 불러오기 + 위치·제목·상태 + 화면 전환 세그먼트)을 함께 씁니다. 주소의 프로젝트와 작업의 프로젝트가 다르면 맞는 주소로 옮깁니다.
 - 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, projectId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
 - 사진 올리기·해석·작업자 확인은 백엔드 `app/pipeline.py`(1·2·3단계 패키지 통합)와 연결돼 있습니다. 해석 결과 화면의 **사진**(`components/JobPhotos`)에서 사진 추가·해석 시작·다시 해석을 하고, `components/PhotoAnnotations`가 1단계가 찾은 글자·기호 위치(`Analysis.vision`의 bbox)와 1단계가 놓치고 VLM 만 읽은 표기(점선)를 사진 위 박스로 보여 줍니다 (확률 80% 미만은 주황). 1단계가 보정한 사진이 있으면 원본·1단계 보정본을 바꿔 볼 수 있습니다.
-- 해석(`analyze`·`review`)은 백엔드가 202 로 바로 돌려주고 백그라운드에서 돌립니다. 작업 상태가 `analyzing` 인 동안 `components/JobFrame`이 2초마다 작업을 다시 읽어 "해석하고 있어요"를 보여 주고, 끝나면 결과로 바뀝니다. 실패하면 `analysis_error`를 작업 화면 위에 보여 줍니다.
+- 해석(`analyze`·`review`)은 백엔드가 202 로 바로 돌려주고 백그라운드에서 돌립니다. 작업 상태가 `analyzing` 인 동안 `components/JobFrame`이 1초마다 작업을 다시 읽고, `components/AnalysisProgress`가 백엔드가 알려 주는 지금 단계(`analysis_stage`: 1 시각 인식 → 2 맥락 해석 → 3 신뢰도)와 그 단계에서 지난 시간으로 진행 막대를 그립니다. 끝나면 결과로 바뀝니다. 실패하면 `analysis_error`를 작업 화면 위에 보여 줍니다.
 
 ### 사이드바 (노션 사이드바 구성, 맨 아래는 클로드처럼 내 계정)
 
