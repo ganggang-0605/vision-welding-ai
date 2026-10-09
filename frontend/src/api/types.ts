@@ -200,6 +200,65 @@ export interface Job {
   needs_review: string[]
 }
 
+/** 작업에 올린 사진 한 장. 파일은 jobImageUrl() */
+export interface JobImage {
+  image_id: string
+  job_id: string
+  filename: string
+  content_type: string
+  /** 원본 픽셀 크기 (1단계 bbox 좌표의 기준) */
+  width: number
+  height: number
+  created_at: DateTimeString
+}
+
+// ── 해석 결과 (shared/schemas/analysis.schema.json) ──────────
+// 화면에서 쓰는 필드만 옮겨 둔다. 전체 형식과 의미는 shared/schemas 와 shared/README.md 가 기준이다.
+
+/** [x1, y1, x2, y2] 원본 사진 픽셀 좌표 */
+export type BBox = [number, number, number, number]
+
+/** [1단계] 읽은 글자 (id: t1, t2, …) */
+export interface TextDetection {
+  id: string
+  text: string
+  /** 0~1 */
+  prob: number
+  bbox: BBox
+  /** 유사 문자 후보 (확률이 낮을 때만) */
+  candidates?: { text: string; prob: number }[]
+}
+
+/** [1단계] 찾은 기호 (id: s1, s2, …). label 은 사전 code, 없으면 "unknown" */
+export interface SymbolDetection {
+  id: string
+  label: string
+  prob: number
+  bbox: BBox
+}
+
+export interface VisionResult {
+  image_id: string
+  image_size: { width: number; height: number }
+  texts: TextDetection[]
+  symbols: SymbolDetection[]
+}
+
+/** 사진 한 장의 해석 결과. 작업자 확인마다 revision 이 늘어난 새 Analysis 가 쌓인다. */
+export interface Analysis {
+  analysis_id: string
+  job_id: string
+  image_id: string
+  revision: number
+  created_at: DateTimeString
+  vision: VisionResult
+}
+
+/** POST .../analyze 본문. image_id 를 빼면 가장 최근에 올린 사진 */
+export interface AnalyzeRequest {
+  image_id?: string
+}
+
 export interface JobCreate {
   /** 같은 워크스페이스의 프로젝트 (아니면 422) */
   project_id: string

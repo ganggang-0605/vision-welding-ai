@@ -1,7 +1,7 @@
 import { isApiError } from '../api/client'
 
-/** 501: 백엔드 파이프라인(업로드·분석·재해석)이 아직 구현되지 않았을 때 */
-export const NOT_IMPLEMENTED_MESSAGE = '아직 준비되지 않은 기능이에요. 해석 파이프라인이 연결되면 동작해요.'
+/** 501: 백엔드에서 아직 구현하지 않은 기능 */
+export const NOT_IMPLEMENTED_MESSAGE = '아직 준비되지 않은 기능이에요.'
 
 const UNREACHABLE_MESSAGE = '서버에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해 주세요.'
 
@@ -15,11 +15,14 @@ export function errorMessage(error: unknown): string {
     if (typeof error.detail === 'string') return error.detail
     if (GATEWAY_STATUSES.includes(error.status)) return UNREACHABLE_MESSAGE
     if (error.status === 404) return '요청한 항목을 찾을 수 없어요.'
+    if (error.status === 413) return '사진이 너무 커요. 20MB 이하로 올려 주세요.'
     if (error.status === 422) return `입력값을 확인해 주세요. ${validationMessages(error.detail)}`.trim()
     return `요청을 처리하지 못했어요 (${error.message}).`
   }
   // fetch 자체가 실패 (백엔드 꺼짐·네트워크 오류)
   if (error instanceof TypeError) return UNREACHABLE_MESSAGE
+  // 화면에서 직접 만든 안내 (예: new Error('바꾼 값이 없어요.'))
+  if (error instanceof Error && error.message) return error.message
   return '알 수 없는 문제가 생겼어요.'
 }
 

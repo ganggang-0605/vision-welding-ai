@@ -71,7 +71,7 @@ npm run dev
 - `/w/:workspaceId/p/:projectId/*` 화면은 `layouts/ProjectLayout`이 주소의 프로젝트를 찾아 넘깁니다 (`useProject()`). 없는 프로젝트면 '찾을 수 없음' 화면을 보여 줍니다.
 - 작업 화면 5·6·7은 `components/JobFrame`(작업 불러오기 + 위치·제목·상태 + 화면 전환 세그먼트)을 함께 씁니다. 주소의 프로젝트와 작업의 프로젝트가 다르면 맞는 주소로 옮깁니다.
 - 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, projectId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
-- 기능이 아직 없는 백엔드 파이프라인(이미지 업로드·해석·재해석)은 501을 돌려주며, 화면에는 **아직 준비되지 않은 기능이에요** 안내가 나옵니다.
+- 사진 올리기·해석·작업자 확인은 백엔드 `app/pipeline.py`(1·2·3단계 패키지 통합)와 연결돼 있습니다. 해석 결과 화면의 **사진**(`components/JobPhotos`)에서 사진 추가·해석 시작·다시 해석을 하고, `components/PhotoAnnotations`가 1단계가 찾은 글자·기호 위치(`Analysis.vision`의 bbox)를 사진 위 박스로 보여 줍니다 (확률 80% 미만은 주황). 단계 패키지에 실제 모델이 아직 없으면 찾은 것이 없어 '확인 필요'가 됩니다.
 
 ### 사이드바 (노션 사이드바 구성)
 
@@ -95,7 +95,7 @@ npm run dev
 | `api/users.ts` | `getMe` · `listUsers` (로그인 전까지 데모 계정). 다른 계정으로 보낼 때는 `client.ts`의 `asUser(userId)` |
 | `api/workspaces.ts` | `listWorkspaces` · `createWorkspace` · `getWorkspace` · `updateWorkspace` · `listMembers` · `inviteMember` · `listSymbols` · `createSymbol` · `updateSymbol` · `deleteSymbol` |
 | `api/projects.ts` | `listProjects` · `createProject` · `getProject` · `getAssemblyTree(workspaceId, projectId)` |
-| `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `analyzeJob` · `reviewJob` · `approveJob` · `exportJob` |
+| `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `listJobImages` · `jobImageUrl` · `analyzeJob` · `listAnalyses` · `reviewJob` · `approveJob` · `exportJob` |
 | `api/standards.ts` | `listWeldingStandards` (공통) |
 
 - 모든 함수의 마지막 인자는 선택 `signal?: AbortSignal`입니다. 경로 파라미터는 `encodeURIComponent`로 인코딩됩니다.
@@ -250,4 +250,4 @@ frontend/
 - 문자/기호 사전 항목 수정(`updateSymbol`) UI
 - 새 작업에서 같은 워크스페이스의 과거 작업 연결(`related_job_ids`) 선택
 - 작업자 확인 '직접 해석'의 `values` 형식은 백엔드 재해석 구현 때 확정
-- 파이프라인(업로드·분석·재해석) 구현 후 501 안내 대신 진행 상태(`analyzing`) 표시
+- 해석이 오래 걸리게 되면(실제 모델) 진행 상태(`analyzing`) 표시와 백그라운드 처리

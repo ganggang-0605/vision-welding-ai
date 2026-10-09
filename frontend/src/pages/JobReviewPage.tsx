@@ -51,27 +51,41 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
   const [error, setError] = useState<unknown>()
   const [done, setDone] = useState(false)
 
+  /** 직접 입력에서 처음 값과 달라진 것만 (빈 값은 보내지 않는다) */
+  const changedValues = (): Record<string, unknown> => {
+    const values: Record<string, unknown> = {}
+    const nextInterpretation = interpretation.trim()
+    if (nextInterpretation && nextInterpretation !== (job.marking?.interpretation ?? '')) {
+      values.interpretation = nextInterpretation
+    }
+    const conditionFilled = CONDITION_FIELDS.every(({ key }) => condition[key].trim())
+    if (conditionFilled && !sameJson(condition, job.welding_condition ?? EMPTY_CONDITION)) {
+      values.welding_condition = condition
+    }
+    if (!sameJson(cell, job.cell ?? EMPTY_CELL)) values.cell = cell
+    const nextLegs = legs
+      .filter((leg) => leg.code && Number(leg.size) > 0)
+      .map((leg): Omit<LegLength, 'meaning'> => ({
+        code: leg.code,
+        size_mm: Number(leg.size),
+        raw_text: `${leg.code}${leg.size}`,
+      }))
+    const before = job.leg_lengths.map((leg) => [leg.code, leg.size_mm])
+    if (!sameJson(nextLegs.map((leg) => [leg.code, leg.size_mm]), before)) values.leg_lengths = nextLegs
+    return values
+  }
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    // TODO: manual 의 values 형식은 백엔드 재해석 구현 때 확정한다.
+    // manual 은 바꾼 값만 보낸다 (키 = 고칠 대상, shared/schemas/analysis.schema.json 의 Correction).
+    // cell·leg_lengths 는 아직 파이프라인 결과가 아니어서 백엔드가 Job 에 바로 반영한다.
+    const values = action === 'manual' ? changedValues() : {}
+    if (action === 'manual' && Object.keys(values).length === 0) {
+      setError(new Error('바꾼 값이 없어요.'))
+      return
+    }
     const body: ReviewRequest =
-      action === 'reinterpret'
-        ? { action, context: context.trim() || null }
-        : {
-            action,
-            values: {
-              interpretation,
-              welding_condition: condition,
-              cell,
-              leg_lengths: legs
-                .filter((leg) => leg.code && Number(leg.size) > 0)
-                .map((leg): Omit<LegLength, 'meaning'> => ({
-                  code: leg.code,
-                  size_mm: Number(leg.size),
-                  raw_text: `${leg.code}${leg.size}`,
-                })),
-            },
-          }
+      action === 'reinterpret' ? { action, context: context.trim() || null } : { action, values }
     setSubmitting(true)
     setError(undefined)
     setDone(false)
@@ -280,4 +294,8 @@ function CellSideToggles({ side, value, onChange }: CellSideTogglesProps) {
       </span>
     </div>
   )
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
 }

@@ -1,12 +1,11 @@
 import { Check } from '@phosphor-icons/react'
-import { useState } from 'react'
 import { Link } from 'react-router'
-import { analyzeJob } from '../api/jobs'
 import type { Confidence, Job } from '../api/types'
 import { CellView } from '../components/CellView'
 import { JobFrame } from '../components/JobFrame'
+import { JobPhotos } from '../components/JobPhotos'
 import { LegLengthList } from '../components/LegLengthList'
-import { ErrorNotice, Notice } from '../components/Notice'
+import { Notice } from '../components/Notice'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { formatScore } from '../lib/format'
 import { jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
@@ -20,7 +19,7 @@ const CONFIDENCE_PARTS: { key: Exclude<keyof Confidence, 'overall'>; label: stri
   { key: 'vlm_reasoning', label: 'VLM 추론' },
 ]
 
-/** 와이어프레임 5 — 해석 결과: 인식한 표기, 신뢰도, 셀 형태, 각장, 용접 조건, 판단 근거 */
+/** 와이어프레임 5 — 해석 결과: 사진(찾은 위치), 인식한 표기, 신뢰도, 셀 형태, 각장, 용접 조건, 판단 근거 */
 export function JobResultPage() {
   return <JobFrame section="해석 결과">{(job, reload) => <JobResult job={job} onChange={reload} />}</JobFrame>
 }
@@ -31,8 +30,6 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
 
   return (
     <>
-      {job.status === 'draft' && <AnalyzePanel workspaceId={workspace.id} jobId={job.id} onDone={onChange} />}
-
       {job.needs_review.length > 0 && (
         <Notice
           tone="warning"
@@ -46,6 +43,8 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
           {job.needs_review[0]}
         </Notice>
       )}
+
+      <JobPhotos workspaceId={workspace.id} job={job} onAnalyzed={onChange} />
 
       <div className={styles.hero}>
         <section aria-labelledby="marking-title">
@@ -180,47 +179,6 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
           </ul>
         </section>
       )}
-    </>
-  )
-}
-
-interface AnalyzePanelProps {
-  workspaceId: string
-  jobId: string
-  onDone: () => void
-}
-
-/** 해석 전 작업: 해석 시작 (파이프라인 구현 전까지 501) */
-function AnalyzePanel({ workspaceId, jobId, onDone }: AnalyzePanelProps) {
-  const [running, setRunning] = useState(false)
-  const [error, setError] = useState<unknown>()
-
-  const run = async () => {
-    setRunning(true)
-    setError(undefined)
-    try {
-      await analyzeJob(workspaceId, jobId)
-      onDone()
-    } catch (err) {
-      setError(err)
-    } finally {
-      setRunning(false)
-    }
-  }
-
-  return (
-    <>
-      <Notice
-        title="아직 해석하지 않은 작업이에요"
-        action={
-          <button type="button" className="btn btn--primary" onClick={run} disabled={running}>
-            {running ? '해석 중' : '해석 시작'}
-          </button>
-        }
-      >
-        사진을 올렸다면 지금 해석할 수 있어요.
-      </Notice>
-      {error !== undefined && <ErrorNotice error={error} />}
     </>
   )
 }
