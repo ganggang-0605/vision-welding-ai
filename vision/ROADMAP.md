@@ -15,7 +15,8 @@ README의 [셀 형태와 각장](../README.md#셀-형태와-각장-pac-과제) �
 | **셀 좌·우 끝 형태** (`slit`, `slot`, `collar_front`, `collar_back`, `scallop`) | 셀 끝 형태를 검출 → `symbols`의 label로 출력, 좌·우는 위치로 구분 | Phase 3 (기호 검출 클래스로 추가) |
 
 - [ ] 셀 형태를 `VisionResult.symbols`로 낼지, 별도 필드를 둘지 팀과 합의 (현재 `shared/schemas/vision_result.schema.json`에는 셀 형태 필드가 없고, `Job.cell`은 백엔드 계약에만 있음)
-- [ ] 과제 안내의 셀 예시 사진·각장 손글씨 사진 확보 → `data/annotations/`
+- [x] 운영측 PAC 사진 7장(블록 4 · 손글씨 3) 정답 작성 → `data/annotations/pac_*.json` (셀 끝 절단부는 위치만, 종류는 `unknown`)
+- [ ] 과제 안내의 셀 예시 그림 확보 → 절단부 종류(slit·slot·collar·scallop) 정답 채우기
 
 ## 1. 범위와 출력 형식
 
@@ -116,8 +117,10 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 - **완료 기준:** 전처리를 켰을 때와 껐을 때 정확도 비교표. 나빠지는 보정은 끔
 
 ### Phase 3 · 기호 인식
-- [ ] 라벨 체계 확정: 워크스페이스 문자/기호 사전(`data/seed/workspaces/demo/symbol_dictionary.json`)의 `kind: symbol` 항목부터 시작
-- [ ] GroundingDINO로 라벨 초안 생성 → 사람이 수정
+- [ ] 라벨 체계 확정: 워크스페이스 문자/기호 사전(`data/seed/workspaces/demo/symbol_dictionary.json`)의 `kind: symbol` 항목부터 시작 — PAC 사진에 맞춰 `→`(지시 화살표) · `+`(먹매김 기준 표시) 추가, `▲`는 PAC 사진에 없음
+- [x] 기호 평가 스크립트: 기호별 AP@0.5 · 재현율 · 정밀도 (`vision/tools/eval_symbols.py`, 원격 `remote_symbols.py`)
+- [x] GroundingDINO 제로샷 시험 → 기호 16개 중 4개 찾는 동안 틀린 상자 34~52개, any AP@0.5 최고 0.085 ([reports/phase3_groundingdino.md](reports/phase3_groundingdino.md)). 검출기·라벨 초안 모두 쓰기 어려워 연결하지 않음
+- [ ] Claude 비전으로 기호·셀 형태 판별 (`source: "vlm"`) → 같은 지표로 비교
 - [ ] albumentations로 얼룩·스크래치·반사 증강
 - [ ] YOLOX 학습 후 `symbols.py`에 연결
 - [ ] 문자와 기호가 겹치는 경우 처리 규칙 (예: ▲가 OCR 글자로도 잡힐 때 어느 쪽을 남길지)
