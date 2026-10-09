@@ -1,18 +1,16 @@
+import { WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { getHealth } from '../api/client'
 
 type Status = 'checking' | 'connected' | 'disconnected'
 
-const LABEL: Record<Status, string> = {
-  checking: '확인 중…',
-  connected: '연결됨',
-  disconnected: '연결 안 됨',
-}
-
 /** 백엔드가 연결만 받고 응답하지 않을 때 '연결 안 됨'으로 바꾸기까지 기다리는 시간 */
 const HEALTH_TIMEOUT_MS = 5000
 
-/** /api/health 를 호출해 백엔드 연결 상태를 보여준다. */
+/**
+ * /api/health 로 백엔드 연결을 확인한다.
+ * 정상일 때는 아무것도 그리지 않고, 연결이 끊겼을 때만 사이드바 아래에 알린다.
+ */
 export function BackendStatus() {
   const [status, setStatus] = useState<Status>('checking')
   const [attempt, setAttempt] = useState(0)
@@ -49,14 +47,16 @@ export function BackendStatus() {
   }
 
   return (
-    <div className="backend-status">
-      <span className={`status-dot status-dot--${status}`} aria-hidden="true" />
-      <span role="status" aria-live="polite">
-        백엔드 서버: <strong>{LABEL[status]}</strong>
-      </span>
-      <button type="button" onClick={recheck} disabled={status === 'checking'}>
-        다시 확인
-      </button>
+    <div role="status" aria-live="polite">
+      {status === 'disconnected' && (
+        <div className="backend-status">
+          <WarningCircle size={16} weight="fill" aria-hidden="true" />
+          <span>서버에 연결할 수 없어요</span>
+          <button type="button" className="btn btn--plain btn--small" onClick={recheck}>
+            다시 확인
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,326 @@
+/* 데스크톱: 고정 사이드바 + 본문 / 768px 미만: 상단 바 + 접히는 사이드바 */
+
+.shell {
+  min-height: 100dvh;
+}
+
+.sidebar {
+  position: fixed;
+  z-index: 30;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: var(--sidebar-width);
+  padding: 14px 10px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--separator);
+  background: var(--fill);
+}
+
+.main {
+  min-width: 0;
+  margin-left: var(--sidebar-width);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.nav {
+  flex: 1;
+}
+
+.navList {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem,
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-row);
+  font-size: 0.875rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--label);
+  background: transparent;
+  cursor: pointer;
+}
+
+.navItem:hover {
+  text-decoration: none;
+  background: var(--fill-strong);
+}
+
+.navItem svg {
+  flex: none;
+  color: var(--secondary);
+}
+
+.navItem[aria-current='page'] {
+  font-weight: 600;
+  background: var(--fill-strong);
+}
+
+.navItem[aria-current='page'] svg {
+  color: var(--accent);
+}
+
+/* 맥 사이드바 위쪽의 검색 칸 모양 */
+.searchField {
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--tertiary);
+  background: var(--fill-strong);
+}
+
+.searchField :global(.kbd) {
+  margin-left: auto;
+}
+
+/* 터치 기기에서는 키보드 단축키 안내를 숨긴다. */
+@media (hover: none) and (pointer: coarse) {
+  .searchField :global(.kbd) {
+    display: none;
+  }
+}
+
+.navHint {
+  display: block;
+  margin: 0 0 14px;
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  color: var(--tertiary);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sectionTitle {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--tertiary);
+}
+
+.sidebarFooter {
+  margin-top: auto; /* 메뉴를 숨겼을 때(없는 워크스페이스)도 맨 아래 */
+}
+
+/* ── 섹션 제목 + 오른쪽 추가 버튼 (노션 사이드바) ── */
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.sectionAction {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  color: var(--tertiary);
+}
+
+.sectionAction:hover {
+  color: var(--label);
+  background: var(--fill-strong);
+}
+
+/* ── 프로젝트 트리 ── */
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-row);
+}
+
+.treeRow:hover {
+  background: var(--fill-strong);
+}
+
+.treeRow:has(.treeLink[aria-current='page']) {
+  background: var(--fill-strong);
+}
+
+.disclosure {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.disclosure:hover {
+  color: var(--label);
+  background: var(--fill-strong);
+}
+
+.disclosure svg {
+  transition: transform 0.18s var(--ease);
+}
+
+.disclosure[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.treeLink {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px 5px 2px;
+  font-size: 0.875rem;
+  color: var(--label);
+  text-decoration: none;
+}
+
+.treeLink:hover {
+  text-decoration: none;
+}
+
+.treeLink svg {
+  flex: none;
+  color: var(--secondary);
+}
+
+.treeLink[aria-current='page'] {
+  font-weight: 600;
+}
+
+.treeLink[aria-current='page'] svg {
+  color: var(--accent);
+}
+
+.treeChildren {
+  margin: 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+
+.treeChildren .navItem {
+  min-height: 30px;
+  font-size: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosure svg {
+    transition: none;
+  }
+}
+
+.mobileBar,
+.backdrop {
+  display: none;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--label);
+  background: transparent;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--fill-strong);
+}
+
+@media (max-width: 767.98px) {
+  .mobileBar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--separator);
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .mobileTitle {
+    overflow: hidden;
+    flex: 1;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* 닫혀 있을 때는 visibility 로 숨겨 키보드 포커스도 받지 않게 한다. */
+  .sidebar {
+    width: min(300px, 85vw);
+    visibility: hidden;
+    box-shadow: var(--shadow-float);
+    transform: translateX(-100%);
+    transition:
+      transform 0.28s var(--ease),
+      visibility 0s linear 0.28s;
+  }
+
+  .sidebar[data-open='true'] {
+    visibility: visible;
+    transform: none;
+    transition: transform 0.28s var(--ease);
+  }
+
+  .backdrop {
+    position: fixed;
+    z-index: 25;
+    inset: 0;
+    display: block;
+    background: rgb(0 0 0 / 0.3);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar[data-open='true'] {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mobileBar {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

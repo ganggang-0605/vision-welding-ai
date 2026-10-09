@@ -1,10 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from app.api import jobs, workspaces
+from app.api import jobs, projects, standards, users, workspaces
+from app.store import get_store
 
-app = FastAPI(title="Vision Welding AI")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_store()  # 시작 시 시드 로드 (인메모리 — 데모 사용자, 워크스페이스 "demo"·"personal", 표준 용접 기준)
+    yield
+
+
+app = FastAPI(title="Vision Welding AI", lifespan=lifespan)
+app.include_router(users.router, prefix="/me", tags=["users"])
 app.include_router(workspaces.router, prefix="/workspaces", tags=["workspaces"])
-app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(projects.router, prefix="/workspaces/{workspace_id}/projects", tags=["projects"])
+app.include_router(jobs.router, prefix="/workspaces/{workspace_id}/jobs", tags=["jobs"])
+app.include_router(standards.router, prefix="/welding-standards", tags=["welding-standards"])
 
 
 @app.get("/health")

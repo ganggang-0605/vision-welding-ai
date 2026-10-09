@@ -1,0 +1,181 @@
+.root {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-row);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.trigger:hover {
+  background: var(--fill-strong);
+}
+
+/* 워크스페이스 첫 글자 타일 (맥 앱 아이콘처럼 어두운 사각형) */
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--label);
+}
+
+.avatarLarge {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 1rem;
+}
+
+.name {
+  overflow: hidden;
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  flex: none;
+  color: var(--tertiary);
+}
+
+.menu :global(.skeleton) span {
+  height: 36px;
+}
+
+/* 사이드바(스크롤 영역) 안에서 잘리지 않게 사이드바 폭에 맞춘다. */
+.menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  padding: 6px;
+  border-radius: var(--radius-group);
+  background: var(--bg);
+  box-shadow: var(--shadow-float);
+}
+
+.currentBlock {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 10px 8px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.currentText {
+  display: grid;
+  min-width: 0;
+}
+
+.currentName {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.currentMeta {
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
+.currentActions {
+  display: flex;
+  gap: 6px;
+}
+
+.menuTitle {
+  overflow: hidden;
+  margin: 6px 8px 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tertiary);
+}
+
+.list {
+  margin: 0 0 6px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--separator);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  color: var(--label);
+  text-decoration: none;
+}
+
+.item:hover,
+.item:focus-visible {
+  text-decoration: none;
+  background: var(--fill);
+}
+
+.itemText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 긴 이름(최대 100자)은 말줄임, 현재 표시 체크는 항상 보이게 */
+.itemName {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.itemMeta {
+  font-size: 0.75rem;
+  color: var(--secondary);
+}
+
+.item[aria-current='page'] .itemName {
+  font-weight: 600;
+}
+
+.check {
+  flex: none;
+  color: var(--label);
+}
+
+.plusTile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--secondary);
+  background: var(--fill-strong);
+}
