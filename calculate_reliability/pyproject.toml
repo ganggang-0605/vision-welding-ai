@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vw-calculate-reliability"
+version = "0.1.0"
+description = "[3단계] 신뢰도 산출과 판단 근거: VisionResult + ContextResult → ConfidenceReport (shared/schemas)"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

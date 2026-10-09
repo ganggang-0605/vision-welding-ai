@@ -3,11 +3,19 @@
 이 저장소의 JSON 스키마는 모두 [`schemas/`](schemas/)에 둡니다 (파이프라인 1·2·3단계, 로봇 연계 JSON).
 
 표기 정보 해석의 **1단계(시각 인식) → 2단계(DB 기반 맥락 해석) → 3단계(신뢰도 산출)**가 서로 주고받는 데이터 형식입니다.
-1단계와 2단계를 폴더를 나눠 따로 개발하기 전에 형식을 먼저 정해 둡니다. 3단계는 나중에 개발하지만, 1·2단계가 무엇을 미리 출력해 둬야 하는지 알 수 있도록 형식은 지금 정합니다.
+세 단계는 폴더를 나눠 독립 패키지로 개발하고, `backend`가 셋을 순서대로 호출해 통합합니다.
 
-```
-스키마 설계 (shared/)  →  1단계 · 2단계 · GUI 폴더 분리 개발  →  3단계 개발
-```
+| 폴더 | 패키지 | 진입 함수 |
+| --- | --- | --- |
+| [`vision/`](../vision) | `vision` | `recognize(image, image_id)` → VisionResult |
+| [`db_context_interpreter/`](../db_context_interpreter) | `db_context_interpreter` | `interpret(vision_result, context_input)` → ContextResult |
+| [`calculate_reliability/`](../calculate_reliability) | `calculate_reliability` | `score(vision, context, corrections, threshold)` → ConfidenceReport |
+| [`backend/app/pipeline.py`](../backend/app/pipeline.py) | 통합 | `analyze_image()` · `review_analysis()` → Analysis, `job_with_analysis()` → Job |
+| `shared/src/vw_shared/` | `vw_shared` | `schema_errors()` · `semantic_errors()` · `to_job_fields()` · `load_example()` |
+
+의존 방향은 한쪽으로만 흐릅니다: `shared` ← 세 단계 ← `backend` ← `frontend`(API로만).
+단계끼리는 서로 import하지 않고, DB도 직접 읽지 않습니다 (2단계에 필요한 DB 값은 `backend`가 `ContextInput`으로 넘김).
+각 단계는 `shared/examples`의 앞 단계 예시를 입력으로 테스트하므로 앞 단계가 완성되지 않아도 개발할 수 있습니다.
 
 > **GUI ↔ 백엔드 계약(워크스페이스·프로젝트·작업·작업자 확인·승인)은 [`backend/app/schemas.py`](../backend/app/schemas.py)가 기준입니다.**
 > 여기서는 그 계약에 없는 파이프라인 내부 형식만 정의하고, 결과를 그 계약의 `Job` 필드로 옮기는 방법을 정합니다.
@@ -19,6 +27,8 @@
 ```
 POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
                                    워크스페이스 사전 · 프로젝트 조립 트리 · 공통 용접 기준
+                                                     │
+                                         ContextInput (backend가 모음)
                                                      │
 이미지 ──▶ [1단계] VisionResult ──▶ [2단계] ContextResult ──▶ [3단계] ConfidenceReport
               │                            │                            │
@@ -35,9 +45,10 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | --- | --- | --- | --- |
 | [`common.schema.json`](schemas/common.schema.json) | 좌표, 확률, ID 등 공통 타입 | — | 전체 |
 | [`vision_result.schema.json`](schemas/vision_result.schema.json) | **[1단계]** 전처리 정보, 문자·기호 인식 결과 | 1단계 | 2단계, 3단계, GUI |
+| [`context_input.schema.json`](schemas/context_input.schema.json) | **[2단계 입력]** 사전, 조립 트리, 용접 기준, 작업자 맥락·수정, 이전 VLM 읽기, 연결된 과거 작업 | 백엔드 (`app/pipeline.py`) | 2단계 |
 | [`context_result.schema.json`](schemas/context_result.schema.json) | **[2단계]** 사전 대조, 부재·조립 경로, 용접 조건, DB 불일치, VLM 해석 | 2단계 | 3단계, 백엔드 |
 | [`confidence_report.schema.json`](schemas/confidence_report.schema.json) | **[3단계]** 세 가지 신뢰도, 근거, 작업자 확인 항목 | 3단계 (이후) | 백엔드, GUI |
-| [`analysis.schema.json`](schemas/analysis.schema.json) | 사진 한 장의 해석 결과 (1·2·3단계 묶음 + 작업자 수정) | 파이프라인 (`run_pipeline`) | 백엔드 |
+| [`analysis.schema.json`](schemas/analysis.schema.json) | 사진 한 장의 해석 결과 (1·2·3단계 묶음 + 작업자 수정) | 백엔드 (`app/pipeline.py`) | 백엔드 |
 | [`robot_output.schema.json`](schemas/robot_output.schema.json) | 승인된 작업의 로봇 연계 JSON (`GET .../export`) | 백엔드 (`backend/app/export/robot_json.py`) | 로봇 제어·용접 프로그램 |
 
 ## 역할과 연결
@@ -53,7 +64,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 작업자 확인(재해석·직접 해석)은 2단계부터 다시 돌리므로, 1단계 결과와 ID는 작업이 끝날 때까지 그대로 유지됩니다.
 2단계가 붙이는 `v*`도 같은 표기면 다시 돌려도 이전 revision의 ID를 그대로 씁니다 (작업자 수정 `corrections`가 이 ID를 가리킴).
 
-**작업 하나에 사진이 여러 장이면** 사진마다 Analysis를 만들고, `Job`에는 가장 최근(`created_at`) Analysis를 반영합니다 (`validate.py`의 `latest_analysis()`).
+**작업 하나에 사진이 여러 장이면** 사진마다 Analysis를 만들고, `Job`에는 가장 최근(`created_at`) Analysis를 반영합니다 (`vw_shared.latest_analysis()`).
 
 ## 팀원 API 계약과의 연결
 
@@ -82,7 +93,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | `evidence` | 3단계 `evidence[].message` |
 | `needs_review` | 3단계 `needs_review[].message` |
 
-`to_job_fields()`는 [`validate.py`](validate.py)에 기준 구현이 있고, 결과가 팀원 `Job` 모델을 통과하는지 점검합니다. 백엔드 `analyze`·`review` 구현 때 그대로 가져다 쓸 수 있습니다.
+`to_job_fields()`는 [`vw_shared/job_fields.py`](src/vw_shared/job_fields.py)에 있고, 백엔드 `app/pipeline.py`의 `job_with_analysis()`가 씁니다. 결과가 팀원 `Job` 모델을 통과하는지는 `backend/tests/test_pipeline.py`가 점검합니다.
 
 > 이름 주의: 팀원 계약의 `Job.marking`(표기 원문·해석 요약)과 구분하려고, 2단계의 사전 대조 결과는 `DictionaryMatch`(`dictionary_matches`)라고 부릅니다.
 
@@ -117,23 +128,24 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 ## 점검
 
 ```bash
-backend/.venv/bin/pip install jsonschema
-backend/.venv/bin/python shared/validate.py
-# 또는 venv 없이: uv run --no-project --python 3.12 --with jsonschema --with pydantic python shared/validate.py
+python -m vw_shared.validate     # backend 가상환경 (requirements.txt가 shared를 설치)
+cd shared && python -m pytest -q # CI와 같음
 ```
 
 - 예시가 스키마에 맞는지
 - 단계 사이 규칙: 참조한 ID가 인식 결과(1단계, `v*`)에 있는지, `char_probs` 개수가 글자 수와 같은지, `overall`이 세 신뢰도의 최솟값인지, 필수 값이 없으면 `passed`가 false이고 `needs_review`에 들어 있는지 등 (`semantic_errors()`)
 - 예시가 팀원 시드 DB와 맞는지: 기호가 `demo` 사전에 있는지, 부재가 `block_a1` 조립 트리에 있는지, 용접 조건이 표준 용접 기준표에 있는지
-- `to_job_fields()` 결과가 팀원 `Job` 모델(Pydantic)을 통과하는지, 통과(`awaiting_approval`)한 결과가 로봇 JSON 스키마도 통과하는지
+- 2단계 입력 예시가 시드 DB를 그대로 옮긴 것인지
+- 통과(`awaiting_approval`)한 결과가 로봇 JSON 스키마도 통과하는지
+- 팀원 Pydantic 모델(`Job`, `RobotOutput`, `SymbolEntry` 등)과 맞는지는 `backend/tests/test_pipeline.py`가 점검
 - 예시끼리 이어지는지: 1·2·3단계 예시 = `analysis` 묶음, revision 1 → 2
 
 ## 스키마를 바꿀 때
 
-1. 스키마와 예시를 같이 고치고 `validate.py`가 통과하는지 확인
+1. 스키마와 예시를 같이 고치고 `python -m vw_shared.validate`와 각 단계 테스트가 통과하는지 확인
 2. PR로 올리고, **그 스키마를 만드는 쪽과 쓰는 쪽 담당 모두** 확인 후 머지
 3. 기존 필드의 이름·의미를 바꾸면 `analysis.schema.json`의 `schema_version`을 올림
-4. 팀원 계약(`backend/app/schemas.py`)의 `Job`·`SymbolEntry`·`AssemblyNode`·`WeldingStandard`가 바뀌면 `to_job_fields()`와 이 문서의 연결 표를 같이 고침
+4. 팀원 계약(`backend/app/schemas.py`)의 `Job`·`SymbolEntry`·`AssemblyNode`·`WeldingStandard`가 바뀌면 `context_input.schema.json`, `to_job_fields()`, 이 문서의 연결 표를 같이 고침 (`backend/tests/test_pipeline.py`가 어긋나면 실패)
 
 ## 아직 정할 것
 
@@ -142,8 +154,7 @@ backend/.venv/bin/python shared/validate.py
   파이프라인 어느 단계가 셀 형태를 판별하고 각장을 읽을지, `to_job_fields()`에서 어떻게 채울지 정해야 함 (지금은 비어 있는 값)
 
 - 사진 여러 장일 때 "가장 최근 Analysis"로 충분한지, 사진들의 결과를 합칠지
-- 백엔드 파이프라인 코드(`backend/app/pipeline/`)를 스키마에 맞추기: `run_pipeline`에 `project_id` 추가(조립 트리 조회), 반환값을 `Analysis`로
+- `analyze`·`review` API(지금 501) 연결: 이미지 저장, Analysis 저장, 사진 → `image_id`가 정해지면 `app/pipeline.py`를 호출
+- `ReviewRequest(manual).values`의 키: 지금 백엔드 테스트(`test_jobs.py`)는 `{"raw_text": …}`를 쓰는데, 파이프라인은 `t*`·`s*`·`v*`·`part`·`welding_condition`·`interpretation`만 받음 (그 밖의 키는 `AnalysisError`)
 - `Analysis`를 저장·조회하는 API를 둘지 (GUI가 사진 위 `bbox`·후보를 그리려면 필요) — 예: `GET /workspaces/{workspace_id}/jobs/{job_id}/analyses`
 - 이미지 업로드(`POST .../images`) 응답의 `image_id` 형식
-- `to_job_fields()`를 백엔드(`backend/app/`)로 옮길지
-- `validate.py`를 CI에 넣을지 (`jsonschema`를 `backend/requirements.txt`에 추가해야 함)

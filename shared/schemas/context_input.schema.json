@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/context_input.schema.json",
+  "title": "ContextInput",
+  "description": "[2단계 입력] 백엔드가 DB에서 모아 2단계에 넘기는 값. 2단계는 DB를 직접 읽지 않고 이것만 씀. 생산: 백엔드(app/pipeline.py) / 소비: 2단계. SymbolEntry·AssemblyNode·WeldingStandard는 backend/app/schemas.py와 같은 모양",
+  "type": "object",
+  "required": ["workspace_id", "project_id", "symbols", "assembly_tree", "welding_standards", "user_context", "corrections", "previous_reading", "related_jobs"],
+  "additionalProperties": false,
+  "properties": {
+    "workspace_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "project_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "symbols": {
+      "type": "array",
+      "description": "워크스페이스 문자/기호 사전 (GET /workspaces/{workspace_id}/symbols)",
+      "items": { "$ref": "#/$defs/SymbolEntry" }
+    },
+    "assembly_tree": {
+      "type": "array",
+      "description": "프로젝트 조립 트리 (GET .../projects/{project_id}/assembly-tree)",
+      "items": { "$ref": "#/$defs/AssemblyNode" }
+    },
+    "welding_standards": {
+      "type": "array",
+      "description": "공통 표준 용접 기준 (GET /welding-standards)",
+      "items": { "$ref": "#/$defs/WeldingStandard" }
+    },
+    "user_context": {
+      "type": ["string", "null"],
+      "description": "재해석(ReviewRequest action=reinterpret) 때 작업자가 추가한 맥락. 결과의 ContextResult.user_context로 그대로 넘김"
+    },
+    "corrections": {
+      "type": "array",
+      "description": "지금까지 작업자가 고친 항목 (Analysis.corrections). 2단계는 고친 값을 1단계 읽기보다 우선해 해석",
+      "items": { "$ref": "analysis.schema.json#/$defs/Correction" }
+    },
+    "previous_reading": {
+      "description": "이전 revision의 vlm.reading. 같은 표기에 v* ID를 그대로 이어 쓰려고 넘김. 처음 해석이거나 VLM을 안 썼으면 null",
+      "anyOf": [{ "$ref": "context_result.schema.json#/$defs/VlmResult/properties/reading" }, { "type": "null" }]
+    },
+    "related_jobs": {
+      "type": "array",
+      "description": "같은 워크스페이스의 연결된 과거 작업 (Job.related_job_ids). 2단계가 맥락으로 쓰면 ContextResult.related_job_ids에 남김",
+      "items": {
+        "type": "object",
+        "required": ["job_id", "assembly_path", "interpretation"],
+        "additionalProperties": false,
+        "properties": {
+          "job_id": { "$ref": "common.schema.json#/$defs/Id" },
+          "assembly_path": { "type": ["string", "null"] },
+          "interpretation": { "type": ["string", "null"], "description": "Job.marking.interpretation" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "SymbolEntry": {
+      "type": "object",
+      "required": ["id", "code", "kind", "meaning", "aliases", "welding_joint_type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["text", "symbol"] },
+        "meaning": { "type": "string", "minLength": 1 },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "welding_joint_type": { "type": ["string", "null"], "description": "용접 기준의 joint_type (예: FILLET, BUTT_V)" }
+      }
+    },
+    "AssemblyNode": {
+      "type": "object",
+      "required": ["node_id", "parent_id", "level", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1 },
+        "parent_id": { "type": ["string", "null"] },
+        "level": { "$ref": "common.schema.json#/$defs/AssemblyLevel" },
+        "path": { "$ref": "common.schema.json#/$defs/AssemblyPath" }
+      }
+    },
+    "WeldingStandard": {
+      "type": "object",
+      "required": ["joint_type", "thickness_min_mm", "thickness_max_mm", "process", "position", "current_a", "voltage_v", "speed_cm_min"],
+      "additionalProperties": false,
+      "properties": {
+        "joint_type": { "type": "string" },
+        "thickness_min_mm": { "type": "number", "minimum": 0 },
+        "thickness_max_mm": { "type": "number", "minimum": 0 },
+        "process": { "type": "string" },
+        "position": { "type": "string" },
+        "current_a": { "$ref": "common.schema.json#/$defs/RangeValue" },
+        "voltage_v": { "$ref": "common.schema.json#/$defs/RangeValue" },
+        "speed_cm_min": { "$ref": "common.schema.json#/$defs/RangeValue" }
+      }
+    }
+  }
+}

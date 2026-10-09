@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vw-vision"
+version = "0.1.0"
+description = "[1단계] 시각 인식: 전처리 → 문자 인식(OCR) / 기호 인식 → VisionResult (shared/schemas/vision_result.schema.json)"
+requires-python = ">=3.12"
+dependencies = ["numpy", "opencv-python-headless"]
+
+[project.optional-dependencies]
+# 실제 모델 (Python 3.12). CI가 느려지지 않도록 기본 설치에서 뺌: pip install -e "vision[models]"
+models = [
+    "paddlepaddle==3.3.1",
+    "paddleocr==3.7.0",
+    "torch==2.14.1",          # TrOCR · PARSeq · YOLOX · Retinexformer 공통
+    "torchvision==0.29.1",
+    "transformers==5.19.0",
+    "albumentations==2.0.8",  # 데이터 증강
+]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -117,18 +117,27 @@
 
 ## 디렉터리 구조
 
+표기 정보 해석의 1·2·3단계는 각자 독립 패키지로 개발하고, `backend`가 셋을 순서대로 호출해 통합합니다.
+단계 사이 데이터 형식은 모두 [`shared/schemas`](shared/schemas)에 있습니다 ([`shared/README.md`](shared/README.md)).
+
 ```
+shared/                   # 공통 계약 — 모든 폴더가 여기에만 의존
+  schemas/                # JSON 스키마 전체 (1·2·3단계 입출력 · Analysis · 로봇 출력)
+  examples/               # 단계별 예시 = 각 단계 테스트의 입력
+  src/vw_shared/          # 스키마 검증 · 단계 사이 규칙 · to_job_fields (python -m vw_shared.validate)
+vision/                   # [1단계] 시각 인식 — recognize(image, image_id) → VisionResult
+  src/vision/             #   preprocess(전처리) · ocr(문자) · symbols(기호) · recognition(진입점, ID 붙이기)
+  tools/ ROADMAP.md       #   데이터 점검 도구 · 개발 계획
+db_context_interpreter/   # [2단계] DB 기반 맥락 해석 — interpret(vision_result, context_input) → ContextResult
+  src/db_context_interpreter/  # welding(용접 기준) · dictionary(사전) · assembly(조립 경로) · vlm/
+calculate_reliability/    # [3단계] 신뢰도 산출 — score(vision, context, corrections, threshold) → ConfidenceReport
+  src/calculate_reliability/   # visual · db_consistency · vlm_reasoning · review(작업자 확인 항목)
 backend/
   app/
     api/            # REST API (FastAPI) — users(/me, /users) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
     schemas.py      # API 스키마 (Pydantic) — 프론트엔드와 공유하는 계약
     store.py        # 임시 인메모리 저장소 (실제 DB 로 교체 예정)
-    pipeline/
-      preprocess/   # [1단계] 전처리
-      recognition/  # [1단계] OCR / YOLO
-      context/      # [2단계] DB 대조 + VLM 맥락 해석
-      confidence/   # [3단계] 신뢰도 산출
-      run.py        # 파이프라인 진입점
+    pipeline.py     # 1·2·3단계 통합 — DB 조회 → 단계 호출 → Analysis → Job 반영
     db/             # 조립 트리 / 문자·기호 / 용접 기준 DB
     export/         # 로봇 연계 JSON
   tests/
@@ -142,7 +151,7 @@ data/seed/
   # demo: 팀(멤버 3명) — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
   # park: 개인(박지훈) — block_b1("B1 블록", 빈 블록)
   # personal: 개인(데모 사용자) — practice("연습용 블록", 빈 블록)
-shared/             # JSON 스키마 전체 (파이프라인 1·2·3단계 · 로봇 출력) — shared/README.md
+data/annotations/   # [1단계] 현장 사진 정답 라벨
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
 ```
@@ -163,7 +172,22 @@ http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 
 시작 시 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·A2 블록, 데모 작업 3건)와
 개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드됩니다.
 
+`requirements.txt`가 `shared`와 1·2·3단계 패키지도 editable(`-e ../…`)로 함께 설치합니다 (`backend` 폴더에서 실행).
+실제 인식 모델은 `pip install -e "../vision[models]"`, 상용 VLM SDK는 `pip install -e "../db_context_interpreter[vlm]"`로 따로 설치합니다.
+
 테스트: `cd backend && python -m pytest -q`
+
+### 해석 파이프라인 (1·2·3단계)
+
+단계마다 `shared/examples`의 앞 단계 예시를 입력으로 테스트하므로, 앞 단계가 완성되지 않아도 따로 개발할 수 있습니다.
+위 백엔드 가상환경에서 저장소 루트를 기준으로 각각 실행합니다.
+
+```bash
+cd vision && python -m pytest -q                   # [1단계]
+cd db_context_interpreter && python -m pytest -q   # [2단계]
+cd calculate_reliability && python -m pytest -q    # [3단계]
+python -m vw_shared.validate                       # 스키마·예시 점검
+```
 
 ### 프론트엔드
 
@@ -181,6 +205,7 @@ http://localhost:5173 에서 열립니다. 백엔드(http://localhost:8000)를 �
 `main` 브랜치 push와 모든 PR에서 GitHub Actions([`.github/workflows/ci.yml`](.github/workflows/ci.yml))가 실행됩니다.
 
 - **backend** (Python 3.12): `pip install -r requirements.txt` → `python -m pytest -q`
+- **pipeline** (Python 3.12, `shared` · `vision` · `db_context_interpreter` · `calculate_reliability` 각각): `pip install -e ../shared -e .` → `python -m pytest -q`
 - **frontend** (Node 24): `npm ci` → `npm run lint` → `npm run build`
 
 Actions 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다.

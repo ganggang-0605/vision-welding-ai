@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vision-welding-ai.local/shared/schemas/analysis.schema.json",
   "title": "Analysis",
-  "description": "이미지 한 장의 표기 정보 해석 결과 (1→2→3단계 묶음). run_pipeline의 반환값. 백엔드가 이 결과로 Job(backend/app/schemas.py)의 marking·welding_condition·confidence·evidence·needs_review를 채움. 작업 하나에 사진이 여러 장이면 사진마다 Analysis를 만들고, Job에는 가장 최근(created_at) Analysis를 반영함",
+  "description": "이미지 한 장의 표기 정보 해석 결과 (1→2→3단계 묶음). backend/app/pipeline.py의 analyze_image·review_analysis 반환값. 백엔드가 이 결과로 Job(backend/app/schemas.py)의 marking·welding_condition·confidence·evidence·needs_review를 채움. 작업 하나에 사진이 여러 장이면 사진마다 Analysis를 만들고, Job에는 가장 최근(created_at) Analysis를 반영함",
   "type": "object",
   "required": ["schema_version", "analysis_id", "workspace_id", "project_id", "job_id", "image_id", "revision", "created_at", "vision", "context", "confidence"],
   "additionalProperties": false,

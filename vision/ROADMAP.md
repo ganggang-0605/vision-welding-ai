@@ -11,9 +11,9 @@
 
 | 구성 | 파일 | 출력 |
 | --- | --- | --- |
-| a. 전처리 | `backend/app/pipeline/preprocess/denoise.py` | `(보정된 이미지, 보정 강도 0~1)` |
-| b. 문자 인식 | `backend/app/pipeline/recognition/ocr.py` | `[{"text", "prob", "bbox"}]` |
-| c. 기호 인식 | `backend/app/pipeline/recognition/symbols.py` | `[{"label", "prob", "bbox"}]` |
+| a. 전처리 | `vision/src/vision/preprocess.py` | `(보정된 이미지, VisionResult.preprocess)` |
+| b. 문자 인식 | `vision/src/vision/ocr.py` | `[{"text", "prob", "bbox", "source"}]` |
+| c. 기호 인식 | `vision/src/vision/symbols.py` | `[{"label", "prob", "bbox", "source"}]` |
 
 - `bbox`는 `[x1, y1, x2, y2]`, **원본 이미지 좌표 기준**으로 통일합니다. 전처리에서 원근을 펴더라도 결과를 원본 좌표로 되돌려 줘야 작업자 확인 화면에서 위치를 표시할 수 있습니다.
 - `prob`는 0~1. 3단계가 0~100%로 바꿔 시각 인식 신뢰도에 씁니다.
@@ -65,7 +65,7 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 
 ## 3. 개발 환경
 
-- **Python 3.12 가상환경 필수.** PaddlePaddle은 Python 3.14용 설치 파일이 없음(3.12용 3.3.1은 있음, 2026-10-09 확인). 1단계 패키지는 CI가 느려지지 않도록 `backend/requirements-vision.txt`로 분리.
+- **Python 3.12 가상환경 필수.** PaddlePaddle은 Python 3.14용 설치 파일이 없음(3.12용 3.3.1은 있음, 2026-10-09 확인). 실제 모델 패키지는 CI가 느려지지 않도록 `vision/pyproject.toml`의 `models` 선택 설치로 분리 (`pip install -e "vision[models]"`).
 - Mac(Apple Silicon)에서는 PaddlePaddle이 CPU로 동작하고, PyTorch 계열(PARSeq, TrOCR, YOLOX, Retinexformer)은 MPS 가속 사용 가능.
 - YOLOX·PARSeq 학습은 Mac에서 느리므로 Colab 등 GPU 환경에서 학습하고, 가중치만 `weights/`에 받아 씀 (`.gitignore` 처리됨).
 - 현장 사진은 `data/raw/`에 둠 (`.gitignore` 처리됨, 팀 공유는 드라이브로). 정답 라벨은 `data/annotations/`에 커밋.
@@ -73,7 +73,7 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 ## 4. 단계별 계획
 
 ### Phase 0 · 환경과 평가 데이터 (가장 먼저)
-- [x] Python 3.12로 `backend/.venv` 재생성, 1단계 패키지 설치 (`backend/requirements-vision.txt`)
+- [x] Python 3.12로 `backend/.venv` 재생성, 1단계 패키지 설치 (지금은 `pip install -e "vision[models]"`)
 - [x] 정답 형식(`data/annotations/README.md`)과 점검 스크립트(`vision/tools/check_dataset.py`) 준비
 - [ ] 실제 표기 사진 수집: 각인, 스텐실, 마커 손글씨, 기호가 섞인 사진 **최소 50~100장**
 - [ ] 사진별 정답 작성 (`data/annotations/`): 글자 내용 + 위치, 기호 라벨 + 위치
@@ -118,7 +118,7 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 - **완료 기준:** 평가 세트에서 Phase 1 대비 정확도 향상 확인, 낮은 확률 결과에 후보 목록 포함
 
 ### Phase 5 · 통합과 시연 준비
-- [ ] `run_pipeline`으로 1~3단계 끝까지 연결
+- [ ] `backend/app/pipeline.py`의 `analyze_image()`로 1~3단계 끝까지 연결 (통합 코드는 준비됨, 단계 구현을 채우면 이어짐)
 - [ ] OCR ↔ VLM 교차 검증: Claude API로 같은 사진을 읽게 해 OCR 결과와 일치하는지 비교 → 시각 인식 신뢰도 근거 (3단계 담당과 협업)
 - [ ] 시연용 사진 세트 구성: 잘 되는 사진 + 어려운 사진(작업자 확인으로 넘어가는 사례)
 - [ ] 사진당 처리 시간 측정, 필요하면 무거운 보정은 조건부로만 실행

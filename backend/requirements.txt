@@ -6,13 +6,11 @@ python-multipart
 opencv-python-headless
 numpy
 pillow
-# 인식 (필요 시 주석 해제)
-# paddleocr
-# transformers   # TrOCR
-# ultralytics    # YOLO
-# VLM
-# anthropic
-# openai
-# google-genai
+# 해석 파이프라인 — 저장소 루트의 단계별 패키지 (backend 폴더에서 설치, app/pipeline.py 가 통합)
+#   실제 모델: pip install -e "../vision[models]"   VLM SDK: pip install -e "../db_context_interpreter[vlm]"
+-e ../shared                  # 공용 스키마 · to_job_fields (jsonschema)
+-e ../vision                  # [1단계] 시각 인식
+-e ../db_context_interpreter  # [2단계] DB 기반 맥락 해석
+-e ../calculate_reliability   # [3단계] 신뢰도 산출
 pytest
 httpx2  # fastapi.testclient (Starlette 1.2+ 권장, httpx 는 deprecated)

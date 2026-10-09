@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vw-db-context-interpreter"
+version = "0.1.0"
+description = "[2단계] DB 기반 맥락 해석: VisionResult + ContextInput → ContextResult (shared/schemas)"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+# 상용 VLM SDK (.env의 VLM_PROVIDER에 맞는 것만 있어도 됨): pip install -e "db_context_interpreter[vlm]"
+vlm = ["anthropic", "openai", "google-genai"]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
