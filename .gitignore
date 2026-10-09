@@ -20,7 +20,12 @@ weights/
 *.pt
 *.onnx
 data/raw/
+data/eval/
 data/uploads/
+# 백엔드 저장소 (DATABASE_URL, 지우면 시드 상태로 다시 시작)
+*.db
+*.db-wal
+*.db-shm
 
 # OS / IDE
 .DS_Store

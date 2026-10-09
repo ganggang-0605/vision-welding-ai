@@ -235,6 +235,8 @@ class Job(ApiModel):
     confidence: Confidence | None = None
     evidence: list[str] = []
     needs_review: list[str] = []
+    # 마지막 해석(analyze · review)이 실패한 이유. 상태는 해석 전으로 돌아감. 다음 해석이 성공하면 null
+    analysis_error: str | None = None
 
 
 class JobImage(ApiModel):
@@ -247,6 +249,9 @@ class JobImage(ApiModel):
     width: int    # 원본 픽셀 크기 — 1단계 bbox 좌표의 기준
     height: int
     created_at: UtcDatetime
+    # 1단계가 보정한 사진이 있는지 (작은 사진 키우기 · 노이즈 제거 — OCR 이 본 사진). 있으면 .../images/{image_id}/preprocessed.
+    # 크기가 원본과 달라도 bbox 는 원본(width·height) 좌표
+    preprocessed: bool = False
 
 
 class PipelineStatus(ApiModel):
@@ -260,6 +265,8 @@ class PipelineStatus(ApiModel):
     vlm_runs: int
     vlm_sdk_installed: bool            # provider SDK 설치됨 (pip install -e "db_context_interpreter[vlm]")
     vlm_api_key_set: bool              # provider API 키가 .env 에 채워져 있음 (값은 돌려주지 않음)
+    vlm_last_error: str | None = None  # 서버를 켠 뒤 가장 최근 VLM 호출 실패 이유 (그다음 성공하면 null). 키 값은 담지 않음
+    vlm_last_error_at: UtcDatetime | None = None
     confidence_threshold: float        # [3단계] .env CONFIDENCE_THRESHOLD
 
 
@@ -284,14 +291,21 @@ class ReviewRequest(ApiModel):
 
 class ApproveRequest(ApiModel):
     approved_by: NonEmptyStr
+    # 확인 필요(needs_review) 작업을 승인할 때 true — 작업자가 확인 항목을 직접 봤다는 표시 (없으면 409)
+    acknowledge_review: bool = False
 
 
 # ── 표준 용접 기준 (공통, 읽기 전용) ──────────────────────────
 
 class WeldingStandard(ApiModel):
+    """판 두께 또는 각장으로 고르는 기준 행 (data/seed/SOURCES.md).
+    출처가 각장별 값만 주는 행(3F 수직 필렛)은 판 두께가 null, 각장 자료가 없는 행(맞대기)은 각장이 null."""
+
     joint_type: str
-    thickness_min_mm: float
-    thickness_max_mm: float
+    thickness_min_mm: float | None
+    thickness_max_mm: float | None
+    leg_min_mm: float | None = None
+    leg_max_mm: float | None = None
     process: str
     position: str
     current_a: str

@@ -1,26 +1,30 @@
-"""임시 인메모리 저장소 (워크스페이스 단위)
+"""저장소 (워크스페이스 단위) — 메모리에 두고, DATABASE_URL 이 있으면 SQLite 파일에도 남긴다 (app/db/sqlite.py)
 
-⚠️ 실제 DB 로 교체하기 전까지 쓰는 임시 구현이다. 데이터는 프로세스 메모리에만 있어
-서버를 재시작하면 data/seed 의 초기 상태(팀 워크스페이스 "demo", 개인 워크스페이스 "personal")로 돌아간다.
-TODO: SQLAlchemy(requirements 에 포함) 기반 DB 로 교체 — 라우터는 Store 메서드만 쓰므로 이 모듈만 바꾸면 된다.
+파일이 비어 있으면 data/seed 의 초기 상태(팀 워크스페이스 "demo", 개인 워크스페이스 "personal")로 시작해 그대로 저장하고,
+그다음부터는 파일에서 읽는다 — 서버를 다시 켜도 작업 · 사진 · 해석 결과가 남는다. 시드 상태로 되돌리려면 파일을 지운다.
+테스트(reset_store)는 파일 없이 메모리만 쓴다.
 TODO(인증): 로그인 없음 — 요청 헤더 X-User-Id 가 데모 사용자를 고르고(없으면 시드의 current_user_id),
   워크스페이스 목록만 그 사용자가 멤버인 것으로 거른다. 그 밖의 권한 검사는 없어 누구나 모든 워크스페이스에 접근할 수 있다.
 
 - 워크스페이스별 데이터(멤버, 문자/기호 사전, 프로젝트, 작업)는 workspace_id 를 키로 하는 dict 에 둔다.
 - 조립 트리는 프로젝트(블록)별 — assembly_trees[workspace_id][project_id]. 작업은 project_id 필드로 프로젝트에 속한다.
-- 사용자와 표준 용접 기준은 모든 워크스페이스가 공유하는 공통 데이터다 (용접 기준은 읽기 전용).
+- 사용자와 표준 용접 기준은 모든 워크스페이스가 공유하는 공통 데이터다 (용접 기준은 읽기 전용, 늘 CSV 에서 읽음).
 - 확인 후 변경하는 작업(승인, 사전 항목 수정·삭제, 워크스페이스 수정, 멤버 초대)은 잠금 안에서 최신 상태를
   다시 읽어 처리한다 — 동시 요청이 같은 스냅샷을 보고 둘 다 성공하지 않도록.
-  (DB 로 바꾸면 조건부 UPDATE·행 잠금·유니크 제약으로 대체)
+- 바꾸는 메서드는 모두 바뀐 항목을 _put 으로 파일에 남긴다 (새 메서드를 만들면 같이 부를 것).
 """
 import json
+import os
 import threading
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import BaseModel
+
 from app.db.assembly_tree import load_tree
+from app.db.sqlite import Database, database_path
 from app.db.symbol_dictionary import load_symbols
 from app.db.welding_standards import load_standards
 from app.schemas import (
@@ -42,8 +46,10 @@ from app.schemas import (
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 
-# 승인할 수 있는 작업 상태
+# 승인할 수 있는 작업 상태 — 확인 필요(needs_review)는 작업자가 확인 항목을 직접 봤다고 표시해야(acknowledge_review) 승인
 APPROVABLE: frozenset[JobStatus] = frozenset({"awaiting_approval", "needs_review"})
+# 로봇 JSON 에 꼭 필요한 해석 결과 (app/export/robot_json.py) — 비어 있으면 승인하지 않음
+REQUIRED_FOR_APPROVAL = ("assembly_path", "marking", "welding_condition")
 
 
 class JobStatusConflict(Exception):
@@ -52,6 +58,22 @@ class JobStatusConflict(Exception):
     def __init__(self, status: JobStatus) -> None:
         super().__init__(status)
         self.status = status
+
+
+class ReviewNotAcknowledged(Exception):
+    """확인 필요 작업을 확인 항목을 봤다는 표시(acknowledge_review) 없이 승인하려 함 (API 에서는 409)"""
+
+    def __init__(self, needs_review: list[str]) -> None:
+        super().__init__(needs_review)
+        self.needs_review = needs_review
+
+
+class MissingForApproval(Exception):
+    """로봇 JSON 에 필요한 해석 결과가 비어 있어 승인할 수 없음 (API 에서는 409)"""
+
+    def __init__(self, missing: list[str]) -> None:
+        super().__init__(missing)
+        self.missing = missing
 
 
 class WorkspaceKindConflict(Exception):
@@ -79,7 +101,8 @@ def utcnow() -> datetime:
 
 
 class Store:
-    def __init__(self) -> None:
+    def __init__(self, db: Database | None = None) -> None:
+        self._db = db
         self.users: dict[str, User] = {}
         self.current_user_id: str | None = None
         self.workspaces: dict[str, Workspace] = {}
@@ -93,9 +116,51 @@ class Store:
         # TODO: 사진 파일은 지금 메모리에만 둔다. 실제 DB 로 바꿀 때 data/uploads/ 나 오브젝트 스토리지로 옮긴다.
         self.images: dict[str, list[JobImage]] = {}
         self.image_data: dict[str, bytes] = {}  # image_id → 파일 바이트
+        self.preprocessed: dict[str, bytes] = {}  # image_id → 1단계가 보정한 사진 (PNG, 보정한 게 없으면 없음)
         self.analyses: dict[str, list[dict]] = {}
         self.welding_standards: list[WeldingStandard] = []
         self._lock = threading.RLock()
+
+    # ── 파일에 남기기 (app/db/sqlite.py) ──
+    def _put(self, collection: str, key: str, value) -> None:
+        if self._db is not None:
+            self._db.put(collection, key, value.model_dump(mode="json") if isinstance(value, BaseModel) else value)
+
+    def _delete(self, collection: str, key: str) -> None:
+        if self._db is not None:
+            self._db.delete(collection, key)
+
+    def attach(self, db: Database) -> None:
+        """지금 상태를 통째로 db 에 쓰고, 이후 바뀌는 것을 계속 남긴다 (시드로 처음 시작할 때)"""
+        with self._lock:
+            self._db = db
+            self._put("meta", "current_user_id", self.current_user_id)
+            for user in self.users.values():
+                self._put("users", user.id, user)
+            for ws_id, workspace in self.workspaces.items():
+                self._put("workspaces", ws_id, workspace)
+                for member in self.members[ws_id].values():
+                    self._put("members", f"{ws_id}/{member.user_id}", member)
+                for entry in self.symbols[ws_id].values():
+                    self._put("symbols", f"{ws_id}/{entry.id}", entry)
+                for project in self.projects[ws_id].values():
+                    self._put_project(project)
+                for job in self.jobs[ws_id].values():
+                    self._put("jobs", f"{ws_id}/{job.id}", job)
+            for job_id, images in self.images.items():
+                for image in images:
+                    self._put("images", f"{job_id}/{image.image_id}", image)
+                    db.put_blob("image", image.image_id, self.image_data[image.image_id])
+            for image_id, data in self.preprocessed.items():
+                db.put_blob("preprocessed", image_id, data)
+            for job_id, analyses in self.analyses.items():
+                for i, analysis in enumerate(analyses):
+                    self._put("analyses", f"{job_id}/{i:06d}", analysis)
+
+    def _put_project(self, project: Project) -> None:
+        key = f"{project.workspace_id}/{project.id}"
+        self._put("projects", key, project)
+        self._put("trees", key, [n.model_dump(mode="json") for n in self.assembly_trees[project.workspace_id][project.id]])
 
     # ── 사용자 ──
     def list_users(self) -> list[User]:
@@ -140,6 +205,11 @@ class Store:
             self.projects[workspace.id] = {}
             self.assembly_trees[workspace.id] = {}
             self.jobs[workspace.id] = {}
+            self._put("workspaces", workspace.id, workspace)
+            for m in members:
+                self._put("members", f"{workspace.id}/{m.user_id}", m)
+            for entry in self.symbols[workspace.id].values():
+                self._put("symbols", f"{workspace.id}/{entry.id}", entry)
         return workspace
 
     def create_workspace(
@@ -175,6 +245,7 @@ class Store:
                 raise WorkspaceKindConflict(workspace.member_count)
             workspace = Workspace.model_validate({**workspace.model_dump(), **changes})
             self.workspaces[workspace_id] = workspace
+            self._put("workspaces", workspace_id, workspace)
             return workspace
 
     # ── 멤버 ──
@@ -195,11 +266,14 @@ class Store:
             if user is None:
                 user = User(id=new_id("user"), name=name, email=email)
                 self.users[user.id] = user
+                self._put("users", user.id, user)
             member = Member(user_id=user.id, name=user.name, email=user.email, role="member", joined_at=utcnow())
             members[user.id] = member
             self.workspaces[workspace_id] = self.workspaces[workspace_id].model_copy(
                 update={"kind": "team", "member_count": len(members)}
             )
+            self._put("members", f"{workspace_id}/{user.id}", member)
+            self._put("workspaces", workspace_id, self.workspaces[workspace_id])
             return member
 
     # ── 문자/기호 사전 ──
@@ -215,6 +289,7 @@ class Store:
     def save_symbol(self, workspace_id: str, entry: SymbolEntry) -> SymbolEntry:
         with self._lock:
             self.symbols[workspace_id][entry.id] = entry
+            self._put("symbols", f"{workspace_id}/{entry.id}", entry)
         return entry
 
     def update_symbol(self, workspace_id: str, symbol_id: str, changes: dict) -> SymbolEntry | None:
@@ -227,7 +302,10 @@ class Store:
 
     def delete_symbol(self, workspace_id: str, symbol_id: str) -> bool:
         with self._lock:
-            return self.symbols[workspace_id].pop(symbol_id, None) is not None
+            removed = self.symbols[workspace_id].pop(symbol_id, None) is not None
+            if removed:
+                self._delete("symbols", f"{workspace_id}/{symbol_id}")
+            return removed
 
     # ── 프로젝트 (블록) ──
     def list_projects(self, workspace_id: str) -> list[Project]:
@@ -241,6 +319,7 @@ class Store:
         with self._lock:
             self.projects[project.workspace_id][project.id] = project
             self.assembly_trees[project.workspace_id][project.id] = list(assembly_tree)
+            self._put_project(project)
         return project
 
     def create_project(self, workspace_id: str, data: ProjectCreate) -> Project:
@@ -281,10 +360,28 @@ class Store:
     def save_job(self, job: Job) -> Job:
         with self._lock:
             self.jobs[job.workspace_id][job.id] = job
+            self._put("jobs", f"{job.workspace_id}/{job.id}", job)
         return job
 
-    def approve_job(self, workspace_id: str, job_id: str, approved_by: str) -> Job | None:
-        """승인 대기·검토 필요 상태만 승인한다 (아니면 JobStatusConflict). 없는 작업이면 None.
+    def start_analysis(self, workspace_id: str, job_id: str) -> Job | None:
+        """해석을 시작하며 상태를 analyzing 으로 (이미 해석 중이면 JobStatusConflict). 없는 작업이면 None.
+        끝나면 호출한 쪽이 결과를 save_job 하거나 실패를 finish_failed_analysis 로 남긴다"""
+        with self._lock:
+            job = self.get_job(workspace_id, job_id)
+            if job is None:
+                return None
+            if job.status == "analyzing":
+                raise JobStatusConflict(job.status)
+            return self.save_job(job.model_copy(update={"status": "analyzing", "analysis_error": None}))
+
+    def finish_failed_analysis(self, job: Job, error: str) -> Job:
+        """해석 실패 → 해석 전 상태(job)로 돌리고 이유를 남김"""
+        return self.save_job(job.model_copy(update={"analysis_error": error}))
+
+    def approve_job(self, workspace_id: str, job_id: str, approved_by: str, acknowledge_review: bool = False) -> Job | None:
+        """승인 대기 상태, 또는 작업자가 확인 항목을 봤다고 표시한(acknowledge_review) 확인 필요 상태만 승인한다.
+        상태가 안 맞으면 JobStatusConflict, 확인 표시가 없으면 ReviewNotAcknowledged, 로봇 JSON 에 필요한 값이 비어 있으면
+        MissingForApproval. 없는 작업이면 None.
 
         상태 확인과 저장을 한 잠금 안에서 해 동시에 여러 번 승인해도 하나만 성공한다.
         """
@@ -294,6 +391,10 @@ class Store:
                 return None
             if job.status not in APPROVABLE:
                 raise JobStatusConflict(job.status)
+            if missing := [name for name in REQUIRED_FOR_APPROVAL if getattr(job, name) is None]:
+                raise MissingForApproval(missing)
+            if job.status == "needs_review" and not acknowledge_review:
+                raise ReviewNotAcknowledged(job.needs_review)
             return self.save_job(
                 job.model_copy(update={"status": "approved", "approved_at": utcnow(), "approved_by": approved_by})
             )
@@ -306,7 +407,26 @@ class Store:
         with self._lock:
             self.image_data[image.image_id] = data
             self.images.setdefault(job.id, []).append(image)
+            self._put("images", f"{job.id}/{image.image_id}", image)
+            if self._db is not None:
+                self._db.put_blob("image", image.image_id, data)
         return image
+
+    def set_preprocessed(self, job_id: str, image_id: str, data: bytes) -> None:
+        """1단계가 보정한 사진 (PNG). JobImage.preprocessed 를 true 로"""
+        with self._lock:
+            images = self.images.get(job_id, [])
+            index = next((i for i, image in enumerate(images) if image.image_id == image_id), None)
+            if index is None:
+                return
+            self.preprocessed[image_id] = data
+            images[index] = images[index].model_copy(update={"preprocessed": True})
+            self._put("images", f"{job_id}/{image_id}", images[index])
+            if self._db is not None:
+                self._db.put_blob("preprocessed", image_id, data)
+
+    def get_preprocessed(self, image_id: str) -> bytes | None:
+        return self.preprocessed.get(image_id)
 
     def list_images(self, job_id: str) -> list[JobImage]:
         """올린 순서 (가장 최근이 마지막)"""
@@ -318,7 +438,9 @@ class Store:
 
     def add_analysis(self, job_id: str, analysis: dict) -> dict:
         with self._lock:
-            self.analyses.setdefault(job_id, []).append(analysis)
+            analyses = self.analyses.setdefault(job_id, [])
+            analyses.append(analysis)
+            self._put("analyses", f"{job_id}/{len(analyses) - 1:06d}", analysis)
         return analysis
 
     def list_analyses(self, job_id: str) -> list[dict]:
@@ -385,19 +507,68 @@ def load_seed(store: Store, seed_dir: Path = SEED_DIR) -> Store:
     return store
 
 
+def load_db(store: Store, db: Database, seed_dir: Path = SEED_DIR) -> Store:
+    """파일에 남은 상태를 읽음 (표준 용접 기준만 CSV 에서). 다 읽은 뒤 db 를 붙여 이후 바뀌는 것을 남긴다"""
+    store.welding_standards = [
+        WeldingStandard.model_validate(row) for row in load_standards(seed_dir / "welding_standards.csv")
+    ]
+    meta = dict(db.all("meta"))
+    store.users = {key: User.model_validate(value) for key, value in db.all("users")}
+    store.current_user_id = meta.get("current_user_id")
+    for ws_id, value in db.all("workspaces"):
+        store.workspaces[ws_id] = Workspace.model_validate(value)
+        for table in (store.members, store.symbols, store.projects, store.assembly_trees, store.jobs):
+            table[ws_id] = {}
+    for key, value in db.all("members"):
+        ws_id, user_id = key.split("/", 1)
+        store.members[ws_id][user_id] = Member.model_validate(value)
+    for key, value in db.all("symbols"):
+        ws_id, symbol_id = key.split("/", 1)
+        store.symbols[ws_id][symbol_id] = SymbolEntry.model_validate(value)
+    trees = dict(db.all("trees"))
+    for key, value in db.all("projects"):
+        ws_id, project_id = key.split("/", 1)
+        store.projects[ws_id][project_id] = Project.model_validate(value)
+        store.assembly_trees[ws_id][project_id] = [AssemblyNode.model_validate(n) for n in trees.get(key, [])]
+    for key, value in db.all("jobs"):
+        ws_id, job_id = key.split("/", 1)
+        store.jobs[ws_id][job_id] = Job.model_validate(value)
+    for key, value in db.all("images"):
+        job_id, _ = key.split("/", 1)
+        store.images.setdefault(job_id, []).append(JobImage.model_validate(value))
+    store.image_data = db.blobs("image")
+    store.preprocessed = db.blobs("preprocessed")
+    for key, value in db.all("analyses"):
+        store.analyses.setdefault(key.split("/", 1)[0], []).append(value)
+    store._db = db
+    return store
+
+
+def open_store(path: Path | None, seed_dir: Path = SEED_DIR) -> Store:
+    """path 가 없으면 메모리만 (시드). 파일이 비어 있으면 시드로 채워 저장, 아니면 파일에서 읽음"""
+    if path is None:
+        return load_seed(Store(), seed_dir)
+    db = Database(path)
+    if db.is_empty():
+        store = load_seed(Store(), seed_dir)
+        store.attach(db)
+        return store
+    return load_db(Store(), db, seed_dir)
+
+
 _store: Store | None = None
 
 
 def get_store() -> Store:
-    """FastAPI 의존성. 처음 호출될 때 시드 데이터로 채운다."""
+    """FastAPI 의존성. 처음 호출될 때 DATABASE_URL 의 파일(없으면 시드)로 채운다."""
     global _store
     if _store is None:
-        _store = load_seed(Store())
+        _store = open_store(database_path(os.environ.get("DATABASE_URL")))
     return _store
 
 
 def reset_store() -> Store:
-    """시드 상태로 되돌린다 (테스트마다 호출해 서로 격리)."""
+    """시드 상태로 되돌린다 (테스트마다 호출해 서로 격리 — 파일에 남기지 않음)."""
     global _store
     _store = load_seed(Store())
     return _store

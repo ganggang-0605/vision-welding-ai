@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from vision.ocr import DEFAULT_CONFIG as OCR_CONFIG
 from vision.ocr import models_available
 
-from app.pipeline import confidence_threshold
+from app.pipeline import confidence_threshold, last_vlm_error
 from app.schemas import PipelineStatus
 
 router = APIRouter()
@@ -39,6 +39,7 @@ def pipeline_status() -> PipelineStatus:
     if provider in ("none", "off"):
         provider = None
     key_name, module = VLM_REQUIREMENTS.get(provider, (None, None)) if provider else (None, None)
+    error, error_at = last_vlm_error()
     return PipelineStatus(
         ocr_available=models_available(),
         ocr_models=OCR_CONFIG.models() if models_available() else {},
@@ -48,5 +49,7 @@ def pipeline_status() -> PipelineStatus:
         vlm_runs=max(1, int(os.environ.get("VLM_RUNS", 3))),
         vlm_sdk_installed=_module_installed(module) if module else False,
         vlm_api_key_set=bool(os.environ.get(key_name)) if key_name else provider is not None,
+        vlm_last_error=error,
+        vlm_last_error_at=error_at,
         confidence_threshold=confidence_threshold(),
     )

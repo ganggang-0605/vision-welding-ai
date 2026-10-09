@@ -15,7 +15,7 @@ P1, P2, P3 = "A1-P1 부재 표기", "A1-P2 부재 표기", "A1-P3 부재 표기"
 JOB_KEYS = {
     "id", "workspace_id", "project_id", "name", "status", "assembly_path", "related_job_ids", "created_at",
     "approved_at", "approved_by", "marking", "welding_condition", "cell", "leg_lengths", "confidence", "evidence",
-    "needs_review",
+    "needs_review", "analysis_error",
 }
 
 
@@ -193,9 +193,9 @@ def test_pipeline_validation(client, action, kwargs):
 
 # ── 승인 ──
 
-@pytest.mark.parametrize("job_id", ["job_demo_p3", "job_demo_p1"])  # 승인 대기 / 검토 필요
-def test_approve(client, job_id):
-    res = client.post(f"{JOBS}/{job_id}/approve", json={"approved_by": "김용접"})
+@pytest.mark.parametrize("job_id, acknowledge", [("job_demo_p3", False), ("job_demo_p1", True)])  # 승인 대기 / 확인 필요
+def test_approve(client, job_id, acknowledge):
+    res = client.post(f"{JOBS}/{job_id}/approve", json={"approved_by": "김용접", "acknowledge_review": acknowledge})
     assert res.status_code == 200
     job = res.json()
     assert job["status"] == "approved"
@@ -204,6 +204,21 @@ def test_approve(client, job_id):
     assert client.get(f"{JOBS}/{job_id}").json() == job
     # 이미 승인된 작업은 다시 승인할 수 없다
     assert client.post(f"{JOBS}/{job_id}/approve", json={"approved_by": "다른 사람"}).status_code == 409
+
+
+def test_approve_needs_review_requires_acknowledgement(client):
+    """확인 필요 작업은 작업자가 확인 항목을 직접 봤다고 표시해야 승인 (검증 없이 로봇 JSON 까지 가지 않게)"""
+    res = client.post(f"{JOBS}/job_demo_p1/approve", json={"approved_by": "김용접"})
+    assert res.status_code == 409 and "확인 필요 항목 2개" in res.json()["detail"]
+    assert client.get(f"{JOBS}/job_demo_p1").json()["status"] == "needs_review"
+
+
+def test_approve_requires_robot_fields(client, fresh_store):
+    """조립 경로 · 표기 · 용접 조건이 비어 있으면 로봇 JSON 을 만들 수 없어 승인하지 않음 (확인 표시가 있어도)"""
+    job = fresh_store.get_job("demo", "job_demo_p1")
+    fresh_store.save_job(job.model_copy(update={"welding_condition": None}))
+    res = client.post(f"{JOBS}/job_demo_p1/approve", json={"approved_by": "김용접", "acknowledge_review": True})
+    assert res.status_code == 409 and "welding_condition" in res.json()["detail"]
 
 
 def test_approve_draft_conflict(client):

@@ -5,13 +5,16 @@
 api/jobs.py 의 analyze·review 가 호출한다 (사진·Analysis 는 지금 store 메모리에 저장).
 """
 import os
+import threading
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
+import cv2
 import numpy as np
 from calculate_reliability import score
 from db_context_interpreter import interpret
 from vision import recognize
+from vision.preprocess import preprocess
 from vw_shared import is_ref, schema_errors, semantic_errors, to_job_fields
 
 from app.schemas import Job, ReviewRequest, WeldingStandard
@@ -34,9 +37,21 @@ def confidence_threshold() -> float:
 
 
 def analyze_image(store: Store, job: Job, image: np.ndarray, image_id: str) -> dict:
-    """새 사진 해석 (revision 1) → Analysis"""
+    """새 사진 해석 (revision 1) → Analysis. 1단계 전처리(작은 사진 키우기 · 노이즈 제거)를 거친 사진은 저장해 두고
+    화면(GET .../images/{image_id}/preprocessed)에서 OCR 이 본 사진으로 보여 준다"""
     vision = recognize(image, image_id)
+    keep_preprocessed(store, job, image_id, image)
     return _interpret(store, job, vision, revision=1, user_context=None, corrections=[], previous=None, image=image)
+
+
+def keep_preprocessed(store: Store, job: Job, image_id: str, image: np.ndarray) -> None:
+    """1단계와 같은 전처리를 한 사진 (보정한 게 없으면 저장하지 않음 — 원본을 그대로 씀)"""
+    clean, prep, _ = preprocess(image)
+    if not prep["steps"] or store.get_image(job.id, image_id) is None:
+        return
+    ok, encoded = cv2.imencode(".png", clean)
+    if ok:
+        store.set_preprocessed(job.id, image_id, encoded.tobytes())
 
 
 def review_analysis(store: Store, job: Job, previous: dict, review: ReviewRequest) -> dict:
@@ -55,19 +70,9 @@ def review_analysis(store: Store, job: Job, previous: dict, review: ReviewReques
 
 
 def job_with_analysis(job: Job, analysis: dict) -> Job:
-    """Analysis 를 반영한 Job (status · assembly_path · marking · welding_condition · confidence · evidence · needs_review).
-    해석이 조립 경로를 찾지 못하면 작업에 이미 있던 경로를 지우지 않는다. 저장은 호출한 쪽에서 store.save_job"""
-    fields = to_job_fields(analysis)
-    if fields["assembly_path"] is None and job.assembly_path:
-        # PAC 셀 사진처럼 사진에 부재 번호가 없으면 2단계가 경로를 못 찾는다. 작업을 만들 때 적은 경로를 지우지 않고,
-        # 3단계의 '부재·조립 경로를 찾지 못함' 확인 항목도 빼 둔다.
-        # TODO(shared): 적어 둔 경로를 2단계 입력(context_input)으로 넘기면 3단계 판단까지 맞출 수 있음 — revision 1 에는
-        #   corrections 를 둘 수 없다는 규칙(vw_shared.rules) 때문에 지금은 Job 에서만 보정한다.
-        fields["assembly_path"] = job.assembly_path
-        missing_part = {n["message"] for n in (analysis["confidence"] or {}).get("needs_review", [])
-                        if n["target"] == "part" and n["reason"] == "missing_required"}
-        fields["needs_review"] = [message for message in fields["needs_review"] if message not in missing_part]
-    return Job.model_validate({**job.model_dump(), **fields})
+    """Analysis 를 반영한 Job (status · assembly_path · marking · welding_condition · cell · leg_lengths · confidence ·
+    evidence · needs_review). 저장은 호출한 쪽에서 store.save_job"""
+    return Job.model_validate({**job.model_dump(), **to_job_fields(analysis), "analysis_error": None})
 
 
 def build_context_input(
@@ -79,6 +84,7 @@ def build_context_input(
     return {
         "workspace_id": job.workspace_id,
         "project_id": job.project_id,
+        "job_assembly_path": job.assembly_path,
         "symbols": [s.model_dump(mode="json") for s in store.list_symbols(job.workspace_id)],
         "assembly_tree": [n.model_dump(mode="json") for n in store.get_assembly_tree(job.workspace_id, job.project_id)],
         "welding_standards": [w.model_dump(mode="json") for w in store.welding_standards],
@@ -105,12 +111,12 @@ def merge_corrections(existing: list[dict], values: Iterable[tuple[str, object]]
     """ReviewRequest(manual).values → Analysis.corrections. 같은 대상을 다시 고치면 새 값으로 바꾼다.
 
     값은 그대로(예: {"t2": "FW"}) 또는 의미까지 {"t3": {"value": "t=10", "meaning": "판 두께 10mm"}}.
-    welding_condition 의 값은 용접 조건 객체.
+    welding_condition · cell · leg_lengths 의 값은 객체·목록 그대로.
     """
     merged = {c["target"]: c for c in existing}
     for target, raw in values:
         correction = {"target": target}
-        if isinstance(raw, dict) and target != "welding_condition":
+        if isinstance(raw, dict) and is_ref(target):
             correction |= raw
         else:
             correction["value"] = raw
@@ -132,17 +138,41 @@ def current_value(analysis: dict, target: str):
         found = {d["id"]: d.get("text") or d.get("label") for d in vision["texts"] + vision["symbols"]}
         found |= {x["ref_id"]: x.get("text") or x.get("label") for x in reading if x["ref_id"][0] == "v"}
         return found.get(target)
+    cell = context.get("cell")
     return {
         "part": context["part"]["assembly_path"],
         "welding_condition": context["welding_condition"],
         "interpretation": context["vlm"]["interpretation"] if context["vlm"] else None,
+        "cell": {"left": cell["left"], "right": cell["right"]} if cell else None,
+        "leg_lengths": [{k: leg[k] for k in ("code", "size_mm", "raw_text")} for leg in context.get("leg_lengths", [])] or None,
     }.get(target)
 
 
 def stage2_image(store: Store, job: Job, image_id: str, fallback: np.ndarray | None = None) -> bytes | np.ndarray | None:
-    """2단계 VLM 에 보여 줄 사진 — 올린 원본 파일 그대로 (작업자 확인 때도 같은 사진). 저장된 게 없으면 fallback"""
+    """2단계 VLM 에 보여 줄 사진 — 올린 원본 파일 그대로 (작업자 확인 때도 같은 사진). 저장된 게 없으면 fallback.
+    1단계 보정본은 쓰지 않는다: 노이즈 제거가 작은 사진의 흐린 마커 획을 지워 VLM 이 글자를 못 읽음 (PAC 손글씨 예시 2).
+    작은 사진은 2단계가 노이즈 제거 없이 키워서 보낸다 (db_context_interpreter.vlm.fit_for_vlm)"""
     found = store.get_image(job.id, image_id)
     return found[1] if found else fallback
+
+
+# 최근 VLM 호출 실패 (GET /pipeline/status 가 보여 줌 — .env 의 키·모델 문제를 설정 화면에서 바로 알 수 있게)
+_vlm_state = {"error": None, "at": None}
+_vlm_lock = threading.Lock()
+
+
+def last_vlm_error() -> tuple[str | None, datetime | None]:
+    with _vlm_lock:
+        return _vlm_state["error"], _vlm_state["at"]
+
+
+def _record_vlm(context: dict) -> None:
+    """VLM 이 실패하면 기록, 성공하면 지움 (VLM 을 끈 해석은 그대로 둠)"""
+    with _vlm_lock:
+        if context.get("vlm_error"):
+            _vlm_state.update(error=context["vlm_error"], at=datetime.now(UTC))
+        elif context["vlm"] is not None:
+            _vlm_state.update(error=None, at=None)
 
 
 def _interpret(
@@ -152,6 +182,7 @@ def _interpret(
     context_input = build_context_input(store, job, user_context=user_context, corrections=corrections, previous=previous)
     context = interpret(vision, context_input, image=stage2_image(store, job, vision["image_id"], image),
                         previous_vlm=previous["context"]["vlm"] if previous else None)
+    _record_vlm(context)
     confidence = score(vision, context, corrections, confidence_threshold())
     analysis = {
         "schema_version": SCHEMA_VERSION,

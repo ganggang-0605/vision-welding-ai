@@ -1,3 +1,6 @@
+import logging
+import os
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,9 +14,26 @@ from app.api import jobs, projects, standards, status, users, workspaces
 from app.store import get_store
 
 
+log = logging.getLogger(__name__)
+
+
+def _warm_up_models() -> None:
+    """[1단계] OCR 모델을 미리 불러 둠 (첫 해석이 모델 로드로 1분 가까이 걸리지 않게). 실패해도 해석 때 다시 시도"""
+    from vision.ocr import warm_up
+
+    try:
+        if warm_up():
+            log.info("OCR 모델을 미리 불러 둠")
+    except Exception:
+        log.exception("OCR 모델을 미리 불러오지 못함 (첫 해석 때 다시 불러옴)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    get_store()  # 시작 시 시드 로드 (인메모리 — 데모 사용자, 워크스페이스 "demo"·"personal", 표준 용접 기준)
+    # 시작 시 저장소 로드 — DATABASE_URL 파일(없거나 비어 있으면 시드: 데모 사용자, 워크스페이스 "demo"·"personal")
+    get_store()
+    if os.environ.get("PRELOAD_MODELS", "1") != "0":
+        threading.Thread(target=_warm_up_models, name="warm-up-models", daemon=True).start()
     yield
 
 
