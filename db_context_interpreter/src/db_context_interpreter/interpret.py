@@ -35,7 +35,7 @@ def interpret(vision_result: dict, context_input: dict, image=None, previous_vlm
     part, part_conflicts, part_keys = find_part(readings, context_input)
     pairs = match_dictionary(readings, context_input, vlm.meanings if vlm else {}, vlm_prob, part_keys)
     matches = [m for _, m in pairs]
-    leg_lengths = find_leg_lengths(pairs, context_input)
+    leg_lengths, leg_conflicts = find_leg_lengths(pairs, context_input, vlm_result)
     cell, cell_conflicts = find_cell(pairs, context_input, vision_result, vlm_result)
     welding_condition, welding_conflicts = find_welding_condition(matches, readings, context_input, leg_lengths)
     result = {
@@ -47,7 +47,7 @@ def interpret(vision_result: dict, context_input: dict, image=None, previous_vlm
         "welding_condition": welding_condition,
         "leg_lengths": leg_lengths,
         "cell": cell,
-        "conflicts": part_conflicts + dictionary_conflicts(pairs, context_input) + cell_conflicts
+        "conflicts": part_conflicts + dictionary_conflicts(pairs, context_input) + leg_conflicts + cell_conflicts
                      + welding_conflicts + find_conflicts(vision_result, readings, vlm_result),
         "vlm": vlm_result,
     }

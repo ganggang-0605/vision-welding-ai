@@ -3,11 +3,14 @@
 둘 다 사전 대조 결과(DictionaryMatch)에서 뽑음 — 각장은 사전의 각장 코드 + 숫자, 셀 형태는 사전 code가 셀 형태인 기호.
 작업자가 leg_lengths · cell을 고쳤으면(corrections) 그 값.
 """
+import re
+
 from db_context_interpreter.dictionary import CODE_VALUE, Dictionary, is_leg_entry
 from db_context_interpreter.readings import corrections_by_target, normalize
 
 # shared/schemas/common.schema.json CellFeature (= backend/app/schemas.py CellFeature), 표시 순서
 CELL_FEATURES = ("slit", "slot", "collar_front", "collar_back", "scallop")
+VLM_CODE_VALUE = re.compile(r"([A-Z]+)([0-9]+(?:\.[0-9]+)?)")  # VLM 글자 속 코드 + 숫자 (줄 안 어디든)
 
 
 def leg_meaning(entry: dict | None) -> str | None:
@@ -15,27 +18,53 @@ def leg_meaning(entry: dict | None) -> str | None:
     return entry["meaning"].partition("(")[0].strip() if entry else None
 
 
-def find_leg_lengths(pairs: list[tuple[dict, dict]], context_input: dict) -> list[dict]:
-    """[(읽기, DictionaryMatch)] → LegLength 목록 (읽는 순서). 숫자 없이 코드만 있는 표기(V)는 크기를 몰라 뺌"""
+def find_leg_lengths(pairs: list[tuple[dict, dict]], context_input: dict,
+                     vlm_result: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """[(읽기, DictionaryMatch)] → (LegLength 목록 (읽는 순서), Conflict 목록). 숫자 없이 코드만 있는 표기(V)는 크기를 몰라 뺌.
+    사진을 본 VLM이 있으면 1단계만 읽은 각장은 VLM 읽기에도 있어야 씀 — 각장 위주로 학습한 인식기가 치수(418)를
+    각장(F11.8)으로 지어내는 일이 있어서. 없으면 각장에서 빼고 작업자 확인 (VLM이 없으면 확인할 길이 없어 그대로 씀)"""
     dictionary = Dictionary(context_input["symbols"])
     correction = corrections_by_target(context_input).get("leg_lengths")
     if correction:
         return [{
             "code": leg["code"], "size_mm": leg["size_mm"], "raw_text": leg["raw_text"],
             "meaning": leg_meaning(dictionary.by_code.get(leg["code"])), "ref_ids": [],
-        } for leg in correction["value"]]
+        } for leg in correction["value"]], []
 
-    legs = []
-    for _, m in pairs:
+    seen_by_vlm = vlm_texts(vlm_result)
+    legs, conflicts = [], []
+    for r, m in pairs:
         entry = dictionary.by_code.get(m["code"])
         found = CODE_VALUE.match(normalize(m["raw"]))
         if not entry or not is_leg_entry(entry) or not found or m["match"] == "none":
             continue
+        raw = normalize(m["raw"])
+        if seen_by_vlm is not None and ocr_only(r) and (entry["code"], float(found.group(2))) not in seen_by_vlm:
+            conflicts.append({
+                "type": "ocr_vlm_mismatch", "severity": "warning",
+                "message": f"1단계만 읽은 각장 '{raw}'를 사진을 본 VLM은 읽지 않아 각장으로 쓰지 않음", "ref_ids": m["ref_ids"],
+            })
+            continue
         legs.append({
-            "code": entry["code"], "size_mm": float(found.group(2)), "raw_text": normalize(m["raw"]),
+            "code": entry["code"], "size_mm": float(found.group(2)), "raw_text": raw,
             "meaning": leg_meaning(entry), "ref_ids": m["ref_ids"],
         })
-    return legs
+    return legs, conflicts
+
+
+def vlm_texts(vlm_result: dict | None) -> set[tuple[str, float]] | None:
+    """사진을 본 VLM이 읽은 글자 속 '코드 + 숫자' 표기 {(코드, 값)} — 한 줄에 여러 표기가 있어도(F5.5 V6) 하나씩.
+    사진을 안 봤으면 None"""
+    if not vlm_result or not vlm_result.get("image_attached"):
+        return None
+    return {(code, float(value)) for x in vlm_result["reading"]["texts"]
+            for code, value in VLM_CODE_VALUE.findall(normalize(x["text"]))}
+
+
+def ocr_only(reading: dict) -> bool:
+    """1단계가 찾은 t* (작업자가 고치거나 확인한 것, VLM만 읽은 v*는 아님). VLM 읽기로 바꾼 t*도 넣음 —
+    VLM 값이 사전에 안 맞으면 1단계 값이 후보로 다시 대조돼 각장이 될 수 있어서 ('Angle' ← 1단계 'F118.0')"""
+    return reading["ref_id"][0] == "t" and not reading["corrected"]
 
 
 def find_cell(pairs: list[tuple[dict, dict]], context_input: dict, vision_result: dict,

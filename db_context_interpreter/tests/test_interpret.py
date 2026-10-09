@@ -686,3 +686,41 @@ def test_vlm_runs_pick_consensus_per_marking(monkeypatch):
     result = run(vision_with([]))
     assert [x["text"] for x in result["vlm"]["reading"]["texts"]] == ["F5.5"]
     assert result["vlm"]["consistency"] == 0.33
+
+
+def _vlm_reads(*texts: str) -> dict:
+    return {"interpretation": "", "texts": [{"text": t, "ref_id": f"t{i}", "bbox": None} for i, t in enumerate(texts, 1)],
+            "symbols": [], "meanings": []}
+
+
+def test_leg_read_only_by_ocr_is_dropped_when_vlm_saw_photo(monkeypatch):
+    """각장 위주로 학습한 인식기가 치수 418을 F11.8로 지어냄 → 사진을 본 VLM이 읽지 않은 각장은 빼고 작업자 확인"""
+    fake_vlm(monkeypatch, _vlm_reads("418", "F5.5"), runs=1)
+    vision = vision_with([("F11.8", 0.95), ("F5.5", 0.95)])
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo()))
+    assert [leg["raw_text"] for leg in result["leg_lengths"]] == ["F5.5"]
+    assert ("ocr_vlm_mismatch", "warning", ["t1"]) in [(c["type"], c["severity"], c["ref_ids"]) for c in result["conflicts"]
+                                                        if "F11.8" in c["message"]]
+
+
+def test_leg_kept_when_vlm_reads_it_on_the_same_line(monkeypatch):
+    """VLM이 한 줄로 읽어도(F5.5 V6) 값이 같으면 같은 각장"""
+    fake_vlm(monkeypatch, _vlm_reads("F5.5 V6"), runs=1)
+    vision = vision_with([("F5.5 V6.0", 0.95)])
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo()))
+    assert [leg["raw_text"] for leg in result["leg_lengths"]] == ["F5.5", "V6.0"]
+
+
+def test_leg_kept_without_photo_for_vlm(monkeypatch):
+    """VLM이 사진을 보지 못했으면 확인할 길이 없어 1단계 각장을 그대로 씀"""
+    fake_vlm(monkeypatch, _vlm_reads("418"), runs=1)
+    result = run(vision_with([("F11.8", 0.95)]))
+    assert [leg["raw_text"] for leg in result["leg_lengths"]] == ["F11.8"]
+
+
+def test_leg_from_ocr_candidate_is_dropped_when_vlm_read_otherwise(monkeypatch):
+    """VLM 읽기(Angle)를 썼는데 사전에 안 맞아 1단계 값(F18.0)이 후보로 대조돼도 VLM이 읽지 않은 각장이면 뺌"""
+    fake_vlm(monkeypatch, _vlm_reads("Angle"), runs=1)
+    vision = vision_with([("F18.0", 0.6)])
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo()))
+    assert result["leg_lengths"] == []
