@@ -6,7 +6,7 @@ import pytest
 
 from app.store import MemberAlreadyExists
 
-DEMO_USER = {"id": "user_demo", "name": "데모 사용자", "email": "demo@vision-welding.local"}
+DEMO_USER = {"id": "user_kkm", "name": "김경무", "email": "gyeongmu.kim@vision-welding.local"}
 MEMBER_KEYS = {"user_id", "name", "email", "role", "joined_at"}
 
 
@@ -25,9 +25,9 @@ def test_demo_members(client):
     members = client.get("/workspaces/demo/members").json()
     assert all(set(m) == MEMBER_KEYS for m in members)
     assert [(m["user_id"], m["role"]) for m in members] == [
-        ("user_demo", "owner"), ("user_park", "member"), ("user_choi", "member"),
+        ("user_kkm", "owner"), ("user_ldh", "member"), ("user_lmh", "member"),
     ]
-    assert members[0]["name"] == "데모 사용자"
+    assert members[0]["name"] == "김경무"
     assert all(m["email"].endswith("@vision-welding.local") for m in members)
     assert all(m["joined_at"].endswith("Z") for m in members)
 
@@ -37,7 +37,7 @@ def test_create_workspace_current_user_is_owner(client):
     assert (ws["kind"], ws["member_count"]) == ("personal", 1)
     [owner] = client.get(f"/workspaces/{ws['id']}/members").json()
     assert {k: owner[k] for k in ("user_id", "name", "email", "role")} == {
-        "user_id": "user_demo", "name": "데모 사용자", "email": "demo@vision-welding.local", "role": "owner",
+        "user_id": "user_kkm", "name": "김경무", "email": "gyeongmu.kim@vision-welding.local", "role": "owner",
     }
     assert datetime.fromisoformat(owner["joined_at"]) == datetime.fromisoformat(ws["created_at"])
 
@@ -58,7 +58,7 @@ def test_invite_turns_personal_into_team(client):
 
     ws = client.get("/workspaces/personal").json()
     assert (ws["kind"], ws["member_count"]) == ("team", 2)
-    assert [m["user_id"] for m in client.get("/workspaces/personal/members").json()] == ["user_demo", member["user_id"]]
+    assert [m["user_id"] for m in client.get("/workspaces/personal/members").json()] == ["user_kkm", member["user_id"]]
     # 같은 사용자를 다른 워크스페이스에 초대하면 같은 user_id
     other = client.post("/workspaces", json={"name": "3도크"}).json()["id"]
     assert _invite(client, other, "다른 이름", "KIM.WELD@vision-welding.local").json()["user_id"] == member["user_id"]
@@ -66,16 +66,16 @@ def test_invite_turns_personal_into_team(client):
 
 def test_invite_reuses_existing_user(client):
     """이메일이 같은 사용자(대소문자 무시)가 있으면 새로 만들지 않고 그 사용자를 초대한다 — 이름은 기존 그대로."""
-    member = _invite(client, "personal", "다른 이름", "Jihoon.Park@vision-welding.local").json()
+    member = _invite(client, "personal", "다른 이름", "Donghyun.Lee@vision-welding.local").json()
     assert (member["user_id"], member["name"], member["email"]) == (
-        "user_park", "박지훈", "jihoon.park@vision-welding.local",
+        "user_ldh", "이동현", "donghyun.lee@vision-welding.local",
     )
 
 
 @pytest.mark.parametrize("email", [
-    "jihoon.park@vision-welding.local",
-    "JIHOON.PARK@VISION-WELDING.LOCAL",
-    "demo@vision-welding.local",  # 소유자
+    "donghyun.lee@vision-welding.local",
+    "DONGHYUN.LEE@VISION-WELDING.LOCAL",
+    "gyeongmu.kim@vision-welding.local",  # 소유자
 ])
 def test_duplicate_invite_conflict(client, email):
     before = client.get("/workspaces/demo").json()
@@ -159,7 +159,7 @@ def test_team_to_personal_conflict_with_members(client):
     assert res.status_code == 409
     assert "멤버" in res.json()["detail"]
     ws = client.get("/workspaces/demo").json()
-    assert (ws["name"], ws["kind"], ws["member_count"]) == ("HD현대중공업 · 울산 1도크", "team", 3)
+    assert (ws["name"], ws["kind"], ws["member_count"]) == ("울산 1도크", "team", 3)
     # team 으로 두는 수정은 된다
     assert client.patch("/workspaces/demo", json={"kind": "team", "name": "1도크"}).json()["name"] == "1도크"
 

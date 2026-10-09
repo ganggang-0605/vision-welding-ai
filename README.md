@@ -124,8 +124,8 @@
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
 - **데모 다중 계정** (Notion 식 계정 전환): 요청 헤더 `X-User-Id: <user_id>` 가 로그인 세션을 대신해 현재 사용자를 고릅니다.
-  헤더가 없거나 비어 있으면 데모 사용자(`user_demo`), `GET /users` 에 없는 id 면 401 입니다.
-  시드 계정: `user_demo`(데모 사용자: `demo`, `personal`), `user_park`(박지훈: `demo`, `park`), `user_choi`(최서연: `demo`).
+  헤더가 없거나 비어 있으면 시드의 현재 사용자(`user_kkm`, 김경무), `GET /users` 에 없는 id 면 401 입니다.
+  시드 계정(팀원 이름): `user_kkm`(김경무: `demo`, `personal`, `yeongam`), `user_ldh`(이동현: `demo`, `ldh`, `yeongam`), `user_lmh`(이민환: `demo`).
 - 워크스페이스 종류: `personal`(개인) → 멤버 초대 시 `team`(팀). 직접 `PATCH` 로 바꿀 수도 있습니다 (팀 → 개인은 멤버 1명일 때만).
 - 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(블록)에 속합니다.
   예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
@@ -133,7 +133,7 @@
 - 다시 해석(`analyze`·`review`)하면 이전 승인은 무효가 됩니다 (`approved_at`·`approved_by` 비움). 단계 패키지에 실제 모델이 없으면 결과가 비어 `needs_review` 가 됩니다.
 - VLM 호출이 실패하면 해석은 VLM 없이 이어 가고, 이유가 작업의 확인 항목(`vlm_failed`)과 `/pipeline/status` 의 `vlm_last_error` 에 남습니다.
 - **저장소**([`backend/app/store.py`](backend/app/store.py))는 `.env` 의 `DATABASE_URL`(기본 `sqlite:///./vision_welding.db`, `backend/` 기준) 파일에 남아 서버를 다시 켜도 작업·사진·해석 결과가 그대로입니다.
-  처음 켤 때(파일이 없거나 비었을 때) 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 채웁니다. 시드로 되돌리려면 `backend/vision_welding.db*` 를 지우고 다시 켭니다. `DATABASE_URL` 을 비우면 메모리만 씁니다 (테스트).
+  처음 켤 때(파일이 없거나 비었을 때) 시드 상태(팀 워크스페이스 `demo`, 팀 워크스페이스 `yeongam`, 개인 워크스페이스 `personal`·`ldh`)로 채웁니다. 시드로 되돌리려면 `backend/vision_welding.db*` 를 지우고 다시 켭니다. `DATABASE_URL` 을 비우면 메모리만 씁니다 (테스트).
 - 인증은 아직 없습니다 (TODO) — `X-User-Id` 헤더는 데모용일 뿐 누구나 아무 계정으로 요청할 수 있습니다.
   워크스페이스 목록만 멤버로 거르고, 그 밖의 경로는 권한 검사를 하지 않습니다 (id 를 알면 누구나 접근, TODO 권한).
 
@@ -171,11 +171,11 @@ data/seed/
     workspace.json, members.json, symbol_dictionary.json  # 워크스페이스(kind)·멤버·문자/기호 사전(없으면 빈 사전)
     projects/<project_id>/                                # 프로젝트(블록) — 폴더 이름이 id
       project.json, assembly_tree.csv, jobs.json          # 트리·작업 파일은 없으면 빈 것으로 봄
-  # demo: 팀(멤버 3명) "HD현대중공업 · 울산 1도크" — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
-  # samho: 팀(데모 사용자·박지훈) "HD현대삼호 · 영암 2도크" — block_s1(빈 블록). 사전은 demo 와 같고 FW 만 플래시버트 용접
-  #   조선소 이름은 시연용 가정이고, 사전·조립 트리·작업은 지어낸 목데이터
-  # park: 개인(박지훈) — block_b1("B1 블록", 빈 블록)
-  # personal: 개인(데모 사용자) — practice("연습용 블록", 빈 블록)
+  # demo: 팀(멤버 3명) "울산 1도크" — block_a1(조립 트리·데모 작업 3건), block_a2(빈 블록)
+  # yeongam: 팀(김경무·이동현) "영암 2도크" — block_s1(빈 블록). 사전은 demo 와 같고 FW 만 플래시버트 용접
+  #   도크 이름은 시연용 가정이고, 사전·조립 트리·작업은 지어낸 목데이터
+  # ldh: 개인(이동현) — block_b1("B1 블록", 빈 블록)
+  # personal: 개인(김경무) — practice("연습용 블록", 빈 블록)
 data/annotations/   # [1단계] 현장 사진 정답 라벨
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
@@ -204,8 +204,8 @@ uv 없이 하려면 `brew install python@3.12` 후 `python3.12 -m venv .venv && 
 > 이미 깨졌으면 `chflags -R nohidden .venv` 로 숨김 속성을 지우세요.
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-처음 켤 때 데모 사용자 3명, 팀 워크스페이스 `demo`("HD현대중공업 · 울산 1도크", A1·A2 블록, 데모 작업 3건)·`samho`("HD현대삼호 · 영암 2도크", S1 블록 — 같은 FW 가 플래시버트 용접인 사전)와
-개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드되고 `backend/vision_welding.db` 에 저장됩니다.
+처음 켤 때 데모 사용자 3명(팀원 김경무·이동현·이민환), 팀 워크스페이스 `demo`("울산 1도크", A1·A2 블록, 데모 작업 3건)·`yeongam`("영암 2도크", S1 블록 — 같은 FW 가 플래시버트 용접인 사전)와
+개인 워크스페이스 `personal`("개인 워크스페이스", 김경무)·`ldh`("이동현의 워크스페이스")가 시드되고 `backend/vision_welding.db` 에 저장됩니다.
 켤 때 OCR 모델을 백그라운드로 미리 불러 둡니다 (`PRELOAD_MODELS=0` 이면 끔 — 첫 해석이 모델 로드로 1분 가까이 걸림).
 
 `requirements.txt`가 `shared`와 1·2·3단계 패키지도 editable(`-e ../…`)로 함께 설치합니다 (`backend` 폴더에서 실행).

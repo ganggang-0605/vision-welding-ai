@@ -6,7 +6,10 @@
 import { useSyncExternalStore } from 'react'
 
 /** 처음 열었을 때 자동으로 로그인되는 데모 계정 (백엔드 시드의 current_user_id) */
-export const DEFAULT_ACCOUNT_ID = 'user_demo'
+export const DEFAULT_ACCOUNT_ID = 'user_kkm'
+
+/** 예전 시드 계정 id → 지금 id (팀원 이름으로 바꾸기 전에 이 브라우저에 저장된 계정을 이어 쓰게) */
+const RENAMED_IDS: Record<string, string> = { user_demo: 'user_kkm', user_park: 'user_ldh', user_choi: 'user_lmh' }
 
 const STORAGE_KEY = 'vwa:accounts'
 
@@ -25,8 +28,11 @@ function load(): AccountState {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AccountState>
-      const accountIds = Array.isArray(parsed.accountIds) ? parsed.accountIds.filter((id) => typeof id === 'string') : []
-      const activeId = accountIds.includes(parsed.activeId as string) ? parsed.activeId : accountIds[0]
+      const rename = (id: string) => RENAMED_IDS[id] ?? id
+      const stored = Array.isArray(parsed.accountIds) ? parsed.accountIds.filter((id) => typeof id === 'string') : []
+      const accountIds = [...new Set(stored.map(rename))]
+      const active = typeof parsed.activeId === 'string' ? rename(parsed.activeId) : undefined
+      const activeId = active && accountIds.includes(active) ? active : accountIds[0]
       return { accountIds, activeId }
     }
   } catch {

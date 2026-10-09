@@ -7,13 +7,13 @@ WORKSPACE_KEYS = {"id", "name", "description", "kind", "member_count", "created_
 
 
 def test_list_seed_workspaces(client):
-    """시드: 팀 워크스페이스 demo(멤버 3명) → 개인 워크스페이스 personal(멤버 1명) → 팀 워크스페이스 samho(멤버 2명) 순 (폴더 이름순)"""
+    """시드: 팀 워크스페이스 demo(멤버 3명) → 개인 워크스페이스 personal(멤버 1명) → 팀 워크스페이스 yeongam(멤버 2명) 순 (폴더 이름순)"""
     res = client.get("/workspaces")
     assert res.status_code == 200
-    demo, personal, samho = res.json()
-    assert all(set(w) == WORKSPACE_KEYS for w in (demo, personal, samho))
-    assert (demo["id"], demo["name"], demo["kind"], demo["member_count"]) == ("demo", "HD현대중공업 · 울산 1도크", "team", 3)
-    assert (samho["id"], samho["name"], samho["kind"], samho["member_count"]) == ("samho", "HD현대삼호 · 영암 2도크", "team", 2)
+    demo, personal, yeongam = res.json()
+    assert all(set(w) == WORKSPACE_KEYS for w in (demo, personal, yeongam))
+    assert (demo["id"], demo["name"], demo["kind"], demo["member_count"]) == ("demo", "울산 1도크", "team", 3)
+    assert (yeongam["id"], yeongam["name"], yeongam["kind"], yeongam["member_count"]) == ("yeongam", "영암 2도크", "team", 2)
     assert (personal["id"], personal["name"], personal["kind"], personal["member_count"]) == (
         "personal", "개인 워크스페이스", "personal", 1,
     )
@@ -176,10 +176,10 @@ def test_empty_dictionary_ignores_copy_source(client):
 
 
 def test_same_code_differs_by_shipyard(client):
-    """현장마다 지식이 다른 예: 같은 FW 가 울산(demo)에선 필렛 용접, 영암(samho)에선 플래시버트 용접"""
+    """현장마다 지식이 다른 예: 같은 FW 가 울산(demo)에선 필렛 용접, 영암(yeongam)에선 플래시버트 용접"""
     def fw(workspace_id: str) -> dict:
         return next(e for e in client.get(f"/workspaces/{workspace_id}/symbols").json() if e["code"] == "FW")
 
     assert (fw("demo")["meaning"], fw("demo")["welding_joint_type"]) == ("필렛 용접 (Fillet Weld)", "FILLET")
-    assert fw("samho")["meaning"].startswith("플래시버트용접") and fw("samho")["welding_joint_type"] is None
-    assert [p["name"] for p in client.get("/workspaces/samho/projects").json()] == ["S1 블록"]
+    assert fw("yeongam")["meaning"].startswith("플래시버트용접") and fw("yeongam")["welding_joint_type"] is None
+    assert [p["name"] for p in client.get("/workspaces/yeongam/projects").json()] == ["S1 블록"]

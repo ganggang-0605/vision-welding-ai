@@ -1,9 +1,9 @@
 {
   "_comment": "인증 전 임시 사용자 — current_user_id 가 모든 요청의 '현재 사용자'(GET /me)다. TODO(인증)",
-  "current_user_id": "user_demo",
+  "current_user_id": "user_kkm",
   "users": [
-    { "id": "user_demo", "name": "데모 사용자", "email": "demo@vision-welding.local" },
-    { "id": "user_park", "name": "박지훈", "email": "jihoon.park@vision-welding.local" },
-    { "id": "user_choi", "name": "최서연", "email": "seoyeon.choi@vision-welding.local" }
+    { "id": "user_kkm", "name": "김경무", "email": "gyeongmu.kim@vision-welding.local" },
+    { "id": "user_ldh", "name": "이동현", "email": "donghyun.lee@vision-welding.local" },
+    { "id": "user_lmh", "name": "이민환", "email": "minhwan.lee@vision-welding.local" }
   ]
 }
