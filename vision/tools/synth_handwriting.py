@@ -9,7 +9,8 @@
 두 가지를 만듦 (--mode):
 - lines : 글자 줄 이미지 + labels.tsv ("images/00000.jpg<TAB>F5.5") — 인식기 학습 (PaddleOCR 인식 학습 형식과 같음)
 - scenes: 철판 한 장에 표기 묶음 여러 개 + det_labels.txt (PaddleOCR 검출 학습 형식:
-  "images/00000.jpg<TAB>[{"transcription": "F5.5", "points": [[x, y] × 4]}]") — 검출기 학습
+  "images/00000.jpg<TAB>[{"transcription": "F5.5", "points": [[x, y] × 4]}]") — 검출기 학습.
+  --closeup 비율만큼은 운영측 예시처럼 표기 하나를 가까이 찍은 작은 사진을 1단계처럼 1280px로 키워 저장
 글씨체(--styles): stroke(운영측 버릇, --stroke-ratio 비율) + Hershey 한 획 글꼴 + --fonts TTF.
 처음 보는 글씨에도 통하는지 보려고 Hershey·TTF는 학습용(train)과 평가용(eval)을 겹치지 않게 나눔.
 배경은 철판 질감을 만들어 씀 (--backgrounds 로 사진을 줄 수도 있지만 글자가 없는 사진만 — 배경 글자가 정답과 섞임).
@@ -358,21 +359,30 @@ def order_points(pts: np.ndarray) -> list[list[int]]:
 
 
 def compose_scene(styles: list[dict], stroke_ratio: float, backgrounds: list[np.ndarray],
-                  rng: np.random.Generator) -> tuple[np.ndarray, list[dict]]:
-    """철판 한 장에 표기 묶음 1~3개(묶음마다 1~3줄 + 화살표) + 정답이 아닌 낙서·기준 표시 (검출기 학습용)"""
-    W = int(rng.uniform(640, 1280))
-    H = int(W * rng.uniform(0.6, 1.0))
+                  rng: np.random.Generator, closeup: bool = False) -> tuple[np.ndarray, list[dict]]:
+    """철판 한 장에 표기 묶음 1~3개(묶음마다 1~3줄 + 화살표) + 정답이 아닌 낙서·기준 표시 (검출기 학습용)
+
+    closeup: 운영측 손글씨 예시처럼 표기 하나를 가까이 찍은 작은 사진(긴 변 150~400px, 글자 높이가 긴 변의 8~18%)을
+    만든 뒤 1단계 전처리처럼 긴 변 1280px로 키움 — 검출기가 보는 글자 높이 100~230px (보통 장면은 20~60px)
+    """
+    if closeup:
+        W = int(rng.uniform(150, 400))
+        H = int(W * rng.uniform(0.75, 1.1))
+        groups = int(rng.choice([1, 2], p=[0.75, 0.25]))
+    else:
+        W = int(rng.uniform(640, 1280))
+        H = int(W * rng.uniform(0.6, 1.0))
+        groups = int(rng.integers(1, 4))
     alpha = np.zeros((H, W), np.uint8)
     boxes = []
-    groups = int(rng.integers(1, 4))
     cell_w = W // groups
     for g in range(groups):
         style = pick_style(styles, stroke_ratio, rng)
-        size = int(rng.uniform(18, 60))  # 글자 높이 (px)
+        size = max(14, int(rng.uniform(0.08, 0.18) * max(W, H))) if closeup else int(rng.uniform(18, 60))  # 글자 높이 (px)
         n_lines = int(rng.choice([1, 2, 3], p=[0.4, 0.4, 0.2]))
         labels = [random_label(rng)] + ["V" if rng.random() < 0.4 else random_label(rng) for _ in range(n_lines - 1)]
         ox = int(g * cell_w + rng.uniform(0.05, 0.3) * cell_w)
-        oy = int(rng.uniform(0.1, 0.6) * H)
+        oy = int(rng.uniform(0.05, 0.4) * H) if closeup else int(rng.uniform(0.1, 0.6) * H)
         angle = rng.uniform(-12, 12)
         for i, label in enumerate(labels):
             text_mask, height, _ = render_line(label, style, rng, height=size)
@@ -386,10 +396,12 @@ def compose_scene(styles: list[dict], stroke_ratio: float, backgrounds: list[np.
             placed = cv2.warpAffine(layers, m, (W, H))
             alpha = np.maximum(alpha, placed[..., 0])
             ys, xs = np.nonzero(placed[..., 1] > 30)
-            if len(xs) < 10 or xs.min() <= 0 or ys.min() <= 0 or xs.max() >= W - 1 or ys.max() >= H - 1:
-                continue  # 사진 밖으로 잘린 줄은 정답에서 뺌 (글자는 그대로 둬도 학습에 큰 해 없음)
+            if len(xs) < 10:
+                continue
+            cut = xs.min() <= 0 or ys.min() <= 0 or xs.max() >= W - 1 or ys.max() >= H - 1
             rect = cv2.boxPoints(cv2.minAreaRect(np.column_stack([xs, ys]).astype(np.float32)))
-            boxes.append({"transcription": label, "points": order_points(rect)})
+            # 사진 밖으로 잘린 줄은 보이는 부분을 무시 영역(###)으로 — 글자를 배경으로 배우지 않게
+            boxes.append({"transcription": "###" if cut else label, "points": order_points(rect)})
     for _ in range(int(rng.integers(0, 4))):  # 정답이 아닌 분필 표시: 기준 십자·긴 선
         x, y, r = int(rng.uniform(0, W)), int(rng.uniform(0, H)), int(rng.uniform(10, 40))
         if rng.random() < 0.5:
@@ -398,6 +410,12 @@ def compose_scene(styles: list[dict], stroke_ratio: float, backgrounds: list[np.
         else:
             cv2.line(alpha, (x, y), (int(x + rng.uniform(-4, 4) * r), int(y + rng.uniform(-4, 4) * r)), 255, 2, cv2.LINE_AA)
     img = paint(background((H, W), backgrounds, rng), alpha, rng)
+    if closeup:  # 작은 사진 그대로 압축한 뒤 1단계처럼 키움 (vision.preprocess: 긴 변 1280px, INTER_CUBIC)
+        s = 1280 / max(W, H)
+        img = cv2.resize(degrade(img, rng), None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
+        for b in boxes:
+            b["points"] = [[round(x * s), round(y * s)] for x, y in b["points"]]
+        return img, boxes
     if rng.random() < 0.6:  # 작은 사진처럼 뭉개기 (운영측 예시는 긴 변 178~343px)
         s = rng.uniform(0.25, 0.6)
         img = cv2.resize(cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA), (W, H), interpolation=cv2.INTER_CUBIC)
@@ -452,7 +470,7 @@ def _make(i: int) -> str:
         img = compose_line(text, pick_style(a["styles"], a["stroke_ratio"], rng), a["backgrounds"], rng)
         line = f"{name}\t{text}"
     else:
-        img, boxes = compose_scene(a["styles"], a["stroke_ratio"], a["backgrounds"], rng)
+        img, boxes = compose_scene(a["styles"], a["stroke_ratio"], a["backgrounds"], rng, closeup=rng.random() < a["closeup"])
         line = f"{name}\t{json.dumps(boxes, ensure_ascii=False)}"
     cv2.imwrite(str(a["out"] / name), img, [cv2.IMWRITE_JPEG_QUALITY, 95 if a["mode"] == "lines" else 85])
     return line
@@ -465,6 +483,7 @@ def main() -> int:
     parser.add_argument("--n", type=int, default=1000)
     parser.add_argument("--styles", choices=["train", "eval", "all"], default="train")
     parser.add_argument("--stroke-ratio", type=float, default=0.6, help="운영측 버릇 글씨체(stroke) 비율")
+    parser.add_argument("--closeup", type=float, default=0.4, help="scenes: 표기 하나를 가까이 찍은 작은 사진(키워서 저장) 비율")
     parser.add_argument("--fonts", action="append", default=[], help="TTF 글꼴 glob, 여러 번 가능 (예: '/usr/share/fonts/**/Humor*')")
     parser.add_argument("--backgrounds", help="배경 사진 glob — 글자가 없는 사진만")
     parser.add_argument("--seed", type=int, default=0)
@@ -477,7 +496,7 @@ def main() -> int:
     backgrounds = load_backgrounds(args.backgrounds)
     (args.out / "images").mkdir(parents=True, exist_ok=True)
     shared = {"mode": args.mode, "seed": args.seed, "styles": styles, "stroke_ratio": args.stroke_ratio,
-              "backgrounds": backgrounds, "out": args.out}
+              "closeup": args.closeup, "backgrounds": backgrounds, "out": args.out}
     if args.workers > 1:
         import multiprocessing as mp
 
@@ -490,6 +509,7 @@ def main() -> int:
     (args.out / label_file).write_text("\n".join(lines) + "\n", encoding="utf-8")
     (args.out / "manifest.json").write_text(json.dumps({
         "mode": args.mode, "n": args.n, "styles": args.styles, "stroke_ratio": args.stroke_ratio, "seed": args.seed,
+        "closeup": args.closeup if args.mode == "scenes" else None,
         "fonts": [Path(f).name for f in fonts], "backgrounds": len(backgrounds),
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{args.mode} {args.n}장 → {args.out} (stroke {args.stroke_ratio:.0%} + 글꼴 {len(styles)}개: TTF "

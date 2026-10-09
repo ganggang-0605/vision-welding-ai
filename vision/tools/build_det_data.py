@@ -7,8 +7,8 @@
 - 운영측 사진(data/annotations/pac_*.json): 평가 전용. 1단계 파이프라인처럼 긴 변 1280px로 키움 (노이즈 제거 없음)
 
 사용:
-  python vision/tools/build_det_data.py --out data/synth/hw_det_v2 \\
-      --synth-train data/synth/det_train --synth-val data/synth/det_val \\
+  python vision/tools/build_det_data.py --out data/synth/hw_det_v3 \\
+      --synth-train data/synth/det_train_v3 --synth-val data/synth/det_val_v3 \\
       --steel-train data/raw/external/steel-ocr/train_data/det/train.txt \\
       --steel-val data/raw/external/steel-ocr/train_data/det/val.txt --pac --ignore-with-detector
 출력: <out>/<세트>/images/*.jpg 와 목록 파일 <out>/train.txt · val_synth.txt · val_steel.txt · val_pac.txt
@@ -88,6 +88,8 @@ def add_steel(label_file: Path, out: Path, tag: str, max_side: int, detector: De
             extra = [p for p in detector.polys(img) if not center_inside(p, gts)]
             boxes += [{"transcription": "###", "points": p} for p in extra]
             ignored += len(extra)
+        if not boxes:  # 표기 없는 사진 — PaddleOCR이 학습에선 건너뛰고 평가에선 다음 사진으로 바꿔 넣어 점수만 흐림
+            continue
         name = f"{tag}/images/{Path(rel).stem}.jpg"
         cv2.imwrite(str(out / name), img, [cv2.IMWRITE_JPEG_QUALITY, 90])
         lines.append(f"{name}\t{json.dumps(boxes, ensure_ascii=False)}")
