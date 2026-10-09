@@ -104,6 +104,19 @@ def test_vlm_gets_uploaded_photo_and_db(client, fake_vlm):
     assert _context(client)["vlm"]["interpretation"] == VLM_RESPONSE["interpretation"]
 
 
+def test_reinterpret_after_vlm_off_keeps_corrected_v_id(client, fake_vlm, monkeypatch):
+    """VLM 만 읽은 표기(v1)를 고친 뒤 VLM 이 꺼지거나 실패해도 재해석이 됨 (이전 VLM 결과를 이어 씀)"""
+    VLM_RESPONSE_EXTRA = {**VLM_RESPONSE, "texts": VLM_RESPONSE["texts"] + [{"text": "S-3", "ref_id": "new1", "bbox": None}]}
+    monkeypatch.setitem(vlm_module.PROVIDERS, "claude",
+                        lambda s, p, i, m: (json.dumps(VLM_RESPONSE_EXTRA, ensure_ascii=False), None))
+    _analyze(client)
+    assert client.post(f"{JOB}/review", json={"action": "manual", "values": {"v1": "S-3"}}).status_code == 200
+    monkeypatch.setenv("VLM_PROVIDER", "off")
+    res = client.post(f"{JOB}/review", json={"action": "reinterpret", "context": "VLM 없이 다시"})
+    assert res.status_code == 200, res.text
+    assert "S-3" in res.json()["marking"]["raw_text"]
+
+
 def test_review_sends_same_photo_and_user_context(client, fake_vlm):
     _analyze(client)
     res = client.post(f"{JOB}/review", json={"action": "reinterpret", "context": "8이 아니라 6입니다"})

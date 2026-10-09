@@ -38,6 +38,15 @@ class Dictionary:
         unit = "mm" if "mm" in note else ""
         return entry, f"{base.strip()} {m.group(2)}{unit}"
 
+    def reading_key(self, value: str) -> tuple[str, float | None] | None:
+        """사전 해석이 같은지 비교하는 키 (코드, 숫자 값). V6 · V6.0은 같고 V6.0 · V6.5는 다름. 사전에 없으면 None"""
+        if found := self.lookup(value):
+            return found[0]["code"], None
+        if self.code_with_value(value):
+            m = CODE_VALUE.match(normalize(value))
+            return m.group(1), float(m.group(2))
+        return None
+
     def fuzzy(self, value: str) -> tuple[dict, float] | None:
         key = normalize(value)
         best = None
@@ -99,7 +108,7 @@ def match_one(r: dict, dictionary: Dictionary, vlm_meaning: str | None, vlm_prob
 
 
 def dictionary_conflicts(matches: list[dict], readings: list[dict], context_input: dict) -> list[dict]:
-    """dictionary_unmatched(사전에 없음: fuzzy · vlm · none) · ambiguous_reading(후보마다 사전 해석이 달라짐).
+    """dictionary_unmatched(사전에 없음: fuzzy · vlm · none) · ambiguous_reading(후보마다 사전 해석이 달라짐 — 각장은 숫자까지).
     작업자가 고치거나 확인한 표기는 넣지 않음"""
     dictionary = Dictionary(context_input["symbols"])
     corrected = {r["ref_id"] for r in readings if r["corrected"]}
@@ -120,11 +129,11 @@ def dictionary_conflicts(matches: list[dict], readings: list[dict], context_inpu
             conflicts.append(unmatched(f"'{raw}' 표기는 문자/기호 사전에 없고 해석하지 못함", "warning", ref))
 
         r = by_ref[ref]
+        chosen = dictionary.reading_key(m["raw"])
         rivals = [
             (value, p) for value, p in r["candidates"]
             if p >= r["prob"] - AMBIGUOUS_MARGIN
-            and (found := dictionary.lookup(value) or dictionary.code_with_value(value))
-            and found[0]["code"] != m["code"]
+            and (key := dictionary.reading_key(value)) is not None and key != chosen
         ]
         if rivals:
             others = ", ".join(f"'{v}'({p:.0%})" for v, p in rivals)

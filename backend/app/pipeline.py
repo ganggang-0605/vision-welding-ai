@@ -140,7 +140,8 @@ def _interpret(
     user_context: str | None, corrections: list[dict], previous: dict | None, image: np.ndarray | None = None,
 ) -> dict:
     context_input = build_context_input(store, job, user_context=user_context, corrections=corrections, previous=previous)
-    context = interpret(vision, context_input, image=stage2_image(store, job, vision["image_id"], image))
+    context = interpret(vision, context_input, image=stage2_image(store, job, vision["image_id"], image),
+                        previous_vlm=previous["context"]["vlm"] if previous else None)
     confidence = score(vision, context, corrections, confidence_threshold())
     analysis = {
         "schema_version": SCHEMA_VERSION,

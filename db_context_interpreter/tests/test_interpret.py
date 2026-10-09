@@ -133,6 +133,12 @@ def test_ambiguous_candidates():
     assert "ambiguous_reading" in types(result)
 
 
+def test_leg_length_candidates_differ_by_value():
+    """코드는 같고 숫자만 다른 후보(V6.0 ↔ V6.5)도 해석이 갈리는 것으로 봄. 같은 값(V6 ↔ V6.0)은 아님"""
+    assert "ambiguous_reading" in types(run(vision_with([("V6.0", 0.5, [("V6.5", 0.4)])])))
+    assert "ambiguous_reading" not in types(run(vision_with([("V6.0", 0.5, [("V6", 0.4)])])))
+
+
 def test_fuzzy_and_unmatched():
     result = run(vision_with([("FWW", 0.9), ("XYZ", 0.9)]))
     fuzzy, none = result["dictionary_matches"]
@@ -157,9 +163,10 @@ def test_part_without_dash_and_deepest_node():
 
 
 def test_part_on_different_branches_is_ambiguous():
-    result = run(vision_with([("P-1", 0.9), ("P-3", 0.8)]))
+    result = run(vision_with([("P-1", 0.9), ("P-3", 0.8), ("FW", 0.9)]))
     assert result["part"]["node_id"] == "P-1"
-    assert "ambiguous_reading" in types(result)
+    assert types(result) == ["ambiguous_reading"]  # P-3은 부재 표기라 '사전에 없음'으로 다시 세지 않음
+    assert [m["raw"] for m in result["dictionary_matches"]] == ["FW"]
 
 
 def test_part_not_in_tree():
@@ -275,6 +282,17 @@ def test_vlm_uses_related_jobs(monkeypatch):
     related = [{"job_id": "job_demo_p2", "assembly_path": "A1/L1/M2/S1/P-2", "interpretation": "필렛 용접"}]
     result = run(related_jobs=related)
     assert result["related_job_ids"] == ["job_demo_p2"] and "job_demo_p2" in calls[0]["prompt"]
+
+
+def test_previous_vlm_kept_for_corrected_v_id():
+    """VLM이 꺼진 채 재해석해도 작업자가 고친 v*가 있으면 이전 VLM 결과를 이어 씀"""
+    previous = copy.deepcopy(EXPECTED["vlm"])
+    previous["reading"]["texts"].append({"text": "S-3", "ref_id": "v1"})
+    ci = {**CONTEXT_INPUT, "previous_reading": previous["reading"], "corrections": [{"target": "v1", "value": "S-3"}]}
+    result = check(VISION, interpret(VISION, ci, previous_vlm=previous))
+    assert result["vlm"] == previous
+    assert any(m["ref_ids"] == ["v1"] for m in result["dictionary_matches"])
+    assert interpret(VISION, CONTEXT_INPUT, previous_vlm=previous)["vlm"] is None  # 고친 v*가 없으면 이어 쓰지 않음
 
 
 def test_vlm_failure_falls_back(monkeypatch):
