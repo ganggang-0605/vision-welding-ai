@@ -44,8 +44,13 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+ * 다크 모드: 기본은 시스템 설정을 따르고(data-theme 없음), 설정 화면에서 라이트·다크로 고정할 수 있다.
+ * 같은 토큰을 두 번 적는다. 하나는 시스템이 다크일 때(라이트로 고정하지 않았으면), 하나는 다크로 고정했을 때.
+ * 값을 바꿀 때는 두 블록을 같이 고친다.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --label: #f5f5f7;
     --secondary: #a1a1a6;
     --tertiary: #8e8e93;
@@ -63,6 +68,34 @@
     --code-key: #6bdfff;
     --shadow-float: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
   }
+}
+
+:root[data-theme='dark'] {
+  --label: #f5f5f7;
+  --secondary: #a1a1a6;
+  --tertiary: #8e8e93;
+  --bg: #161617;
+  --fill: #222224;
+  --fill-strong: #2e2e31;
+  --separator: rgb(255 255 255 / 0.1);
+  --accent: #2997ff;
+  --on-accent: #ffffff;
+  --accent-soft: rgb(41 151 255 / 0.16);
+  --attention: #ff9f0a;
+  --danger: #ff6961;
+  --code-string: #ff8170;
+  --code-number: #d9c97c;
+  --code-key: #6bdfff;
+  --shadow-float: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+/* 고정한 모드에 맞춰 스크롤바·폼 컨트롤 같은 브라우저 기본 요소 색도 바꾼다. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 /* ── 기본 ─────────────────────────────────────────────────── */

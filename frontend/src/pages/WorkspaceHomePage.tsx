@@ -29,7 +29,7 @@ export function WorkspaceHomePage() {
         }
         actions={
           <Link className="btn btn--primary" to={paths.newProject(workspace.id)}>
-            새 프로젝트
+            새 호선
           </Link>
         }
       />
@@ -44,17 +44,17 @@ export function WorkspaceHomePage() {
             </Link>
           }
         >
-          팀원을 초대하면 팀 워크스페이스로 바뀌고, 프로젝트와 사전을 함께 써요.
+          팀원을 초대하면 팀 워크스페이스로 바뀌고, 호선과 사전을 함께 써요.
         </Notice>
       )}
 
       <section className="section" aria-labelledby="projects-title">
         <h2 id="projects-title" className="section-title">
-          프로젝트
+          호선
         </h2>
         {projects.length === 0 ? (
           <p className="state">
-            아직 프로젝트가 없어요. <Link to={paths.newProject(workspace.id)}>호선을 추가</Link>하면 작업과 조립 트리를
+            아직 호선이 없어요. <Link to={paths.newProject(workspace.id)}>호선을 추가</Link>하면 작업과 조립 트리를
             호선별로 나눠 관리해요.
           </p>
         ) : (
