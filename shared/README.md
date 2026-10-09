@@ -105,7 +105,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | 순서 | 무슨 일 | 예시 파일 |
 | --- | --- | --- |
 | 1 | 1단계: `t1` "P-1", `t2` "FW"(62%, 후보 FW·EW), `t3` "t=10", `s1` "▲" | `vision_result.example.json` |
-| 2 | 2단계: 부재 P-1(A1/L1/M2/S1/P-1), FW → 필렛 용접, 판 두께 10mm → 220-260A | `context_result.example.json` |
+| 2 | 2단계: 부재 P-1(A1/L1/M2/S1/P-1), FW → 필렛 용접, 판 두께 10mm → 2F 수평 필렛 420-440A | `context_result.example.json` |
 | 3 | 3단계: overall 62%로 기준 80% 미달, `t2` 확인 필요 | `confidence_report.example.json` |
 | 4 | 세 결과를 묶음 (revision 1) → `Job.status = needs_review` | `analysis.example.json` |
 | 5 | 작업자가 `t2`를 FW로 확인 → revision 2, overall 88%로 통과 → `Job.status = awaiting_approval` | `analysis_revision2.example.json` |

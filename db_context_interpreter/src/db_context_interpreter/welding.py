@@ -1,15 +1,28 @@
 """a. 용접 기준 DB: 표준 용접 기준표 대조"""
 import re
 
+from db_context_interpreter.ocr_text import ocr_variants
 from db_context_interpreter.readings import corrections_by_target, normalize
 
+# 사전 항목의 뜻에 적힌 AWS 자세 (예: V "2F 용접장 각장", PB "수평수직필릿 자세 (…, AWS 2F)")
+POSITION = re.compile(r"(?<![0-9A-Za-z])([1-4][FG])(?![0-9A-Za-z])")
+# 자세 표기 없이 같은 판 두께에 자세만 다른 기준 행이 여럿일 때 고르는 순서 — 2F(수평 필렛)가 선체 보강재 용접의 대표 자세
+# (선박용접 용어사전 STD-0214)
+POSITION_PREFERENCE = ("2F", "1F", "3F", "4F", "1G", "2G", "3G", "4G")
 # 판 두께 표기: t=10, T10, t:12mm, 10t, 10.5T
 THICKNESS = re.compile(r"^(?:T[=:]?([0-9]+(?:\.[0-9]+)?)(?:MM)?|([0-9]+(?:\.[0-9]+)?)(?:MM)?T)$")
 
 
 def parse_thickness(value: str) -> float | None:
-    m = THICKNESS.match(normalize(value))
-    return float(m.group(1) or m.group(2)) if m else None
+    return read_thickness(value)[0]
+
+
+def read_thickness(value: str) -> tuple[float | None, str | None]:
+    """(판 두께 mm, 그렇게 읽은 표기). 그대로 안 읽히면 OCR이 헷갈린 글자를 고쳐 봄 (t=1O → T=10)"""
+    for candidate in [normalize(value), *ocr_variants(value)]:
+        if m := THICKNESS.match(candidate):
+            return float(m.group(1) or m.group(2)), candidate
+    return None, None
 
 
 def find_welding_condition(matches: list[dict], readings: list[dict], context_input: dict) -> tuple[dict | None, list[dict]]:
@@ -40,17 +53,35 @@ def find_welding_condition(matches: list[dict], readings: list[dict], context_in
     if not rows:
         conflicts.append(standard_conflict(f"표준 용접 기준표에 이음 형태 {joint_type}가 없음", "error", refs))
         return None, conflicts
+
+    positions, position_refs = position_marks(matches, context_input["symbols"])
+    if positions:
+        refs += position_refs
+        rows = [r for r in rows if r["position"] in positions]
+        if not rows:
+            have = ", ".join(sorted({s["position"] for s in context_input["welding_standards"] if s["joint_type"] == joint_type}))
+            conflicts.append(standard_conflict(
+                f"표기된 자세({', '.join(sorted(positions))})의 {joint_type} 기준이 표준 용접 기준표에 없음 (있는 자세: {have})",
+                "error", refs))
+            return None, conflicts
     if thickness is None:
         if len(rows) > 1:  # 판 두께 없이는 기준 행을 고를 수 없음 → 작업자 확인(missing_required)
             return None, conflicts
         row = rows[0]
     else:
-        row = standard_row(rows, thickness)
-        if row is None:
-            low, high = min(r["thickness_min_mm"] for r in rows), max(r["thickness_max_mm"] for r in rows)
+        inside = [r for r in rows if r["thickness_min_mm"] <= thickness <= r["thickness_max_mm"]]
+        if not inside:
+            have = ", ".join(f"{t:g}" for t in sorted({r["thickness_min_mm"] for r in rows}))
             conflicts.append(standard_conflict(
-                f"판 두께 {thickness:g}mm는 {joint_type} 표준 용접 기준({low:g}~{high:g}mm) 범위 밖", "error", refs))
+                f"판 두께 {thickness:g}mm에 맞는 {joint_type} 표준 용접 기준이 없음 (기준표 판 두께: {have}mm)", "error", refs))
             return None, conflicts
+        row = standard_row(inside, thickness)
+        assumed = sorted({r["position"] for r in inside})
+        if len(assumed) > 1:  # 자세 표기가 없어 자세를 정할 수 없음 → 대표 자세로 고르고 작업자 확인
+            row = min(inside, key=lambda r: position_rank(r["position"]))
+            conflicts.append(standard_conflict(
+                f"자세 표기가 없어 {row['position']} 기준을 씀 (판 두께 {thickness:g}mm {joint_type} 기준 자세: {', '.join(assumed)})",
+                "warning", refs))
     return {
         "joint_type": joint_type,
         "thickness_mm": thickness,
@@ -70,6 +101,22 @@ def joint_type_marks(matches: list[dict], entries: list[dict]) -> dict[str, list
         if joint_type:
             marks.setdefault(joint_type, []).append(m)
     return marks
+
+
+def position_marks(matches: list[dict], entries: list[dict]) -> tuple[set[str], list[str]]:
+    """사전 대조 결과 중 뜻에 AWS 자세(1F~4G)가 적힌 항목 → ({자세}, 근거 ref_ids)"""
+    by_code = {e["code"]: e for e in entries}
+    positions, refs = set(), []
+    for m in matches:
+        found = POSITION.findall((by_code.get(m["code"]) or {}).get("meaning", ""))
+        if found:
+            positions |= set(found)
+            refs += m["ref_ids"]
+    return positions, refs
+
+
+def position_rank(position: str) -> int:
+    return POSITION_PREFERENCE.index(position) if position in POSITION_PREFERENCE else len(POSITION_PREFERENCE)
 
 
 def standard_row(rows: list[dict], thickness: float) -> dict | None:

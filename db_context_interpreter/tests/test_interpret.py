@@ -154,6 +154,73 @@ def test_unknown_symbol():
     assert result["dictionary_matches"][0]["match"] == "none"
 
 
+# ── 실제 OCR 출력: 한 줄로 붙은 표기 · 헷갈리는 글자 (vision/reports/phase1_baseline.md) ──
+
+def test_one_line_is_split_into_markings():
+    """PaddleOCR이 표기 여러 개를 한 줄(t1)로 읽어도 나눠서 해석하고, 근거는 모두 t1"""
+    result = run(vision_with([("P-1 FW t=10", 0.95)]))
+    assert result["part"]["assembly_path"] == "A1/L1/M2/S1/P-1" and result["part"]["ref_ids"] == ["t1"]
+    assert [(m["raw"], m["code"], m["ref_ids"]) for m in result["dictionary_matches"]] == [
+        ("FW", "FW", ["t1"]), ("t=10", None, ["t1"])]
+    assert result["welding_condition"]["current_a"] == "420-440" and result["welding_condition"]["ref_ids"] == ["t1"]
+
+
+def test_leg_lengths_on_one_line():
+    result = run(vision_with([("P-2", 0.95), ("F5.5 V6.0", 0.93)]))
+    assert [(m["code"], m["meaning"], m["ref_ids"]) for m in result["dictionary_matches"]] == [
+        ("F", "3F 용접장 각장 5.5mm", ["t2"]), ("V", "2F 용접장 각장 6.0mm", ["t2"])]
+
+
+@pytest.mark.parametrize("line", ["t = 10", "t=10", "T 10"])
+def test_spaced_marking_kept_together(line):
+    """공백이 끼어도 붙여야 뜻이 되는 표기(t = 10)는 나누지 않음"""
+    result = run(vision_with([("FW", 0.9), (line, 0.9)]))
+    assert result["welding_condition"]["thickness_mm"] == 10
+    assert len(result["dictionary_matches"]) == 2
+
+
+def test_confused_characters_in_part_and_thickness():
+    """1→I, 0→O로 읽어도 조립 트리 · 판 두께를 찾고, 보정했다는 항목을 남김"""
+    result = run(vision_with([("P-I", 0.99), ("FW", 0.9), ("t=1O", 0.98)]))
+    assert result["part"]["assembly_path"] == "A1/L1/M2/S1/P-1"
+    assert result["welding_condition"]["thickness_mm"] == 10
+    t3 = next(m for m in result["dictionary_matches"] if m["ref_ids"] == ["t3"])
+    assert (t3["raw"], t3["meaning"]) == ("T=10", "판 두께 10mm")
+    assert ("ambiguous_reading", "info", ["t1"]) in [(c["type"], c["severity"], c["ref_ids"]) for c in result["conflicts"]]
+
+
+@pytest.mark.parametrize("text, code, meaning", [
+    ("F5,5", "F", "3F 용접장 각장 5.5mm"),   # 소수점을 쉼표로
+    ("V6.O", "V", "2F 용접장 각장 6.0mm"),   # 0 → O
+    ("54.5", "S", "스티프너 각장 4.5mm"),    # S → 5
+])
+def test_confused_characters_in_leg_length(text, code, meaning):
+    (m,) = run(vision_with([(text, 0.9)]))["dictionary_matches"]
+    assert (m["code"], m["meaning"], m["match"], m["score"]) == (code, meaning, "fuzzy", 0.81)
+
+
+def test_exact_reading_wins_over_fix():
+    """그대로 맞는 읽기는 보정하지 않음 (FW · S1 · 10t)"""
+    result = run(vision_with([("S1", 0.9), ("FW", 0.9), ("10t", 0.9)]))
+    assert result["part"]["node_id"] == "S1"
+    assert [m["match"] for m in result["dictionary_matches"]] == ["exact", "none"]
+    assert "ambiguous_reading" not in types(result)
+
+
+def test_corrected_line_is_split_too():
+    result = run(vision_with([("PI FVV", 0.6)]), corrections=[{"target": "t1", "value": "P-1 FW t=10"}])
+    assert result["welding_condition"]["current_a"] == "420-440"
+    assert result["conflicts"] == []  # 작업자가 고친 값은 확인된 것
+
+
+def test_vlm_compares_whole_line(monkeypatch):
+    """줄을 나눠도 OCR↔VLM 비교는 1단계가 읽은 줄 전체 기준"""
+    fake_vlm(monkeypatch, {"interpretation": "부재 P-1, 필렛 용접, 판 두께 10mm",
+                           "texts": [{"text": "P-1 FW t=10", "ref_id": "t1", "bbox": None}], "symbols": [], "meanings": []}, runs=1)
+    result = run(vision_with([("P-1 FW t=10", 0.95)]))
+    assert "ocr_vlm_mismatch" not in types(result)
+
+
 # ── 조립 경로 ──
 
 def test_part_without_dash_and_deepest_node():
@@ -181,10 +248,46 @@ def test_no_part():
 
 # ── 용접 기준 ──
 
-@pytest.mark.parametrize("thickness, current", [("t=8", "220-260"), ("T12", "250-290"), ("20t", "250-290")])
-def test_standard_row_by_thickness(thickness, current):
+# 기준표: data/seed/welding_standards.csv (다이도 특수강 溶接施工, 판 두께별 값 — data/seed/SOURCES.md)
+
+@pytest.mark.parametrize("thickness, position, current, assumed", [
+    ("t=10", "2F", "420-440", False),  # 10mm는 2F 행만 있음
+    ("T12", "1F", "450-480", False),   # 12mm는 1F 행만 있음
+    ("t=8", "2F", "420-440", True),    # 8mm는 1F · 2F 둘 다 → 자세 표기가 없으면 2F + 경고
+])
+def test_standard_row_by_thickness(thickness, position, current, assumed):
     result = run(vision_with([("FW", 0.9), (thickness, 0.9)]))
-    assert result["welding_condition"]["current_a"] == current
+    wc = result["welding_condition"]
+    assert (wc["position"], wc["current_a"], wc["process"], wc["standard_matched"]) == (position, current, "GMAW", True)
+    assert ("standard_conflict" in types(result)) == assumed
+
+
+def test_thickness_not_in_table():
+    """기준표는 판 두께별 값이라 사이 두께(7mm)는 지어내지 않고 작업자 확인"""
+    result = run(vision_with([("FW", 0.9), ("t=7", 0.9)]))
+    assert result["welding_condition"] is None
+    (conflict,) = [c for c in result["conflicts"] if c["type"] == "standard_conflict"]
+    assert conflict["severity"] == "error" and "3.2, 4.5, 6, 8, 10, 12" in conflict["message"]
+
+
+@pytest.mark.parametrize("marking, position, current", [
+    ("V6", "2F", "420-440"),   # V = 2F 용접장 각장
+    ("PB", "2F", "420-440"),   # 수평수직필릿 자세 (AWS 2F)
+    ("PA", "1F", "300-350"),   # 아래보기자세 (AWS 1F·1G) → 필렛이면 1F
+])
+def test_position_from_dictionary(marking, position, current):
+    """사전 항목의 뜻에 적힌 자세로 기준 행을 고름 (경고 없음)"""
+    result = run(vision_with([("FW", 0.9), (marking, 0.9), ("t=8", 0.9)]))
+    assert (result["welding_condition"]["position"], result["welding_condition"]["current_a"]) == (position, current)
+    assert "standard_conflict" not in types(result)
+    assert "t2" in result["welding_condition"]["ref_ids"]
+
+
+def test_position_without_standard():
+    """F = 3F 용접장 각장인데 기준표에 3F 행이 없음 → 다른 자세로 바꾸지 않고 작업자 확인"""
+    result = run(vision_with([("F5.5", 0.9), ("t=8", 0.9)]))
+    assert result["welding_condition"] is None
+    assert any(c["type"] == "standard_conflict" and "3F" in c["message"] for c in result["conflicts"])
 
 
 def test_thickness_out_of_range():
@@ -205,7 +308,8 @@ def test_corrected_text_is_used():
     result = run(corrections=[{"target": "t2", "value": "BV", "previous": "FW"}])
     m = next(m for m in result["dictionary_matches"] if m["ref_ids"] == ["t2"])
     assert (m["raw"], m["code"], m["score"]) == ("BV", "BV", 1.0)
-    assert result["welding_condition"]["joint_type"] == "BUTT_V"
+    assert result["welding_condition"] is None  # 기준표에 V형 맞대기(BUTT_V) 행이 없음
+    assert any(c["type"] == "standard_conflict" and "BUTT_V" in c["message"] for c in result["conflicts"])
 
 
 def test_corrected_meaning_and_no_conflict():

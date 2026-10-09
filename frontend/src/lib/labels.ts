@@ -71,6 +71,15 @@ const POSITION_LABEL: Record<string, string> = {
   HORIZONTAL: '수평',
   VERTICAL: '수직',
   OVERHEAD: '위보기',
+  // AWS 자세 (용접 기준표 data/seed/welding_standards.csv)
+  '1F': '아래보기 필렛',
+  '2F': '수평 필렛',
+  '3F': '수직 필렛',
+  '4F': '위보기 필렛',
+  '1G': '아래보기 맞대기',
+  '2G': '수평 맞대기',
+  '3G': '수직 맞대기',
+  '4G': '위보기 맞대기',
 }
 
 export function jointTypeLabel(code: string): string {

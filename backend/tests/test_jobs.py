@@ -38,8 +38,8 @@ def test_demo_jobs_newest_first(client):
     assert p1["needs_review"]
     assert (p2["status"], p2["assembly_path"], p2["confidence"]["overall"]) == ("approved", "A1/L1/M2/S1/P-2", 94)
     assert p2["welding_condition"] == {
-        "joint_type": "FILLET", "process": "FCAW", "position": "FLAT",
-        "current_a": "220-260", "voltage_v": "26-30", "speed_cm_min": "30-40",
+        "joint_type": "FILLET", "process": "GMAW", "position": "2F",
+        "current_a": "420-440", "voltage_v": "35-37", "speed_cm_min": "60",
     }
     assert p2["approved_by"] == "[작업자]"
     assert p2["approved_at"] is not None

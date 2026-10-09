@@ -68,7 +68,7 @@ def test_stage2_uses_seed_db(client):
     context = _context(client)
     assert context["part"]["assembly_path"] == "A1/L1/M2/S1/P-1" and context["part"]["found_in_tree"]
     assert {m["code"] for m in context["dictionary_matches"]} >= {"FW", "▲"}
-    assert context["welding_condition"]["current_a"] == "220-260"
+    assert context["welding_condition"]["current_a"] == "420-440"  # FILLET 2F 10mm (data/seed/SOURCES.md)
     assert job["assembly_path"] == "A1/L1/M2/S1/P-1"
     assert job["welding_condition"]["joint_type"] == "FILLET"
 
