@@ -15,3 +15,4 @@ pillow
 # openai
 # google-genai
 pytest
+httpx2  # fastapi.testclient (Starlette 1.2+ 권장, httpx 는 deprecated)
