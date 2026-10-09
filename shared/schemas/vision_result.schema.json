@@ -30,8 +30,8 @@
   "$defs": {
     "PreprocessStepName": {
       "type": "string",
-      "enum": ["clahe", "denoise", "perspective", "retinexformer", "uvdoc", "sihr"],
-      "description": "대비 보정 / 노이즈 제거 / 원근 보정 / 조도 보정 / 곡면 펴기 / 반사 제거"
+      "enum": ["upscale", "clahe", "denoise", "perspective", "retinexformer", "uvdoc", "sihr"],
+      "description": "작은 사진 키우기 / 대비 보정 / 노이즈 제거 / 원근 보정 / 조도 보정 / 곡면 펴기 / 반사 제거"
     },
     "Preprocess": {
       "type": "object",

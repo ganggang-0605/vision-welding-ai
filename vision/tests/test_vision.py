@@ -49,3 +49,28 @@ def test_to_text_detections_converts_paddleocr_result():
         "text": "P-1", "prob": 0.9712, "bbox": [412, 289, 598, 362],
         "polygon": [[412, 289], [598, 289], [598, 362], [412, 362]], "source": "paddleocr",
     }]
+
+
+def test_preprocess_upscales_small_image_and_maps_back():
+    """작은 사진은 긴 변 1280px로 키우고(노이즈 제거 → 키우기 → 대비 보정), 찾은 위치는 원본 좌표로 되돌림"""
+    from vision.preprocess import preprocess, to_original_coords
+
+    small = np.full((240, 320, 3), 128, np.uint8)
+    clean, prep, to_original = preprocess(small)
+
+    assert clean.shape[:2] == (960, 1280)
+    assert [s["name"] for s in prep["steps"]] == ["denoise", "upscale", "clahe"]
+    assert 0 < prep["correction_strength"] <= 1
+    found = [{"text": "F5.5", "bbox": [400, 400, 800, 600], "polygon": [[400, 400], [800, 400], [800, 600], [400, 600]]}]
+    mapped = to_original_coords(found, to_original, 320, 240)
+    assert mapped[0]["bbox"] == [100, 100, 200, 150]
+    assert mapped[0]["polygon"][2] == [200, 150]
+
+
+def test_preprocess_keeps_large_image_size(image):
+    from vision.preprocess import preprocess
+
+    clean, prep, to_original = preprocess(image)  # 1920×1080: 키우지 않음
+    assert clean.shape == image.shape
+    assert [s["name"] for s in prep["steps"]] == ["clahe"]
+    assert np.allclose(to_original, np.eye(3))

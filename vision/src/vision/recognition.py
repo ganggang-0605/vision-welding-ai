@@ -5,7 +5,7 @@ import numpy as np
 
 from vision.ocr import DEFAULT_CONFIG as OCR_CONFIG
 from vision.ocr import models_available, recognize_text
-from vision.preprocess import preprocess
+from vision.preprocess import preprocess, to_original_coords
 from vision.symbols import detect_symbols
 
 
@@ -13,9 +13,9 @@ def recognize(image: np.ndarray, image_id: str) -> dict:
     """image: OpenCV BGR 배열 (H, W, 3) → VisionResult. bbox는 원본 이미지 좌표"""
     start = time.perf_counter()
     height, width = image.shape[:2]
-    clean, prep = preprocess(image)
-    texts = recognize_text(clean)
-    symbols = detect_symbols(clean)
+    clean, prep, to_original = preprocess(image)
+    texts = to_original_coords(recognize_text(clean), to_original, width, height)
+    symbols = to_original_coords(detect_symbols(clean), to_original, width, height)
     return {
         "image_id": image_id,
         "image_size": {"width": width, "height": height},

@@ -3,8 +3,11 @@
 비용은 .env 의 ANTHROPIC_API_KEY 계정에서 나감 (Claude 토큰 + 컨테이너 실행 시간). 세션마다 예산 상한을 걸어 그 이상 쓰지 않음.
 
 사용:
-  backend/.venv/bin/python vision/tools/remote_eval.py                # 10장 시험, 예산 $5
-  backend/.venv/bin/python vision/tools/remote_eval.py --limit 0 --budget 10   # 110장 전체
+  backend/.venv/bin/python vision/tools/remote_eval.py                          # steel-ocr 10장 시험, 예산 $5
+  backend/.venv/bin/python vision/tools/remote_eval.py --eval "--prep default"  # steel-ocr 110장 전체 (--limit 없으면 전체)
+  backend/.venv/bin/python vision/tools/remote_eval.py \
+      --eval "--dataset mpsc --limit 300 --prep none" --eval "--dataset mpsc --limit 300 --prep default"
+  --eval 은 eval_ocr.py 인자 묶음이고 여러 번 주면 한 세션에서 차례로 실행 (설치·데이터 받기는 한 번)
 결과: vision/reports/runs/remote/<session_id>/ (eval JSON, 설치·실행 로그)
 """
 import argparse
@@ -40,10 +43,30 @@ TASK = """Run these steps in order with bash.
 2. Extract the code: `mkdir -p /workspace/repo && tar -xzf /mnt/session/uploads/code.tar.gz -C /workspace/repo`
 3. PaddlePaddle needs Python 3.12. If python3 is 3.12, run `python3 -m venv /workspace/venv`. Otherwise run `pip install -q uv && uv venv -p 3.12 /workspace/venv` (then install packages with `uv pip install --python /workspace/venv/bin/python ...`). Use PY=/workspace/venv/bin/python from here on.
 4. Install, logging to /tmp/pip.log: `$PY -m pip install -e /workspace/repo/shared -e /workspace/repo/vision paddlepaddle==3.3.1 paddleocr==3.7.0 huggingface_hub > /tmp/pip.log 2>&1; tail -3 /tmp/pip.log`. Do NOT install torch. If importing paddleocr later fails on libGL/libglib, run `apt-get update -qq && apt-get install -y -qq libgl1 libglib2.0-0 > /tmp/apt.log 2>&1`.
-5. Download the dataset, logging to /tmp/hf.log: `$PY -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Hoshino121/steel-ocr-dataset', repo_type='dataset', local_dir='/workspace/repo/data/raw/external/steel-ocr')" > /tmp/hf.log 2>&1; tail -2 /tmp/hf.log`
-6. Evaluate and time it: `cd /workspace/repo && date +%s > /tmp/start && PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True $PY vision/tools/eval_ocr.py {eval_args} --out /mnt/session/outputs/{result_name} 2>/tmp/eval.log | tail -20; echo "seconds: $(( $(date +%s) - $(cat /tmp/start) ))"`
-7. `mkdir -p /mnt/session/outputs/logs && cp /tmp/uv.log /tmp/pip.log /tmp/apt.log /tmp/hf.log /tmp/eval*.log /mnt/session/outputs/logs/ 2>/dev/null; ls /mnt/session/outputs/logs`
-8. Reply with a short summary: Python version, CPU count, RAM, evaluation wall time in seconds, and the "summary" numbers from step 6 (or the error if a step failed)."""
+5. Download the datasets:
+{downloads}
+6. Run each evaluation below in order, from /workspace/repo with PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True. Time each one. An evaluation can take several minutes: if a command could exceed your tool time limit, start it with nohup in the background and poll every 60 seconds until its output JSON exists. Print only the "summary" part of each result.
+{evals}
+7. `mkdir -p /mnt/session/outputs/logs && cp /tmp/uv.log /tmp/pip.log /tmp/apt.log /tmp/hf.log /tmp/mpsc.log /tmp/eval*.log /mnt/session/outputs/logs/ 2>/dev/null; ls /mnt/session/outputs/logs`
+8. Reply with a short summary: Python version, CPU count, RAM, and for each evaluation its wall time in seconds and its "summary" numbers (or the error if a step failed)."""
+
+DOWNLOADS = {
+    "steel-ocr": """   - steel-ocr, logging to /tmp/hf.log: `$PY -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Hoshino121/steel-ocr-dataset', repo_type='dataset', local_dir='/workspace/repo/data/raw/external/steel-ocr')" > /tmp/hf.log 2>&1; tail -2 /tmp/hf.log`""",
+    "mpsc": """   - MPSC, logging to /tmp/mpsc.log: `$PY -m pip install -q gdown > /tmp/mpsc.log 2>&1; mkdir -p /workspace/repo/data/raw/external/mpsc && $PY -m gdown 1wPHXf4sKjEr7JFfobKV9IqC0EKM79J6G -O /workspace/mpsc.zip >> /tmp/mpsc.log 2>&1 && unzip -q /workspace/mpsc.zip -d /workspace/repo/data/raw/external/mpsc && ls /workspace/repo/data/raw/external/mpsc/MPSC/image/test | wc -l`""",
+}
+
+
+def build_task(evals: list[str]) -> tuple[str, list[str]]:
+    """eval 인자 묶음 → (작업 지시문, 결과 파일 이름들). 필요한 데이터셋만 받음"""
+    datasets = {"mpsc" if "--dataset mpsc" in e else "steel-ocr" for e in evals}
+    names, lines = [], []
+    for i, e in enumerate(evals, 1):
+        slug = "_".join(e.replace("--", "").replace("+", "-").split()) or "default"
+        name = f"eval{i}_{slug}.json"
+        names.append(name)
+        lines.append(f"   {i}. `$PY vision/tools/eval_ocr.py {e} --out /mnt/session/outputs/{name} 2>/tmp/eval{i}.log`")
+    downloads = "\n".join(DOWNLOADS[d] for d in sorted(datasets))
+    return TASK.format(downloads=downloads, evals="\n".join(lines)), names
 
 
 def load_key() -> None:
@@ -142,11 +165,11 @@ def download_outputs(client: anthropic.Anthropic, session_id: str) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--limit", type=int, default=10, help="평가할 사진 수 (0이면 110장 전체)")
+    parser.add_argument("--eval", action="append", help='eval_ocr.py 인자 묶음, 여러 번 가능 (기본 "--limit 10")')
     parser.add_argument("--budget", type=float, default=5.0, help="이 세션의 지출 상한 (달러)")
-    parser.add_argument("--eval-args", default="", help="eval_ocr.py에 더 넘길 인자 (예: --charset steel-ocr)")
     args = parser.parse_args()
 
+    evals = args.eval or ["--limit 10"]
     load_key()
     client = anthropic.Anthropic()
     env_id, agent_id, agent_version = ensure_env_and_agent(client)
@@ -158,16 +181,15 @@ def main() -> int:
     session = client.beta.sessions.create(
         agent={"type": "agent", "id": agent_id, "version": agent_version},
         environment_id=env_id,
-        title=f"OCR eval limit={args.limit or 'all'}",
+        title="OCR eval: " + " | ".join(evals),
         resources=[{"type": "file", "file_id": uploaded.id, "mount_path": "/code.tar.gz"}],
         budget={"type": "limit", "max_list_cost": {"amount": str(round(args.budget * 100)), "currency": "USD"}},
     )
     print(f"세션: {session.id}  (콘솔에서 보기: https://platform.claude.com/workspaces/default/sessions/{session.id})")
 
-    eval_args = " ".join(filter(None, [f"--limit {args.limit}" if args.limit else "", args.eval_args]))
-    result_name = f"steel-ocr_det_remote_{args.limit or 'all'}.json"
+    task, _ = build_task(evals)
     started = time.monotonic()
-    stop = stream_until_idle(client, session.id, TASK.format(eval_args=eval_args, result_name=result_name))
+    stop = stream_until_idle(client, session.id, task)
     print(f"\n멈춘 이유: {stop}  ·  걸린 시간 {time.monotonic() - started:.0f}초")
 
     dest = download_outputs(client, session.id)

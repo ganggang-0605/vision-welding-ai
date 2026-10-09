@@ -4,6 +4,8 @@
   backend/.venv/bin/python vision/tools/eval_ocr.py --dataset steel-ocr            # 사진 전체 (검출 + 인식)
   backend/.venv/bin/python vision/tools/eval_ocr.py --dataset steel-ocr --mode rec # 잘라낸 글자 이미지 (인식만)
   backend/.venv/bin/python vision/tools/eval_ocr.py --dataset annotations          # data/annotations (조선소 표기)
+  backend/.venv/bin/python vision/tools/eval_ocr.py --dataset mpsc --limit 200     # MPSC 테스트 (금속 양각·각인)
+  --prep none|up|clahe|up+clahe|up+denoise|default : 전처리 비교 (기본 none = 전처리 없이 OCR만)
   --rec-model, --det-model, --limit-side 로 설정 비교, --out 으로 결과 JSON 저장
   --charset steel-ocr : 표기에 쓰일 수 있는 글자만 남기는 후처리 효과 측정 (헷갈리는 글자는 바꾸고 나머지는 버림)
 
@@ -20,6 +22,7 @@ from pathlib import Path
 import cv2
 
 from vision.ocr import DEFAULT_CONFIG, config_dict, models_available, recognize_text
+from vision.preprocess import DEFAULT_PREPROCESS, PreprocessConfig, preprocess, to_original_coords
 from vision.recognition import assign_ids
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +31,7 @@ STEEL_OCR = ROOT / "data" / "raw" / "external" / "steel-ocr"
 # 학습에 쓸 train 은 빼고 평가용 val + test 만
 STEEL_DET = [STEEL_OCR / "train_data/det/val.txt", STEEL_OCR / "test_data/det/test.txt"]
 STEEL_REC = [STEEL_OCR / "train_data/rec/rec_gt_val.txt", STEEL_OCR / "test_data/rec/rec_gt_test.txt"]
+MPSC = ROOT / "data" / "raw" / "external" / "mpsc" / "MPSC"
 ANNOTATIONS = ROOT / "data" / "annotations"
 RAW = ROOT / "data" / "raw"
 
@@ -57,6 +61,31 @@ def load_steel_rec() -> list[tuple[Path, str]]:
                 rel, text = line.split("\t", 1)
                 samples.append((label_file.parent / rel, text))
     return samples
+
+
+def load_mpsc() -> list[tuple[Path, list[dict]]]:
+    """테스트 639장. 라벨 한 줄 = x1,y1,…,x4,y4,글자. '###'(판독 불가)은 정답에서 뺌"""
+    samples = []
+    for label in sorted((MPSC / "annotation/test").glob("gt_img_*.txt"), key=lambda p: int(p.stem.split("_")[-1])):
+        gts = []
+        for line in label.read_text(encoding="utf-8-sig").splitlines():
+            parts = line.strip().split(",", 8)
+            if len(parts) < 9 or parts[8] == "###":
+                continue
+            xs, ys = [float(v) for v in parts[0:8:2]], [float(v) for v in parts[1:8:2]]
+            gts.append({"text": parts[8], "bbox": [min(xs), min(ys), max(xs), max(ys)]})
+        samples.append((MPSC / "image/test" / f"MPSC_img_{label.stem.split('_')[-1]}.jpg", gts))
+    return samples
+
+
+PREP = {
+    "none": None,
+    "up": PreprocessConfig(denoise=False, clahe=False),
+    "clahe": PreprocessConfig(min_long_side=0, denoise=False, clahe=True),
+    "up+clahe": PreprocessConfig(denoise=False, clahe=True),
+    "up+denoise": PreprocessConfig(denoise=True, clahe=False),
+    "default": DEFAULT_PREPROCESS,
+}
 
 
 def load_annotations() -> list[tuple[Path, list[dict]]]:
@@ -173,12 +202,17 @@ def summarize(rows: list[dict], times: list[float], extra_preds: int) -> dict:
 
 # ── 실행 ──
 
-def run_det(samples, config, limit, charset=None):
+def run_det(samples, config, limit, charset=None, prep=None):
     rows, times, details, extra = [], [], [], 0
     for path, gts in samples[:limit]:
         image = cv2.imread(str(path))
         start = time.perf_counter()
-        preds = assign_ids(recognize_text(image, config), "t")
+        if prep:
+            height, width = image.shape[:2]
+            clean, _, to_original = preprocess(image, prep)
+            preds = assign_ids(to_original_coords(recognize_text(clean, config), to_original, width, height), "t")
+        else:
+            preds = assign_ids(recognize_text(image, config), "t")
         times.append(time.perf_counter() - start)
         if charset:
             preds = [{**p, "text": constrain(p["text"], charset)} for p in preds]
@@ -193,7 +227,7 @@ def run_det(samples, config, limit, charset=None):
 def run_rec(samples, config, limit, charset=None):
     from paddleocr import TextRecognition
 
-    model = TextRecognition(model_name=config.rec_model)
+    model = TextRecognition(model_name=config.rec_model, enable_mkldnn=config.enable_mkldnn)
     rows, times, details = [], [], []
     for path, gt in samples[:limit]:
         image = cv2.imread(str(path))
@@ -212,13 +246,14 @@ def run_rec(samples, config, limit, charset=None):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dataset", choices=["steel-ocr", "annotations"], default="steel-ocr")
+    parser.add_argument("--dataset", choices=["steel-ocr", "mpsc", "annotations"], default="steel-ocr")
     parser.add_argument("--mode", choices=["det", "rec"], default="det", help="det: 사진 전체, rec: 잘라낸 글자 (steel-ocr만)")
     parser.add_argument("--det-model")
     parser.add_argument("--rec-model")
     parser.add_argument("--limit-side", type=int, help="검출 전 긴 변 크기")
     parser.add_argument("--orientation", action="store_true", help="뒤집힌 글자 줄 보정 켜기")
     parser.add_argument("--charset", help="허용 글자 후처리: steel-ocr 또는 글자 목록 파일(한 줄에 한 글자)")
+    parser.add_argument("--prep", choices=list(PREP), default="none", help="전처리 (기본 none: 전처리 없이)")
     parser.add_argument("--limit", type=int, help="앞에서 N장만")
     parser.add_argument("--out", type=Path, help="결과 JSON 저장 경로")
     args = parser.parse_args()
@@ -238,13 +273,14 @@ def main() -> int:
             parser.error("--mode rec 는 steel-ocr 만 지원")
         summary, details = run_rec(load_steel_rec(), config, args.limit, charset)
     else:
-        samples = load_steel_det() if args.dataset == "steel-ocr" else load_annotations()
+        samples = {"steel-ocr": load_steel_det, "mpsc": load_mpsc, "annotations": load_annotations}[args.dataset]()
         if not samples:
             print("평가할 정답이 없습니다 (data/annotations 의 split=eval 파일)")
             return 1
-        summary, details = run_det(samples, config, args.limit, charset)
+        summary, details = run_det(samples, config, args.limit, charset, PREP[args.prep])
 
-    report = {"dataset": args.dataset, "mode": args.mode, "config": config_dict(config), "charset": args.charset, "summary": summary}
+    report = {"dataset": args.dataset, "mode": args.mode, "config": config_dict(config), "prep": args.prep,
+              "charset": args.charset, "summary": summary}
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
