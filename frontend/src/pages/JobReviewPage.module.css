@@ -11,3 +11,31 @@
   font-size: 1.0625rem;
   font-weight: 600;
 }
+
+/* 직접 입력: 셀 형태 (좌/우 한 줄씩) */
+.cellSide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cellSideLabel {
+  flex: none;
+  width: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--secondary);
+}
+
+/* 직접 입력: 각장 한 줄 (코드, 크기, mm, 지우기) */
+.legRow {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 8rem) auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 8px;
+}
+
+.addLeg {
+  justify-self: start;
+}

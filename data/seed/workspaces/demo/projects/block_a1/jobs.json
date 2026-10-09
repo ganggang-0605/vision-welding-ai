@@ -1,5 +1,5 @@
 {
-  "_comment": "데모 데이터 — 실제 해석 결과가 아닌 화면 시연용 예시 작업 (검토 필요 / 승인 대기 / 승인 완료)",
+  "_comment": "데모 데이터: 실제 해석 결과가 아닌 화면 시연용 예시 작업. 셀 형태는 PAC 과제 셀 예시 1·2·3, 각장 값은 지어낸 값",
   "jobs": [
     {
       "id": "job_demo_p1",
@@ -9,9 +9,9 @@
       "related_job_ids": [],
       "created_at": "2026-10-07T23:40:00Z",
       "marking": {
-        "raw_text": "F/W 8 ▲",
-        "symbols": ["▲"],
-        "interpretation": "필렛 용접(F/W → FW), 판 두께 8mm 추정, 현장 용접"
+        "raw_text": "F5.5 V6.0",
+        "symbols": [],
+        "interpretation": "3F 용접장 각장 5.5mm, 2F 용접장 각장 6.0mm"
       },
       "welding_condition": {
         "joint_type": "FILLET",
@@ -21,17 +21,43 @@
         "voltage_v": "26-30",
         "speed_cm_min": "30-40"
       },
-      "confidence": { "visual": 68, "db_consistency": 88, "vlm_reasoning": 76, "overall": 68 },
+      "confidence": {
+        "visual": 68,
+        "db_consistency": 88,
+        "vlm_reasoning": 76,
+        "overall": 68
+      },
       "evidence": [
-        "OCR: 'F/W' 0.93 · '8' 0.64",
-        "YOLO: '▲' 0.71",
-        "문자/기호 사전: 'F/W' 는 'FW'(필렛 용접)의 별칭",
-        "조립 트리: A1/L1/M2/S1/P-1 존재",
-        "용접 기준: FILLET 6–12mm · FCAW · FLAT 조건 적용"
+        "OCR: 'F5.5' 0.93, 'V6.0' 0.64",
+        "문자/기호 사전: F = 3F 용접장 각장, V = 2F 용접장 각장",
+        "셀 형태: 좌 Slit, 우 Slot (YOLO 0.88)",
+        "조립 트리: A1/L1/M2/S1/P-1 존재"
       ],
       "needs_review": [
-        "'8' 판독 신뢰도 낮음 — 'B'·'6' 과 시각적으로 유사",
-        "'▲' 기호 일부 가려짐 — 현장 용접 여부 확인 필요"
+        "'V6.0'의 '6.0' 판독 신뢰도 낮음, '6.5'와 비슷해 보임",
+        "우측이 Slot인지 Slit인지 개구부 폭 확인 필요"
+      ],
+      "cell": {
+        "left": [
+          "slit"
+        ],
+        "right": [
+          "slot"
+        ]
+      },
+      "leg_lengths": [
+        {
+          "code": "F",
+          "size_mm": 5.5,
+          "raw_text": "F5.5",
+          "meaning": "3F 용접장 각장"
+        },
+        {
+          "code": "V",
+          "size_mm": 6.0,
+          "raw_text": "V6.0",
+          "meaning": "2F 용접장 각장"
+        }
       ]
     },
     {
@@ -39,14 +65,16 @@
       "name": "A1-P2 부재 표기",
       "status": "approved",
       "assembly_path": "A1/L1/M2/S1/P-2",
-      "related_job_ids": ["job_demo_p1"],
+      "related_job_ids": [
+        "job_demo_p1"
+      ],
       "created_at": "2026-10-08T00:15:00Z",
       "approved_at": "2026-10-08T02:00:00Z",
       "approved_by": "[작업자]",
       "marking": {
-        "raw_text": "FW 10",
+        "raw_text": "F4.5 S5.0",
         "symbols": [],
-        "interpretation": "필렛 용접(FW), 판 두께 10mm"
+        "interpretation": "3F 용접장 각장 4.5mm, 스티프너 각장 5.0mm"
       },
       "welding_condition": {
         "joint_type": "FILLET",
@@ -56,14 +84,41 @@
         "voltage_v": "26-30",
         "speed_cm_min": "30-40"
       },
-      "confidence": { "visual": 97, "db_consistency": 96, "vlm_reasoning": 94, "overall": 94 },
+      "confidence": {
+        "visual": 97,
+        "db_consistency": 96,
+        "vlm_reasoning": 94,
+        "overall": 94
+      },
       "evidence": [
-        "OCR: 'FW' 0.98 · '10' 0.97",
-        "문자/기호 사전: 'FW' 필렛 용접 일치",
-        "조립 트리: A1/L1/M2/S1/P-2 존재",
-        "용접 기준: FILLET 6–12mm · FCAW · FLAT 조건 적용"
+        "OCR: 'F4.5' 0.97, 'S5.0' 0.95",
+        "문자/기호 사전: F = 3F 용접장 각장, S = 스티프너 각장",
+        "셀 형태: 좌 뒤 Collar, 우 Slit (YOLO 0.94)",
+        "조립 트리: A1/L1/M2/S1/P-2 존재"
       ],
-      "needs_review": []
+      "needs_review": [],
+      "cell": {
+        "left": [
+          "collar_back"
+        ],
+        "right": [
+          "slit"
+        ]
+      },
+      "leg_lengths": [
+        {
+          "code": "F",
+          "size_mm": 4.5,
+          "raw_text": "F4.5",
+          "meaning": "3F 용접장 각장"
+        },
+        {
+          "code": "S",
+          "size_mm": 5.0,
+          "raw_text": "S5.0",
+          "meaning": "스티프너 각장"
+        }
+      ]
     },
     {
       "id": "job_demo_p3",
@@ -73,26 +128,54 @@
       "related_job_ids": [],
       "created_at": "2026-10-08T01:05:00Z",
       "marking": {
-        "raw_text": "BV 16",
+        "raw_text": "F5.5 S6.0",
         "symbols": [],
-        "interpretation": "V형 맞대기 용접(BV), 판 두께 16mm"
+        "interpretation": "3F 용접장 각장 5.5mm, 스티프너 각장 6.0mm"
       },
       "welding_condition": {
-        "joint_type": "BUTT_V",
+        "joint_type": "FILLET",
         "process": "FCAW",
         "position": "FLAT",
-        "current_a": "200-240",
-        "voltage_v": "25-29",
-        "speed_cm_min": "20-30"
+        "current_a": "220-260",
+        "voltage_v": "26-30",
+        "speed_cm_min": "30-40"
       },
-      "confidence": { "visual": 90, "db_consistency": 93, "vlm_reasoning": 86, "overall": 86 },
+      "confidence": {
+        "visual": 90,
+        "db_consistency": 93,
+        "vlm_reasoning": 86,
+        "overall": 86
+      },
       "evidence": [
-        "OCR: 'BV' 0.95 · '16' 0.90",
-        "문자/기호 사전: 'BV' V형 맞대기 용접 일치",
-        "조립 트리: A1/L1/M2/S2/P-3 존재",
-        "용접 기준: BUTT_V 10–20mm · FCAW · FLAT 조건 적용"
+        "OCR: 'F5.5' 0.95, 'S6.0' 0.90",
+        "문자/기호 사전: F = 3F 용접장 각장, S = 스티프너 각장",
+        "셀 형태: 좌 Slit, 우 앞 Collar + Scallop (YOLO 0.86)",
+        "조립 트리: A1/L1/M2/S2/P-3 존재"
       ],
-      "needs_review": []
+      "needs_review": [],
+      "cell": {
+        "left": [
+          "slit"
+        ],
+        "right": [
+          "collar_front",
+          "scallop"
+        ]
+      },
+      "leg_lengths": [
+        {
+          "code": "F",
+          "size_mm": 5.5,
+          "raw_text": "F5.5",
+          "meaning": "3F 용접장 각장"
+        },
+        {
+          "code": "S",
+          "size_mm": 6.0,
+          "raw_text": "S6.0",
+          "meaning": "스티프너 각장"
+        }
+      ]
     }
   ]
 }

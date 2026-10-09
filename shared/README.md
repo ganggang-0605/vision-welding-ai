@@ -137,6 +137,10 @@ backend/.venv/bin/python shared/validate.py
 
 ## 아직 정할 것
 
+- **셀 형태·각장 (PAC 과제)**: 팀원 계약 `Job`에 `cell`(좌·우 각각 `slit`·`slot`·`collar_front`·`collar_back`·`scallop` 목록)과
+  `leg_lengths`(수기 각장 `F`·`V`·`S` + mm, 예: `F5.5` → 3F 용접장 각장 5.5mm)가 생겼고 로봇 JSON에도 들어감.
+  파이프라인 어느 단계가 셀 형태를 판별하고 각장을 읽을지, `to_job_fields()`에서 어떻게 채울지 정해야 함 (지금은 비어 있는 값)
+
 - 사진 여러 장일 때 "가장 최근 Analysis"로 충분한지, 사진들의 결과를 합칠지
 - 백엔드 파이프라인 코드(`backend/app/pipeline/`)를 스키마에 맞추기: `run_pipeline`에 `project_id` 추가(조립 트리 조회), 반환값을 `Analysis`로
 - `Analysis`를 저장·조회하는 API를 둘지 (GUI가 사진 위 `bbox`·후보를 그리려면 필요) — 예: `GET /workspaces/{workspace_id}/jobs/{job_id}/analyses`

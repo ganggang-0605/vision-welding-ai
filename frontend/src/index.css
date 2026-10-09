@@ -506,6 +506,36 @@ p {
   display: flex;
 }
 
+/* ── 켜고 끄는 캡슐 버튼 (여러 개 선택, 예: 셀 형태) ─────── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--label);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--fill);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: transparent;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
 /* ── 상태 글자 ────────────────────────────────────────────── */
 
 .status {

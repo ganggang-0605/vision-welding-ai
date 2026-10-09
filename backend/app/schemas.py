@@ -192,6 +192,31 @@ class Confidence(ApiModel):
     overall: Score
 
 
+# ── 셀 형태 · 각장 (PAC 과제: 셀 타입 판별 + F·V·S 수기 각장 인식) ──
+
+# 셀 한쪽 끝의 관통부 형태. 앞/뒤 Collar 는 Collar 판이 붙은 면.
+CellFeature = Literal["slit", "slot", "collar_front", "collar_back", "scallop"]
+
+
+class Cell(ApiModel):
+    """셀(블록 안의 칸) 좌·우 끝의 형태. 한쪽에 여러 개가 겹칠 수 있다 (예: 앞 Collar + Scallop)."""
+
+    left: list[CellFeature] = []
+    right: list[CellFeature] = []
+
+
+class LegLength(ApiModel):
+    """수기 각장 표기 하나 — 예: "F5.5" → 3F 용접장 각장 5.5mm.
+
+    code 는 워크스페이스 사전의 code (데모 사전: F 3F 용접장, V 2F 용접장, S 스티프너), meaning 은 해석할 때의 사전 뜻.
+    """
+
+    code: NonEmptyStr
+    size_mm: float = Field(gt=0)
+    raw_text: str
+    meaning: str | None = None
+
+
 class Job(ApiModel):
     id: str
     workspace_id: str
@@ -205,6 +230,8 @@ class Job(ApiModel):
     approved_by: str | None = None
     marking: Marking | None = None
     welding_condition: WeldingCondition | None = None
+    cell: Cell | None = None             # 판별한 셀 형태 (해석 전이면 null)
+    leg_lengths: list[LegLength] = []    # 읽은 각장 표기 (읽는 순서)
     confidence: Confidence | None = None
     evidence: list[str] = []
     needs_review: list[str] = []
@@ -252,6 +279,8 @@ class RobotOutput(ApiModel):
     assembly_path: str
     marking: Marking
     welding_condition: WeldingCondition
+    cell: Cell | None          # 셀 형태를 판별하지 못했으면 null
+    leg_lengths: list[LegLength]
     confidence: Confidence
     evidence: list[str]
     needs_review: list[str]

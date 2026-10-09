@@ -1,10 +1,11 @@
-import { WarningCircle } from '@phosphor-icons/react'
+import { Plus, Trash, WarningCircle } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
 import { reviewJob } from '../api/jobs'
-import type { Job, ReviewAction, ReviewRequest, WeldingCondition } from '../api/types'
+import type { Cell, CellFeature, Job, LegLength, ReviewAction, ReviewRequest, WeldingCondition } from '../api/types'
 import { JobFrame } from '../components/JobFrame'
 import { ErrorNotice, Notice } from '../components/Notice'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { CELL_FEATURE_LABEL, CELL_FEATURES } from '../lib/labels'
 import styles from './JobReviewPage.module.css'
 
 const CONDITION_FIELDS: { key: keyof WeldingCondition; label: string }[] = [
@@ -15,6 +16,11 @@ const CONDITION_FIELDS: { key: keyof WeldingCondition; label: string }[] = [
   { key: 'voltage_v', label: '전압 (V)' },
   { key: 'speed_cm_min', label: '속도 (cm/min)' },
 ]
+
+/** 데모 사전의 각장 코드. 사전에 다른 코드가 있으면 직접 입력할 수 있게 목록 밖 값도 그대로 둔다. */
+const LEG_CODES = ['F', 'V', 'S']
+
+const EMPTY_CELL: Cell = { left: [], right: [] }
 
 const EMPTY_CONDITION: WeldingCondition = {
   joint_type: '',
@@ -38,6 +44,9 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
   const [context, setContext] = useState('')
   const [interpretation, setInterpretation] = useState(job.marking?.interpretation ?? '')
   const [condition, setCondition] = useState<WeldingCondition>(job.welding_condition ?? EMPTY_CONDITION)
+  const [cell, setCell] = useState<Cell>(job.cell ?? EMPTY_CELL)
+  // 크기는 입력 중 '5.' 같은 값도 받도록 문자열로 들고 있다가 보낼 때 숫자로 바꾼다.
+  const [legs, setLegs] = useState(job.leg_lengths.map((leg) => ({ code: leg.code, size: String(leg.size_mm) })))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<unknown>()
   const [done, setDone] = useState(false)
@@ -48,7 +57,21 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
     const body: ReviewRequest =
       action === 'reinterpret'
         ? { action, context: context.trim() || null }
-        : { action, values: { interpretation, welding_condition: condition } }
+        : {
+            action,
+            values: {
+              interpretation,
+              welding_condition: condition,
+              cell,
+              leg_lengths: legs
+                .filter((leg) => leg.code && Number(leg.size) > 0)
+                .map((leg): Omit<LegLength, 'meaning'> => ({
+                  code: leg.code,
+                  size_mm: Number(leg.size),
+                  raw_text: `${leg.code}${leg.size}`,
+                })),
+            },
+          }
     setSubmitting(true)
     setError(undefined)
     setDone(false)
@@ -131,6 +154,69 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
                 />
               </div>
               <fieldset className="field">
+                <legend className="field-label">셀 형태</legend>
+                <CellSideToggles
+                  side="좌"
+                  value={cell.left}
+                  onChange={(left) => setCell({ ...cell, left })}
+                />
+                <CellSideToggles
+                  side="우"
+                  value={cell.right}
+                  onChange={(right) => setCell({ ...cell, right })}
+                />
+                <p className="field-hint">한쪽에 여러 개를 고를 수 있어요 (예: 앞 Collar + Scallop).</p>
+              </fieldset>
+              <fieldset className="field">
+                <legend className="field-label">각장</legend>
+                {legs.map((leg, index) => (
+                  <div key={index} className={styles.legRow}>
+                    <select
+                      className="input"
+                      aria-label={`${index + 1}번째 각장 코드`}
+                      value={leg.code}
+                      onChange={(event) =>
+                        setLegs(legs.map((item, i) => (i === index ? { ...item, code: event.target.value } : item)))
+                      }
+                    >
+                      {[...new Set([...LEG_CODES, leg.code])].map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      aria-label={`${index + 1}번째 각장 크기 (mm)`}
+                      placeholder="5.5"
+                      value={leg.size}
+                      onChange={(event) =>
+                        setLegs(legs.map((item, i) => (i === index ? { ...item, size: event.target.value } : item)))
+                      }
+                    />
+                    <span className="secondary">mm</span>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn--danger"
+                      onClick={() => setLegs(legs.filter((_, i) => i !== index))}
+                      title="지우기"
+                    >
+                      <Trash size={16} aria-hidden="true" />
+                      <span className="visually-hidden">{index + 1}번째 각장 지우기</span>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className={`btn btn--plain ${styles.addLeg}`}
+                  onClick={() => setLegs([...legs, { code: 'F', size: '' }])}
+                >
+                  <Plus size={14} weight="bold" aria-hidden="true" />
+                  각장 추가
+                </button>
+              </fieldset>
+              <fieldset className="field">
                 <legend className="field-label">용접 조건</legend>
                 <div className="grid-2">
                   {CONDITION_FIELDS.map(({ key, label }) => (
@@ -159,5 +245,39 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
         </form>
       </section>
     </>
+  )
+}
+
+interface CellSideTogglesProps {
+  side: string
+  value: CellFeature[]
+  onChange: (value: CellFeature[]) => void
+}
+
+/** 셀 한쪽의 형태를 켜고 끄는 버튼 묶음 (여러 개 선택) */
+function CellSideToggles({ side, value, onChange }: CellSideTogglesProps) {
+  const toggle = (feature: CellFeature) =>
+    onChange(
+      value.includes(feature)
+        ? value.filter((item) => item !== feature)
+        : CELL_FEATURES.filter((item) => item === feature || value.includes(item)),
+    )
+  return (
+    <div className={styles.cellSide} role="group" aria-label={`셀 ${side}쪽 형태`}>
+      <span className={styles.cellSideLabel}>{side}</span>
+      <span className="chips">
+        {CELL_FEATURES.map((feature) => (
+          <button
+            key={feature}
+            type="button"
+            className="chip"
+            aria-pressed={value.includes(feature)}
+            onClick={() => toggle(feature)}
+          >
+            {CELL_FEATURE_LABEL[feature]}
+          </button>
+        ))}
+      </span>
+    </div>
   )
 }

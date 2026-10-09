@@ -10,7 +10,7 @@ import { useAsync } from '../hooks/useAsync'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { downloadJson } from '../lib/download'
 import { formatDateTime, formatScore } from '../lib/format'
-import { APPROVABLE_STATUSES, jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
+import { APPROVABLE_STATUSES, cellSideLabel, jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
 import styles from './JobSummaryPage.module.css'
 
 const STATS: { key: keyof Confidence; label: string }[] = [
@@ -67,6 +67,27 @@ function Summary({ job }: { job: Job }) {
           </dl>
         )}
       </section>
+
+      {(job.cell || job.leg_lengths.length > 0) && (
+        <section className="section" aria-labelledby="cell-title">
+          <h2 id="cell-title" className="section-title">
+            셀 형태와 각장
+          </h2>
+          <dl className="group">
+            {job.cell && (
+              <>
+                <Row label="좌">{cellSideLabel(job.cell.left)}</Row>
+                <Row label="우">{cellSideLabel(job.cell.right)}</Row>
+              </>
+            )}
+            {job.leg_lengths.map((leg, index) => (
+              <Row key={`${leg.raw_text}-${index}`} label={leg.meaning ? `${leg.code} (${leg.meaning})` : leg.code}>
+                {leg.size_mm}mm
+              </Row>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {condition && (
         <section className="section" aria-labelledby="condition-title">

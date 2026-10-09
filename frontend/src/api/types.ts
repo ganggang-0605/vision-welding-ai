@@ -159,6 +159,25 @@ export interface Confidence {
   overall: number
 }
 
+/** 셀 한쪽 끝의 관통부 형태 (PAC 과제 타입). 앞/뒤 Collar 는 Collar 판이 붙은 면. */
+export type CellFeature = 'slit' | 'slot' | 'collar_front' | 'collar_back' | 'scallop'
+
+/** 셀(블록 안의 칸) 좌·우 끝의 형태. 한쪽에 여러 개가 겹칠 수 있다 (예: 앞 Collar + Scallop). */
+export interface Cell {
+  left: CellFeature[]
+  right: CellFeature[]
+}
+
+/** 수기 각장 표기 하나. 예: "F5.5" → code F(3F 용접장), 5.5mm */
+export interface LegLength {
+  /** 워크스페이스 사전의 code (데모: F 3F 용접장, V 2F 용접장, S 스티프너) */
+  code: string
+  size_mm: number
+  raw_text: string
+  /** 해석할 때의 사전 뜻 */
+  meaning: string | null
+}
+
 export interface Job {
   id: string
   workspace_id: string
@@ -172,6 +191,10 @@ export interface Job {
   approved_by: string | null
   marking: Marking | null
   welding_condition: WeldingCondition | null
+  /** 판별한 셀 형태 (해석 전이면 null) */
+  cell: Cell | null
+  /** 읽은 각장 표기 (읽는 순서) */
+  leg_lengths: LegLength[]
   confidence: Confidence | null
   evidence: string[]
   needs_review: string[]
@@ -233,6 +256,8 @@ export interface RobotOutput {
   assembly_path: string
   marking: Marking
   welding_condition: WeldingCondition
+  cell: Cell | null
+  leg_lengths: LegLength[]
   confidence: Confidence
   evidence: string[]
   needs_review: string[]

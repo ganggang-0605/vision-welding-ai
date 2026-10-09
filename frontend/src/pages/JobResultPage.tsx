@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { analyzeJob } from '../api/jobs'
 import type { Confidence, Job } from '../api/types'
+import { CellView } from '../components/CellView'
 import { JobFrame } from '../components/JobFrame'
+import { LegLengthList } from '../components/LegLengthList'
 import { ErrorNotice, Notice } from '../components/Notice'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { formatScore } from '../lib/format'
@@ -18,7 +20,7 @@ const CONFIDENCE_PARTS: { key: Exclude<keyof Confidence, 'overall'>; label: stri
   { key: 'vlm_reasoning', label: 'VLM 추론' },
 ]
 
-/** 와이어프레임 5 — 해석 결과: 인식한 표기, 신뢰도, 용접 조건, 판단 근거 */
+/** 와이어프레임 5 — 해석 결과: 인식한 표기, 신뢰도, 셀 형태, 각장, 용접 조건, 판단 근거 */
 export function JobResultPage() {
   return <JobFrame section="해석 결과">{(job, reload) => <JobResult job={job} onChange={reload} />}</JobFrame>
 }
@@ -82,6 +84,26 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
             </>
           ) : (
             <p className="state">아직 신뢰도가 없어요.</p>
+          )}
+        </section>
+      </div>
+
+      <div className={styles.columns}>
+        <section className="section" aria-labelledby="cell-title">
+          <h2 id="cell-title" className="section-title">
+            셀 형태
+          </h2>
+          {job.cell ? <CellView cell={job.cell} /> : <p className="state">아직 판별한 셀 형태가 없어요.</p>}
+        </section>
+
+        <section className="section" aria-labelledby="leg-title">
+          <h2 id="leg-title" className="section-title">
+            각장
+          </h2>
+          {job.leg_lengths.length > 0 ? (
+            <LegLengthList legs={job.leg_lengths} />
+          ) : (
+            <p className="state">아직 읽은 각장 표기가 없어요.</p>
           )}
         </section>
       </div>

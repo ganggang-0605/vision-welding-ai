@@ -14,7 +14,8 @@ P1, P2, P3 = "A1-P1 부재 표기", "A1-P2 부재 표기", "A1-P3 부재 표기"
 
 JOB_KEYS = {
     "id", "workspace_id", "project_id", "name", "status", "assembly_path", "related_job_ids", "created_at",
-    "approved_at", "approved_by", "marking", "welding_condition", "confidence", "evidence", "needs_review",
+    "approved_at", "approved_by", "marking", "welding_condition", "cell", "leg_lengths", "confidence", "evidence",
+    "needs_review",
 }
 
 
@@ -45,26 +46,33 @@ def test_demo_jobs_newest_first(client):
     assert (p3["status"], p3["assembly_path"], p3["confidence"]["overall"]) == ("awaiting_approval", "A1/L1/M2/S2/P-3", 86)
     assert p3["approved_at"] is None
 
+    # 셀 형태 = PAC 과제 셀 예시 1·2·3, 각장 = F·V·S 수기 표기
+    assert p1["cell"] == {"left": ["slit"], "right": ["slot"]}
+    assert p2["cell"] == {"left": ["collar_back"], "right": ["slit"]}
+    assert p3["cell"] == {"left": ["slit"], "right": ["collar_front", "scallop"]}
+    assert [(leg["code"], leg["size_mm"]) for leg in p1["leg_lengths"]] == [("F", 5.5), ("V", 6.0)]
+    assert p1["leg_lengths"][0] == {"code": "F", "size_mm": 5.5, "raw_text": "F5.5", "meaning": "3F 용접장 각장"}
+
 
 @pytest.mark.parametrize("params, expected", [
     ({"q": "a1-p2"}, [P2]),                    # 이름 (대소문자 무시)
     ({"q": "s2/p"}, [P3]),                     # 조립 경로
-    ({"q": "f/w"}, [P1]),                      # 표기 원문
-    ({"q": "맞대기"}, [P3]),                    # 해석
+    ({"q": "v6.0"}, [P1]),                     # 표기 원문
+    ({"q": "2f 용접장"}, [P1]),                 # 해석
     ({"q": "부재"}, [P3, P2, P1]),
     ({"q": ""}, [P3, P2, P1]),
     ({"q": "", "status": ""}, [P3, P2, P1]),  # 빈 값은 필터 없음
     ({"q": "없는 작업"}, []),
     ({"status": "approved"}, [P2]),
     ({"status": "draft"}, []),
-    ({"q": "fw", "status": "needs_review"}, [P1]),
-    ({"q": "fw", "status": "approved"}, [P2]),
+    ({"q": "f5.5", "status": "needs_review"}, [P1]),
+    ({"q": "s5.0", "status": "approved"}, [P2]),
     ({"project_id": BLOCK}, [P3, P2, P1]),
     ({"project_id": ""}, [P3, P2, P1]),       # 빈 값은 필터 없음
     ({"project_id": "block_a2"}, []),         # 작업 없는 프로젝트
     ({"project_id": "nope"}, []),              # 없는 프로젝트 id 도 빈 목록
     ({"project_id": "practice"}, []),          # 다른 워크스페이스의 프로젝트
-    ({"q": "fw", "project_id": BLOCK}, [P2, P1]),
+    ({"q": "f5.5", "project_id": BLOCK}, [P3, P1]),
 ])
 def test_search_jobs(client, params, expected):
     assert _names(client.get(JOBS, params=params)) == expected
@@ -86,7 +94,8 @@ def test_create_job(client):
     assert job["project_id"] == BLOCK
     assert job["related_job_ids"] == ["job_demo_p3"]
     assert job["marking"] is job["confidence"] is job["approved_at"] is None
-    assert job["evidence"] == job["needs_review"] == []
+    assert job["evidence"] == job["needs_review"] == job["leg_lengths"] == []
+    assert job["cell"] is None
 
     assert client.get(f"{JOBS}/{job['id']}").json() == job
     assert client.get(JOBS).json()[0] == job  # 최신순

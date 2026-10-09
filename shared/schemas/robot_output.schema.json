@@ -5,8 +5,8 @@
   "description": "승인된 작업 결과를 로봇 제어·용접 프로그램에 전달하기 위한 JSON",
   "type": "object",
   "required": [
-    "job_id", "workspace_id", "project_id", "created_at", "assembly_path", "marking", "welding_condition", "confidence",
-    "evidence", "needs_review", "approved", "approved_by"
+    "job_id", "workspace_id", "project_id", "created_at", "assembly_path", "marking", "welding_condition", "cell",
+    "leg_lengths", "confidence", "evidence", "needs_review", "approved", "approved_by"
   ],
   "properties": {
     "job_id": { "type": "string" },
@@ -35,6 +35,29 @@
         "speed_cm_min": { "type": "string" }
       }
     },
+    "cell": {
+      "description": "셀 좌·우 끝의 형태. 한쪽에 여러 개가 겹칠 수 있음 (예: 앞 Collar + Scallop). 판별하지 못했으면 null",
+      "type": ["object", "null"],
+      "required": ["left", "right"],
+      "properties": {
+        "left": { "type": "array", "items": { "$ref": "#/$defs/CellFeature" } },
+        "right": { "type": "array", "items": { "$ref": "#/$defs/CellFeature" } }
+      }
+    },
+    "leg_lengths": {
+      "description": "수기 각장 표기 (읽는 순서). 예: F5.5 → 3F 용접장 각장 5.5mm",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "size_mm", "raw_text", "meaning"],
+        "properties": {
+          "code": { "type": "string", "examples": ["F", "V", "S"] },
+          "size_mm": { "type": "number", "exclusiveMinimum": 0 },
+          "raw_text": { "type": "string", "examples": ["F5.5"] },
+          "meaning": { "type": ["string", "null"], "examples": ["3F 용접장 각장"] }
+        }
+      }
+    },
     "confidence": {
       "type": "object",
       "required": ["visual", "db_consistency", "vlm_reasoning", "overall"],
@@ -49,5 +72,8 @@
     "needs_review": { "type": "array", "items": { "type": "string" } },
     "approved": { "type": "boolean" },
     "approved_by": { "type": "string" }
+  },
+  "$defs": {
+    "CellFeature": { "type": "string", "enum": ["slit", "slot", "collar_front", "collar_back", "scallop"] }
   }
 }

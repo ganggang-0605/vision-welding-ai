@@ -19,6 +19,8 @@ def to_robot_json(job: Job) -> dict:
         "assembly_path": job.assembly_path,
         "marking": job.marking,
         "welding_condition": job.welding_condition,
+        "cell": job.cell,
+        "leg_lengths": job.leg_lengths,
         "confidence": job.confidence,
         "evidence": job.evidence,
         "needs_review": job.needs_review,

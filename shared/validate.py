@@ -185,6 +185,8 @@ def api_errors(analysis: dict, registry: Registry) -> list[str]:
             "job_id": job["id"], "workspace_id": job["workspace_id"], "project_id": job["project_id"],
             "created_at": job["created_at"], "approved": True, "approved_by": "검증용",
             **{k: fields[k] for k in ("assembly_path", "marking", "welding_condition", "confidence", "evidence", "needs_review")},
+            # 셀 형태·각장은 아직 파이프라인 출력에 없음 (to_job_fields 가 채우기 전까지 비어 있는 값)
+            "cell": fields.get("cell"), "leg_lengths": fields.get("leg_lengths", []),
         }
         errors += [f"로봇 JSON: {e}" for e in schema_errors(robot, "robot_output.schema.json", registry)]
     return errors

@@ -2,7 +2,7 @@ import { CaretRight } from '@phosphor-icons/react'
 import { Link } from 'react-router'
 import type { Job, Project } from '../api/types'
 import { formatScore, formatShortDate } from '../lib/format'
-import { conditionSummary } from '../lib/labels'
+import { cellSummary, conditionSummary } from '../lib/labels'
 import { paths } from '../lib/paths'
 import styles from './JobList.module.css'
 import { StatusLabel } from './StatusLabel'
@@ -33,7 +33,8 @@ export function JobList({ workspaceId, jobs, projects }: JobListProps) {
               <StatusLabel status={job.status} />
             </span>
             <span className={styles.condition}>
-              {job.welding_condition ? conditionSummary(job.welding_condition) : ''}
+              {/* 셀 형태가 있으면 그것을, 없으면 용접 조건을 한 줄로 */}
+              {job.cell ? cellSummary(job.cell) : job.welding_condition ? conditionSummary(job.welding_condition) : ''}
             </span>
             <span className={styles.score}>
               {job.confidence && (

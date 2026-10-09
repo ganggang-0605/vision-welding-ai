@@ -1,5 +1,15 @@
 /** 계약 모델의 enum 값 → 화면 표시용 한국어 라벨 */
-import type { AssemblyLevel, JobStatus, MemberRole, SymbolKind, WeldingCondition, Workspace } from '../api/types'
+import type {
+  AssemblyLevel,
+  Cell,
+  CellFeature,
+  JobStatus,
+  LegLength,
+  MemberRole,
+  SymbolKind,
+  WeldingCondition,
+  Workspace,
+} from '../api/types'
 
 /** 워크스페이스 종류 한 줄: "개인" / "팀, 멤버 3명" */
 export function workspaceKindLabel(workspace: Pick<Workspace, 'kind' | 'member_count'>): string {
@@ -79,4 +89,30 @@ export function conditionSummary(condition: WeldingCondition): string {
 /** "220-260" 같은 범위 문자열에 단위를 붙인다. */
 export function withUnit(range: string, unit: string): string {
   return range ? `${range} ${unit}` : range
+}
+
+/** 셀 형태 (현장에서 쓰는 영문 이름 그대로, 앞/뒤만 한국어) */
+export const CELL_FEATURES: readonly CellFeature[] = ['slit', 'slot', 'collar_front', 'collar_back', 'scallop']
+
+export const CELL_FEATURE_LABEL: Record<CellFeature, string> = {
+  slit: 'Slit',
+  slot: 'Slot',
+  collar_front: '앞 Collar',
+  collar_back: '뒤 Collar',
+  scallop: 'Scallop',
+}
+
+/** 셀 한쪽: "앞 Collar + Scallop", 없으면 "없음" */
+export function cellSideLabel(features: readonly CellFeature[]): string {
+  return features.length ? features.map((feature) => CELL_FEATURE_LABEL[feature]).join(' + ') : '없음'
+}
+
+/** 목록용 한 줄: "좌 Slit, 우 앞 Collar + Scallop" */
+export function cellSummary(cell: Cell): string {
+  return `좌 ${cellSideLabel(cell.left)}, 우 ${cellSideLabel(cell.right)}`
+}
+
+/** 각장 한 줄: "F 5.5mm" */
+export function legLengthLabel(leg: Pick<LegLength, 'code' | 'size_mm'>): string {
+  return `${leg.code} ${leg.size_mm}mm`
 }

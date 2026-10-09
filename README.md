@@ -44,6 +44,18 @@
 | P-2 | S1 | PART | A1/L1/M2/S1/P-2 |
 | P-3 | S2 | PART | A1/L1/M2/S2/P-3 |
 
+## 셀 형태와 각장 (PAC 과제)
+
+과제는 셀 블록 사진에서 **셀 좌·우 끝의 형태**를 판별하고, **수기 각장 표기 F·V·S**를 읽어 셀 타입에 매핑하는 것입니다.
+
+| 항목 | 값 | 계약 (`backend/app/schemas.py`) |
+| --- | --- | --- |
+| 셀 형태 | `slit`, `slot`, `collar_front`(앞 Collar), `collar_back`(뒤 Collar), `scallop`. 한쪽에 여러 개가 겹칠 수 있음 (예: 앞 Collar + Scallop) | `Job.cell = {left: [...], right: [...]}` (판별 전이면 `null`) |
+| 수기 각장 | `F` 3F 용접장 각장, `V` 2F 용접장 각장, `S` 스티프너 각장 + 숫자(mm). 예: `F5.5` | `Job.leg_lengths = [{code, size_mm, raw_text, meaning}]` |
+
+데모 작업 3건(`block_a1`)의 셀 형태는 과제 안내의 셀 예시 1·2·3(좌 Slit·우 Slot / 좌 뒤 Collar·우 Slit / 좌 Slit·우 앞 Collar + Scallop)이고, 각장 값은 지어낸 값입니다.
+데모 사전에 `F`·`V`·`S`가 들어 있습니다. 로봇 연계 JSON에도 `cell`·`leg_lengths`가 들어갑니다.
+
 ## 신뢰도
 
 | 구분 | 측정 대상 | 근거 |
