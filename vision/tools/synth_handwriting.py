@@ -7,7 +7,9 @@
   두세 줄로 쌓아 쓰기(F5.5 / V / S6.5), 가로 178px 정도의 흐린 사진
 
 두 가지를 만듦 (--mode):
-- lines : 글자 줄 이미지 + labels.tsv ("images/00000.jpg<TAB>F5.5") — 인식기 학습 (PaddleOCR 인식 학습 형식과 같음)
+- lines : 글자 줄 이미지 + labels.tsv ("images/00000.jpg<TAB>F5.5") — 인식기 학습 (PaddleOCR 인식 학습 형식과 같음).
+  --general 비율만큼은 각장 표기가 아닌 일반 글자(숫자·단어·부재 번호·다른 글자 + 치수)를 씀 — 각장만 배우면 무엇이든
+  F·V·S 형식으로 읽게 굳음 (인식기 v3: 150 → F5.0). --wide 비율만큼은 검출기처럼 글자에 붙은 화살표·꼬리·세로선까지 잘라 냄
 - scenes: 철판 한 장에 표기 묶음 여러 개 + det_labels.txt (PaddleOCR 검출 학습 형식:
   "images/00000.jpg<TAB>[{"transcription": "F5.5", "points": [[x, y] × 4]}]") — 검출기 학습.
   --closeup 비율만큼은 운영측 예시처럼 표기 하나를 가까이 찍은 작은 사진을 1단계처럼 1280px로 키워 저장
@@ -60,6 +62,37 @@ STROKES = {
 F_TAIL = [(0.0, 0.5), (0.75, 0.45), (0.55, 1.0)]  # 가운데 가로획이 아래로 꺾인 꼬리 (예시 1·3)
 F_TAIL_LONG = [(0.0, 0.5), (1.1, 0.42), (0.75, 1.15)]  # 7처럼 오른쪽으로 나갔다 꺾여 다음 글자(5)와 겹침 — 겹치면 6처럼 보임
 MIN_GAP = 30  # 글씨와 배경 밝기 차이 하한 — 예시 2(흰 철판 위 흐린 흰 글씨)처럼 흐리되 사람은 읽을 수 있게
+
+
+WORDS = ["Face", "Angle", "Web", "Flange", "Plate", "Back", "Top", "Bottom", "Stiff", "Bracket", "Collar", "Slot", "Lug",
+         "Butt", "Fillet", "Bevel", "Gap", "Root", "Fore", "Aft", "Port", "Stbd", "Deck", "Shell", "Girder", "Floor", "Side",
+         "CL", "BL", "FR", "UP", "DN", "OK", "NG", "TYP", "REF", "MIN", "MAX"]
+
+
+def random_general(rng: np.random.Generator) -> str:
+    """각장 표기가 아닌 글자: 치수 숫자(350·1247), 단어(Face·Angle), 부재 번호(B1Sb30N-16·P-10), F·V·S가 아닌 글자 + 치수"""
+    upper = "ABCDEGHJKLMNPRTUWXYZ"  # F·V·S 빼고 — 다른 글자 뒤 숫자도 읽게
+    r = rng.random()
+    if r < 0.4:
+        return str(int(rng.integers(1, 10 ** int(rng.choice([1, 2, 3, 4], p=[0.1, 0.3, 0.45, 0.15])))))
+    if r < 0.65:
+        word = str(rng.choice(WORDS))
+        word = word.upper() if rng.random() < 0.2 else word.lower() if rng.random() < 0.1 else word
+        return word + (str(int(rng.integers(10, 1000))) if rng.random() < 0.2 else "")
+    if r < 0.9:
+        letters = "".join(rng.choice(list(upper + "FVS"), int(rng.integers(1, 3))))
+        code = letters + str(int(rng.integers(1, 100)))
+        if rng.random() < 0.4:
+            code += "".join(rng.choice(list("SbNAMPLs"), int(rng.integers(1, 3)))) + str(int(rng.integers(1, 100)))
+        if rng.random() < 0.5:
+            code += "-" + (str(int(rng.integers(1, 100))) if rng.random() < 0.8 else str(rng.choice(list(upper))))
+        return code if rng.random() < 0.85 else str(rng.choice(["P-", "No.", "R", "t="])) + str(int(rng.integers(1, 60)))
+    return f"{rng.choice(list(upper))}{rng.choice(np.arange(3.0, 12.51, 0.5)):.1f}"  # C5.5 · R6.0 처럼 F·V·S가 아닌 글자 + 치수
+
+
+def stroke_ok(text: str) -> bool:
+    """운영측 버릇 글씨체(stroke)로 그릴 수 있는 글자만인지 (F·V·S·숫자·점)"""
+    return all(ch in STROKES or ch == "." for ch in text)
 
 
 def random_label(rng: np.random.Generator) -> str:
@@ -190,6 +223,10 @@ def render_line(text: str, style: dict, rng: np.random.Generator, height: int | 
         else:
             g = jitter_glyph(trim(glyph_hershey(ch, style["font"], h, thickness, style["italic"])), rng)
             top = height - g.shape[0]
+        if ch in "-=~":  # 줄 가운데 높이 (아래에 붙이면 _ 처럼 보임)
+            top = int(height * 0.5 - g.shape[0] / 2)
+        elif ch in "gjpqy" and style["kind"] != "stroke":  # 아래로 내려가는 획
+            top = height - int(g.shape[0] * 0.72)
         placed.append((g, top + int(rng.uniform(-0.1, 0.1) * height)))
     width = sum(g.shape[1] for g, _ in placed) + height * (len(placed) + 4)
     canvas = np.zeros((height * 4, width), np.uint8)
@@ -329,8 +366,10 @@ def degrade(img: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return cv2.imdecode(buf, cv2.IMREAD_COLOR)
 
 
-def compose_line(text: str, style: dict, backgrounds: list[np.ndarray], rng: np.random.Generator) -> np.ndarray:
-    """글자 줄 이미지 하나 (인식기 학습용)"""
+def compose_line(text: str, style: dict, backgrounds: list[np.ndarray], rng: np.random.Generator,
+                 wide: bool = False) -> np.ndarray:
+    """글자 줄 이미지 하나 (인식기 학습용). wide: 글자 줄 높이 안에서 글자에 붙은 화살표·꼬리·세로선까지 잘라 냄
+    — 검출기 v3가 운영측 손글씨에서 실제로 그렇게 잡음 (예시 1: F5.5 + ← + 용접선)"""
     text_mask, height, _ = render_line(text, style, rng)
     mask = text_mask.copy()
     add_strokes(mask, text_mask, height, int(rng.integers(2, 5)), rng)
@@ -343,6 +382,9 @@ def compose_line(text: str, style: dict, backgrounds: list[np.ndarray], rng: np.
     layers = cv2.warpPerspective(layers, cv2.getPerspectiveTransform(src, dst), (w, h))
     img = paint(background((h, w), backgrounds, rng), layers[..., 0], rng)
     ys, xs = np.nonzero(layers[..., 1] > 30)  # 자르는 기준은 정답 글자만 (화살표·옆 줄은 여백에 걸침)
+    if wide:
+        band = layers[max(0, ys.min() - height // 4):ys.max() + height // 4, :, 0]
+        xs = np.concatenate([xs, np.nonzero(band > 30)[1]])
     m = int(height * rng.uniform(0.15, 0.5))
     img = img[max(0, ys.min() - m):ys.max() + m, max(0, xs.min() - m):xs.max() + m]
     s = rng.uniform(16, 64) / img.shape[0]  # 운영측 예시의 글자 줄은 20~70px
@@ -466,8 +508,12 @@ def _make(i: int) -> str:
     rng = np.random.default_rng([a["seed"], i])
     name = f"images/{i:05d}.jpg"
     if a["mode"] == "lines":
-        text = random_label(rng)
-        img = compose_line(text, pick_style(a["styles"], a["stroke_ratio"], rng), a["backgrounds"], rng)
+        # 비율이 0이면 난수를 쓰지 않음 — 예전 데이터(hw_rec_v3 등)를 같은 seed로 그대로 다시 만들 수 있게
+        general = a["general"] > 0 and rng.random() < a["general"]
+        wide = a["wide"] > 0 and rng.random() < a["wide"]
+        text = random_general(rng) if general else random_label(rng)
+        style = pick_style(a["styles"], a["stroke_ratio"] if stroke_ok(text) else 0.0, rng)
+        img = compose_line(text, style, a["backgrounds"], rng, wide=wide)
         line = f"{name}\t{text}"
     else:
         img, boxes = compose_scene(a["styles"], a["stroke_ratio"], a["backgrounds"], rng, closeup=rng.random() < a["closeup"])
@@ -483,6 +529,8 @@ def main() -> int:
     parser.add_argument("--n", type=int, default=1000)
     parser.add_argument("--styles", choices=["train", "eval", "all"], default="train")
     parser.add_argument("--stroke-ratio", type=float, default=0.6, help="운영측 버릇 글씨체(stroke) 비율")
+    parser.add_argument("--general", type=float, default=0.0, help="lines: 각장 표기가 아닌 일반 글자 비율")
+    parser.add_argument("--wide", type=float, default=0.0, help="lines: 글자에 붙은 화살표·꼬리까지 잘라 낸 줄 비율")
     parser.add_argument("--closeup", type=float, default=0.4, help="scenes: 표기 하나를 가까이 찍은 작은 사진(키워서 저장) 비율")
     parser.add_argument("--fonts", action="append", default=[], help="TTF 글꼴 glob, 여러 번 가능 (예: '/usr/share/fonts/**/Humor*')")
     parser.add_argument("--backgrounds", help="배경 사진 glob — 글자가 없는 사진만")
@@ -496,7 +544,7 @@ def main() -> int:
     backgrounds = load_backgrounds(args.backgrounds)
     (args.out / "images").mkdir(parents=True, exist_ok=True)
     shared = {"mode": args.mode, "seed": args.seed, "styles": styles, "stroke_ratio": args.stroke_ratio,
-              "closeup": args.closeup, "backgrounds": backgrounds, "out": args.out}
+              "closeup": args.closeup, "general": args.general, "wide": args.wide, "backgrounds": backgrounds, "out": args.out}
     if args.workers > 1:
         import multiprocessing as mp
 
@@ -510,6 +558,7 @@ def main() -> int:
     (args.out / "manifest.json").write_text(json.dumps({
         "mode": args.mode, "n": args.n, "styles": args.styles, "stroke_ratio": args.stroke_ratio, "seed": args.seed,
         "closeup": args.closeup if args.mode == "scenes" else None,
+        "general": args.general if args.mode == "lines" else None, "wide": args.wide if args.mode == "lines" else None,
         "fonts": [Path(f).name for f in fonts], "backgrounds": len(backgrounds),
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{args.mode} {args.n}장 → {args.out} (stroke {args.stroke_ratio:.0%} + 글꼴 {len(styles)}개: TTF "
