@@ -7,7 +7,7 @@ export interface ProjectOutletContext extends WorkspaceOutletContext {
   project: Project
 }
 
-/** 현재 프로젝트(호선). ProjectLayout(/w/:workspaceId/p/:projectId) 아래 페이지에서만 쓴다. */
+/** 현재 프로젝트(블록). ProjectLayout(/w/:workspaceId/p/:projectId) 아래 페이지에서만 쓴다. */
 export function useProject(): Project {
   return useOutletContext<ProjectOutletContext>().project
 }

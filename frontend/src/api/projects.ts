@@ -1,4 +1,4 @@
-/** 프로젝트(호선) API. 조립 트리는 프로젝트마다 따로 있다. */
+/** 프로젝트(블록) API. 조립 트리는 프로젝트마다 따로 있다. */
 import { apiFetch, apiPath, jsonInit } from './client'
 import type { AssemblyNode, Project, ProjectCreate } from './types'
 

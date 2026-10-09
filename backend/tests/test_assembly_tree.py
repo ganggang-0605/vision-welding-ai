@@ -4,7 +4,7 @@ from app.db.assembly_tree import find_path, load_tree
 
 SEED = (
     Path(__file__).resolve().parents[2]
-    / "data" / "seed" / "workspaces" / "demo" / "projects" / "hull_3201" / "assembly_tree.csv"
+    / "data" / "seed" / "workspaces" / "demo" / "projects" / "block_a1" / "assembly_tree.csv"
 )
 PROJECTS = "/workspaces/demo/projects"
 
@@ -18,7 +18,7 @@ def test_find_path():
 
 
 def test_assembly_tree_api(client):
-    res = client.get(f"{PROJECTS}/hull_3201/assembly-tree")
+    res = client.get(f"{PROJECTS}/block_a1/assembly-tree")
     assert res.status_code == 200
     nodes = res.json()
     assert [n["node_id"] for n in nodes] == ["A1", "L1", "M2", "S1", "S2", "P-1", "P-2", "P-3"]
@@ -27,10 +27,10 @@ def test_assembly_tree_api(client):
 
 
 def test_assembly_tree_per_project(client):
-    """조립 트리는 프로젝트(호선)별 — 트리 파일이 없는 시드 프로젝트·새 프로젝트는 빈 트리"""
-    assert client.get(f"{PROJECTS}/hull_3202/assembly-tree").json() == []
+    """조립 트리는 프로젝트(블록)별 — 트리 파일이 없는 시드 프로젝트·새 프로젝트는 빈 트리"""
+    assert client.get(f"{PROJECTS}/block_a2/assembly-tree").json() == []
     assert client.get("/workspaces/personal/projects/practice/assembly-tree").json() == []
-    project = client.post(PROJECTS, json={"name": "3203호선"}).json()
+    project = client.post(PROJECTS, json={"name": "A3 블록"}).json()
     assert client.get(f"{PROJECTS}/{project['id']}/assembly-tree").json() == []
 
 

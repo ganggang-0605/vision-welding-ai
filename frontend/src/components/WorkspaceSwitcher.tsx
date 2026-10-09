@@ -107,7 +107,7 @@ function WorkspaceMenu({ id, currentId, current, onClose }: WorkspaceMenuProps) 
           </Link>
         </li>
         <li>
-          <Link className={styles.item} to={`${paths.settings(currentId)}#members`} onClick={onClose}>
+          <Link className={styles.item} to={paths.members(currentId)} onClick={onClose}>
             <UserPlus className={styles.itemIcon} size={17} aria-hidden="true" />
             팀원 초대
           </Link>

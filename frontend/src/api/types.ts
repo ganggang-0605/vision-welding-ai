@@ -37,7 +37,7 @@ export interface MemberInvite {
 /** 개인(혼자 쓰기, 기본값) / 팀(협업). 노션처럼 개인 워크스페이스에 사람을 초대하면 팀이 된다. */
 export type WorkspaceKind = 'personal' | 'team'
 
-/** 최상위 단위 (조선소·팀 하나). 프로젝트(호선)·문자/기호 사전·멤버가 워크스페이스에 속한다. */
+/** 최상위 단위 (조선소·팀 하나). 프로젝트(블록)·문자/기호 사전·멤버가 워크스페이스에 속한다. */
 export interface Workspace {
   id: string
   name: string
@@ -68,13 +68,13 @@ export interface WorkspaceUpdate {
   kind?: WorkspaceKind
 }
 
-// ── 프로젝트 (호선, 워크스페이스별) ────────────────────────────
+// ── 프로젝트 (블록, 워크스페이스별) ────────────────────────────
 
-/** 호선(선박) 하나. 조립 트리와 작업이 프로젝트에 속한다. */
+/** 블록 하나 (배 전체가 아닐 수도 있는 조립 단위). 조립 트리와 작업이 프로젝트에 속한다. */
 export interface Project {
   id: string
   workspace_id: string
-  /** 예: "3201호선" */
+  /** 예: "A1 블록" */
   name: string
   description: string | null
   created_at: DateTimeString

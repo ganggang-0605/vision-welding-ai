@@ -7,7 +7,7 @@ TODO(인증): 로그인 없음 — 요청 헤더 X-User-Id 가 데모 사용자�
   워크스페이스 목록만 그 사용자가 멤버인 것으로 거른다. 그 밖의 권한 검사는 없어 누구나 모든 워크스페이스에 접근할 수 있다.
 
 - 워크스페이스별 데이터(멤버, 문자/기호 사전, 프로젝트, 작업)는 workspace_id 를 키로 하는 dict 에 둔다.
-- 조립 트리는 프로젝트(호선)별 — assembly_trees[workspace_id][project_id]. 작업은 project_id 필드로 프로젝트에 속한다.
+- 조립 트리는 프로젝트(블록)별 — assembly_trees[workspace_id][project_id]. 작업은 project_id 필드로 프로젝트에 속한다.
 - 사용자와 표준 용접 기준은 모든 워크스페이스가 공유하는 공통 데이터다 (용접 기준은 읽기 전용).
 - 확인 후 변경하는 작업(승인, 사전 항목 수정·삭제, 워크스페이스 수정, 멤버 초대)은 잠금 안에서 최신 상태를
   다시 읽어 처리한다 — 동시 요청이 같은 스냅샷을 보고 둘 다 성공하지 않도록.
@@ -223,7 +223,7 @@ class Store:
         with self._lock:
             return self.symbols[workspace_id].pop(symbol_id, None) is not None
 
-    # ── 프로젝트 (호선) ──
+    # ── 프로젝트 (블록) ──
     def list_projects(self, workspace_id: str) -> list[Project]:
         """생성 순 (오래된 것부터)"""
         return sorted(self.projects[workspace_id].values(), key=lambda p: p.created_at)
@@ -315,7 +315,7 @@ def load_seed(store: Store, seed_dir: Path = SEED_DIR) -> Store:
 
     사용자: users.json — {"current_user_id": ..., "users": [User, ...]}
     워크스페이스: workspaces/<workspace_id>/{workspace.json, members.json, symbol_dictionary.json(없으면 빈 사전)}
-    프로젝트(호선): workspaces/<workspace_id>/projects/<project_id>/{project.json, assembly_tree.csv, jobs.json}
+    프로젝트(블록): workspaces/<workspace_id>/projects/<project_id>/{project.json, assembly_tree.csv, jobs.json}
       — assembly_tree.csv·jobs.json 은 없으면 비어 있는 것으로 본다. 작업의 project_id 는 폴더 이름.
     """
     store.welding_standards = [

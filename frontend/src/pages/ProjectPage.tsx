@@ -15,7 +15,7 @@ import styles from './ProjectPage.module.css'
 /** 목록 위 필터. 해석 전·해석 중은 잠깐 지나가는 상태라 버튼으로 두지 않는다. */
 const FILTERS: readonly JobStatus[] = ['needs_review', 'awaiting_approval', 'approved']
 
-/** 프로젝트(호선) 페이지: 확인할 작업 + 메일 앱 같은 작업 목록 (와이어프레임 1의 목록) */
+/** 프로젝트(블록) 페이지: 확인할 작업 + 메일 앱 같은 작업 목록 (와이어프레임 1의 목록) */
 export function ProjectPage() {
   const workspace = useWorkspace()
   const project = useProject()

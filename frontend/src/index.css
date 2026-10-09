@@ -5,7 +5,8 @@
  * 디자인 원칙 (Figma 'Vision Welding AI' 기준, 노션형 구조 + 애플 시스템 앱 느낌)
  * - 강조색은 파랑 하나. 상태는 색 태그 대신 글자로 쓰고, 확인이 필요한 것만 주황 글자로 표시한다.
  * - 선과 상자를 줄이고 여백과 글자 크기로 구분한다. 묶음이 필요하면 회색 그룹 면(.group) 하나만 쓴다.
- * - 모서리 규칙: 버튼은 캡슐(999px), 그룹 면 12px, 입력칸 10px, 사이드바·목록의 선택 줄 8px.
+ * - 모서리 규칙: 버튼은 캡슐(999px), 나머지(면·목록 줄·입력칸·메뉴·창·타일)는 모두 10px(--radius).
+ *   30px보다 작은 아이콘 타일·아이콘 버튼만 6px(--radius-small), 세그먼트 안쪽 버튼은 바깥보다 2px 작은 8px.
  */
 
 :root {
@@ -25,9 +26,12 @@
   --code-number: #1c00cf;
   --code-key: #0b4f79;
 
-  --radius-group: 12px;
-  --radius-input: 10px;
-  --radius-row: 8px;
+  --radius: 10px;
+  --radius-small: 6px;
+  /* 예전 이름 (모두 --radius 와 같다) */
+  --radius-group: var(--radius);
+  --radius-input: var(--radius);
+  --radius-row: var(--radius);
   --sidebar-width: 248px;
   --shadow-float: 0 24px 64px rgb(29 29 31 / 0.18), 0 0 0 1px rgb(29 29 31 / 0.06);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
@@ -87,6 +91,15 @@
   --code-number: #d9c97c;
   --code-key: #6bdfff;
   --shadow-float: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+/* 글씨 크기 (환경설정). 대부분 rem 이라 기준 크기만 바꾸면 화면 전체가 따라간다. */
+:root[data-text-size='small'] {
+  font-size: 15px;
+}
+
+:root[data-text-size='large'] {
+  font-size: 17.5px;
 }
 
 /* 고정한 모드에 맞춰 스크롤바·폼 컨트롤 같은 브라우저 기본 요소 색도 바꾼다. */
@@ -455,7 +468,7 @@ p {
   max-width: 100%;
   padding: 2px;
   overflow-x: auto;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: var(--fill-strong);
 }
 
@@ -465,7 +478,7 @@ p {
   min-height: 28px;
   padding: 3px 14px;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(var(--radius) - 2px);
   font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;

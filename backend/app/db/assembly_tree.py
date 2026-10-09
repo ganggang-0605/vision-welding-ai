@@ -1,4 +1,4 @@
-"""조립 트리 DB (블록→대조립→중조립→소조립→부재) — 프로젝트(호선)별 assembly_tree.csv"""
+"""조립 트리 DB (블록→대조립→중조립→소조립→부재) — 프로젝트(블록)별 assembly_tree.csv"""
 import csv
 from pathlib import Path
 

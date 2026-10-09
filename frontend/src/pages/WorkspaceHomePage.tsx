@@ -1,4 +1,4 @@
-import { Boat, CaretRight, UserPlus } from '@phosphor-icons/react'
+import { Cube, CaretRight, UserPlus } from '@phosphor-icons/react'
 import { Link } from 'react-router'
 import { listJobs } from '../api/jobs'
 import type { Job, Project } from '../api/types'
@@ -15,7 +15,7 @@ import styles from './WorkspaceHomePage.module.css'
 /** 홈의 '최근 작업' 개수 */
 const RECENT_COUNT = 5
 
-/** 와이어프레임 1 — 워크스페이스 홈 (노션 홈처럼): 프로젝트(호선) 목록, 확인할 작업, 최근 작업 */
+/** 와이어프레임 1 — 워크스페이스 홈 (노션 홈처럼): 프로젝트(블록) 목록, 확인할 작업, 최근 작업 */
 export function WorkspaceHomePage() {
   const { workspace, projects } = useWorkspaceContext()
   const jobs = useAsync((signal) => listJobs(workspace.id, {}, signal), [workspace.id])
@@ -29,7 +29,7 @@ export function WorkspaceHomePage() {
         }
         actions={
           <Link className="btn btn--primary" to={paths.newProject(workspace.id)}>
-            새 호선
+            새 블록
           </Link>
         }
       />
@@ -38,24 +38,24 @@ export function WorkspaceHomePage() {
         <Notice
           title="혼자 쓰는 워크스페이스예요"
           action={
-            <Link className="btn" to={`${paths.settings(workspace.id)}#members`}>
+            <Link className="btn" to={paths.members(workspace.id)}>
               <UserPlus size={15} aria-hidden="true" />
               팀원 초대
             </Link>
           }
         >
-          팀원을 초대하면 팀 워크스페이스로 바뀌고, 호선과 사전을 함께 써요.
+          팀원을 초대하면 팀 워크스페이스로 바뀌고, 블록과 사전을 함께 써요.
         </Notice>
       )}
 
       <section className="section" aria-labelledby="projects-title">
         <h2 id="projects-title" className="section-title">
-          호선
+          블록
         </h2>
         {projects.length === 0 ? (
           <p className="state">
-            아직 호선이 없어요. <Link to={paths.newProject(workspace.id)}>호선을 추가</Link>하면 작업과 조립 트리를
-            호선별로 나눠 관리해요.
+            아직 블록이 없어요. <Link to={paths.newProject(workspace.id)}>블록을 추가</Link>하면 작업과 조립 트리를
+            블록별로 나눠 관리해요.
           </p>
         ) : (
           <ProjectList workspaceId={workspace.id} projects={projects} jobs={jobs.data} />
@@ -109,7 +109,7 @@ function ProjectList({ workspaceId, projects, jobs }: ProjectListProps) {
           <li key={project.id}>
             <Link className={styles.project} to={paths.project(workspaceId, project.id)}>
               <span className={styles.icon} aria-hidden="true">
-                <Boat size={20} />
+                <Cube size={20} />
               </span>
               <span className={styles.text}>
                 <span className={styles.name}>{project.name}</span>

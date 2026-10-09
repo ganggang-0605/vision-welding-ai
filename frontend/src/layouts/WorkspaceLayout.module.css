@@ -23,6 +23,96 @@
   margin-left: var(--sidebar-width);
 }
 
+/* ── 사이드바 접기·펴기 (데스크톱, 노션의 << 버튼) ── */
+
+.sidebarTop {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebarTop > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.collapseButton,
+.expandButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-row);
+  color: var(--secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.collapseButton:hover,
+.expandButton:hover {
+  color: var(--label);
+  background: var(--fill-strong);
+}
+
+/* 노션처럼 사이드바에 마우스를 올렸을 때만 보인다 (키보드로 오면 항상 보인다). */
+.collapseButton {
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+
+.sidebar:hover .collapseButton,
+.collapseButton:focus-visible {
+  opacity: 1;
+}
+
+/* 접었을 때 본문 왼쪽 위에 뜨는 열기 버튼 */
+.expandButton {
+  position: fixed;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+@media (min-width: 768px) {
+  .sidebar,
+  .main {
+    transition:
+      transform 0.28s var(--ease),
+      margin-left 0.28s var(--ease),
+      visibility 0s linear 0s;
+  }
+
+  .shell[data-collapsed='true'] .sidebar {
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform 0.28s var(--ease),
+      visibility 0s linear 0.28s;
+  }
+
+  .shell[data-collapsed='true'] .main {
+    margin-left: 0;
+  }
+}
+
+/* 휴대폰은 상단 바의 메뉴 버튼(서랍)을 쓰므로 접기·열기 버튼을 숨긴다. */
+@media (max-width: 767.98px) {
+  .collapseButton,
+  .expandButton {
+    display: none;
+  }
+}
+
+@media (hover: none) {
+  .collapseButton {
+    opacity: 1;
+  }
+}
+
 .main:focus {
   outline: none;
 }
@@ -134,7 +224,7 @@
   width: 22px;
   height: 22px;
   margin-bottom: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   color: var(--tertiary);
 }
 
@@ -168,7 +258,7 @@
   margin-left: 2px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-small);
   color: var(--tertiary);
   background: transparent;
   cursor: pointer;
@@ -312,7 +402,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
-  .sidebar[data-open='true'] {
+  .sidebar[data-open='true'],
+  .shell[data-collapsed='true'] .sidebar,
+  .main,
+  .collapseButton {
     transition: none;
   }
 }

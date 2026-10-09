@@ -10,7 +10,7 @@
     "schema_version": { "const": "1.1" },
     "analysis_id": { "$ref": "common.schema.json#/$defs/Id" },
     "workspace_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.workspace_id" },
-    "project_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.project_id (호선). 조립 트리가 프로젝트에 속함" },
+    "project_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.project_id (블록). 조립 트리가 프로젝트에 속함" },
     "job_id": { "$ref": "common.schema.json#/$defs/Id", "description": "Job.id" },
     "image_id": { "$ref": "common.schema.json#/$defs/Id" },
     "revision": {

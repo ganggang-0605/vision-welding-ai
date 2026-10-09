@@ -1,8 +1,3 @@
-/* 사이드바의 '팀원 초대'로 들어왔을 때 제목이 화면 맨 위에 붙지 않게 */
-.anchor {
-  scroll-margin-top: 24px;
-}
-
 .member {
   display: flex;
   align-items: center;

@@ -15,7 +15,7 @@ const MAX_RESULTS = 20
 
 interface SearchDialogProps {
   workspaceId: string
-  /** 결과에 호선 이름을 붙이는 데 쓴다. */
+  /** 결과에 블록 이름을 붙이는 데 쓴다. */
   projects: Project[]
   open: boolean
   onClose: () => void

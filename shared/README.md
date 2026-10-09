@@ -88,7 +88,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 
 ## 사진 한 장이 지나가는 순서 (예시 파일)
 
-[`examples/`](examples/)에 팀원 데모 시드(`demo` 워크스페이스, `hull_3201` 호선)를 기준으로 한 흐름이 들어 있습니다.
+[`examples/`](examples/)에 팀원 데모 시드(`demo` 워크스페이스, `block_a1` 블록)를 기준으로 한 흐름이 들어 있습니다.
 사진 속 표기는 부재 `P-1`, 손글씨 `FW`, 판 두께 `t=10`, 현장 용접 기호 `▲`입니다.
 
 | 순서 | 무슨 일 | 예시 파일 |
@@ -124,7 +124,7 @@ backend/.venv/bin/python shared/validate.py
 
 - 예시가 스키마에 맞는지
 - 단계 사이 규칙: 참조한 ID가 인식 결과(1단계, `v*`)에 있는지, `char_probs` 개수가 글자 수와 같은지, `overall`이 세 신뢰도의 최솟값인지, 필수 값이 없으면 `passed`가 false이고 `needs_review`에 들어 있는지 등 (`semantic_errors()`)
-- 예시가 팀원 시드 DB와 맞는지: 기호가 `demo` 사전에 있는지, 부재가 `hull_3201` 조립 트리에 있는지, 용접 조건이 표준 용접 기준표에 있는지
+- 예시가 팀원 시드 DB와 맞는지: 기호가 `demo` 사전에 있는지, 부재가 `block_a1` 조립 트리에 있는지, 용접 조건이 표준 용접 기준표에 있는지
 - `to_job_fields()` 결과가 팀원 `Job` 모델(Pydantic)을 통과하는지, 통과(`awaiting_approval`)한 결과가 로봇 JSON 스키마도 통과하는지
 - 예시끼리 이어지는지: 1·2·3단계 예시 = `analysis` 묶음, revision 1 → 2
 
