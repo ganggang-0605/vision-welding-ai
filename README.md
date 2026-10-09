@@ -231,15 +231,14 @@ backend/.venv/bin/python backend/tools/eval_pipeline.py --simulate all  # 저조
 ```
 
 **학습한 1단계 모델 쓰기** — 손글씨 각장 표기(F·V·S)를 찾고 읽도록 추가 학습한 검출기·인식기
-(`vision/notebooks/colab_train_det.ipynb` · `colab_train_rec.ipynb`). 모델 파일은 커서 저장소에 넣지 않고 GitHub Releases 에 올린다.
+(`vision/notebooks/colab_train_det.ipynb` · `colab_train_rec.ipynb`). 모델 파일은 커서 저장소에 넣지 않고 팀 안에서 따로 주고받는다 (`det_v3_inference.zip` · `rec_v4_inference.zip`, 1단계 담당에게 받기).
 
-1. [Releases](https://github.com/ganggang-0605/vision-welding-ai/releases) 의 최신 `models-*` 에서 `det_v3_inference.zip` · `rec_v4_inference.zip` 받기
-2. 저장소 루트에서 풀기 — 폴더마다 `inference.json` · `inference.pdiparams` · `inference.yml`
+1. 저장소 루트에서 두 zip 풀기 — 폴더마다 `inference.json` · `inference.pdiparams` · `inference.yml`
    ```bash
    unzip det_v3_inference.zip -d weights/det_v3/inference
    unzip rec_v4_inference.zip -d weights/rec_v4/inference
    ```
-3. `.env` 에 `VISION_DET_MODEL_DIR=weights/det_v3/inference`, `VISION_REC_MODEL_DIR=weights/rec_v4/inference` → 백엔드 다시 켜기.
+2. `.env` 에 `VISION_DET_MODEL_DIR=weights/det_v3/inference`, `VISION_REC_MODEL_DIR=weights/rec_v4/inference` → 백엔드 다시 켜기.
    `GET /pipeline/status` 의 `ocr_models` 에 `weights/…` 경로가 보이면 적용된 것 (두 줄을 비우면 PaddleOCR 공식 모델)
 
 | 원격 평가 (2026-10-10) | 공식 검출기 + 인식기 | 검출기 v3 + 인식기 v4 |
