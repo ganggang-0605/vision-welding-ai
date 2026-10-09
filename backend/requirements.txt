@@ -3,6 +3,7 @@ uvicorn[standard]
 pydantic>=2
 sqlalchemy
 python-multipart
+python-dotenv            # 저장소 루트 .env (API 키 · VLM 설정) 읽기
 opencv-python-headless
 numpy
 pillow

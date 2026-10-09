@@ -1,6 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# 저장소 루트의 .env (API 키 · VLM_PROVIDER · CONFIDENCE_THRESHOLD). 이미 설정된 환경 변수가 우선
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 from app.api import jobs, projects, standards, users, workspaces
 from app.store import get_store

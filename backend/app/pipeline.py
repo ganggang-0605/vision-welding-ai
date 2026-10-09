@@ -36,7 +36,7 @@ def confidence_threshold() -> float:
 def analyze_image(store: Store, job: Job, image: np.ndarray, image_id: str) -> dict:
     """새 사진 해석 (revision 1) → Analysis"""
     vision = recognize(image, image_id)
-    return _interpret(store, job, vision, revision=1, user_context=None, corrections=[], previous=None)
+    return _interpret(store, job, vision, revision=1, user_context=None, corrections=[], previous=None, image=image)
 
 
 def review_analysis(store: Store, job: Job, previous: dict, review: ReviewRequest) -> dict:
@@ -129,12 +129,19 @@ def current_value(analysis: dict, target: str):
     }.get(target)
 
 
+def stage2_image(store: Store, job: Job, image_id: str, fallback: np.ndarray | None = None) -> bytes | np.ndarray | None:
+    """2단계 VLM 에 보여 줄 사진 — 올린 원본 파일 그대로 (작업자 확인 때도 같은 사진). 저장된 게 없으면 fallback"""
+    found = store.get_image(job.id, image_id)
+    return found[1] if found else fallback
+
+
 def _interpret(
     store: Store, job: Job, vision: dict, *, revision: int,
-    user_context: str | None, corrections: list[dict], previous: dict | None,
+    user_context: str | None, corrections: list[dict], previous: dict | None, image: np.ndarray | None = None,
 ) -> dict:
     context_input = build_context_input(store, job, user_context=user_context, corrections=corrections, previous=previous)
-    context = interpret(vision, context_input)
+    context = interpret(vision, context_input, image=stage2_image(store, job, vision["image_id"], image),
+                        previous_vlm=previous["context"]["vlm"] if previous else None)
     confidence = score(vision, context, corrections, confidence_threshold())
     analysis = {
         "schema_version": SCHEMA_VERSION,
