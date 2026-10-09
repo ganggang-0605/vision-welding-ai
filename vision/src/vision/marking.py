@@ -20,8 +20,11 @@ _AS_DIGIT = {"O": "0", "o": "0", "D": "0", "Q": "0", "I": "1", "l": "1", "|": "1
 
 
 def to_marking(text: str) -> str | None:
-    """인식 결과 → 각장 표기 (형식에 맞출 수 없으면 None). 앞뒤 잡글자(화살표를 글자로 읽은 것 등)는 버림"""
+    """인식 결과 → 각장 표기 (형식에 맞출 수 없으면 None). 앞뒤 잡글자(화살표를 글자로 읽은 것 등)는 버림.
+    숫자 없이 글자만 쓴 줄(운영측 예시 1·3의 V)은 읽은 결과가 그 글자 하나뿐일 때만 인정"""
     s = "".join(ch for ch in text if not ch.isspace())
+    if len(s) == 1 and s in _AS_LETTER and not s.isdigit():
+        return _AS_LETTER[s]
     for start, ch in enumerate(s):
         letter = _AS_LETTER.get(ch)
         if letter is None:

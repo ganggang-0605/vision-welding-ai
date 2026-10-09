@@ -116,5 +116,7 @@ def test_to_marking_fixes_confusable_characters_by_position():
     assert to_marking("f6,0") == "F6.0"
     assert to_marking("->F7.5<-") == "F7.5"  # 화살표를 글자로 읽은 것
     assert to_marking("V5") == "V5"
+    assert to_marking("U") == "V"  # 숫자 없이 글자만 쓴 줄 (운영측 예시 1·3)
+    assert to_marking("5") is None  # 숫자 하나는 글자로 보지 않음
     assert to_marking("doc") is None
     assert to_marking("") is None
