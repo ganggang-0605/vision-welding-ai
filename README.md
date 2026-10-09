@@ -1,5 +1,7 @@
 # vision-welding-ai
 
+[![CI](https://github.com/ganggang-0605/vision-welding-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ganggang-0605/vision-welding-ai/actions/workflows/ci.yml)
+
 **AI 기반 용접 작업 분석 서비스** — PAC 해커톤
 
 선박 블록의 부재 표기 정보를 촬영하면 AI가 노이즈를 제거하고 시각 정보를 문자·기호로 나눠 인식한 뒤,
@@ -67,18 +69,40 @@ backend/
   tests/
 data/seed/          # 예시 시드 데이터 (조립 트리, 기호 사전, 용접 기준)
 schemas/            # 로봇 출력 JSON 스키마
-frontend/           # UI (스택 미정)
+frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
 ```
 
 ## 시작하기
 
+### 백엔드
+
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example ../.env
 uvicorn app.main:app --reload
 ```
 
 테스트: `cd backend && pytest`
+
+### 프론트엔드
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+http://localhost:5173 에서 열립니다. 백엔드(http://localhost:8000)를 먼저 띄워 두면 개발 서버가
+`/api/*` 요청을 백엔드로 프록시합니다 (예: `fetch('/api/health')` → `GET http://localhost:8000/health`).
+
+### CI
+
+`main` 브랜치 push와 모든 PR에서 GitHub Actions([`.github/workflows/ci.yml`](.github/workflows/ci.yml))가 실행됩니다.
+
+- **backend** (Python 3.12): `pip install -r requirements.txt` → `python -m pytest -q`
+- **frontend** (Node 24): `npm ci` → `npm run lint` → `npm run build`
+
+Actions 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다.
