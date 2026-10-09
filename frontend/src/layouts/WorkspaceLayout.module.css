@@ -161,7 +161,7 @@
 }
 
 .navItem[aria-current='page'] svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* 맥 사이드바 위쪽의 검색 칸 모양 */
@@ -304,7 +304,7 @@
 }
 
 .treeLink[aria-current='page'] svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .treeChildren {

@@ -53,7 +53,7 @@ npm run dev
 | `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 1단계 혼자 / 팀과 함께(기본값 개인) → 2단계 이름·설명·사전 시작 방식. 팀이면 만든 뒤 멤버 초대로 이동. **사이드바 없는 단독 화면** |
 | `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(블록) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
 | (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 워크스페이스의 모든 프로젝트에서 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
-| `/w/:workspaceId/settings/preferences` | `PreferencesPage` | | 설정 > **내 설정 > 환경설정**: 계정(추가·로그아웃), 화면 모드(시스템/라이트/다크), 글씨 크기. 모든 워크스페이스 공통, 이 브라우저에만 저장 |
+| `/w/:workspaceId/settings/preferences` | `PreferencesPage` | | 설정 > **내 설정 > 환경설정** (사이드바 맨 아래 내 계정 메뉴에서): 계정(추가·로그아웃), 화면 모드(시스템/라이트/다크), 글씨 크기. 모든 워크스페이스 공통, 이 브라우저에만 저장 |
 | `/w/:workspaceId/settings` | `WorkspaceGeneralPage` | | 설정 > **워크스페이스 > 일반**: 이름·설명, 사용 방식(개인/팀) |
 | `/w/:workspaceId/settings/members` | `WorkspaceMembersPage` | | 설정 > **워크스페이스 > 멤버**: 목록·초대 (개인이면 초대 시 팀으로 전환) |
 | `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
@@ -73,14 +73,14 @@ npm run dev
 - 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, projectId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
 - 사진 올리기·해석·작업자 확인은 백엔드 `app/pipeline.py`(1·2·3단계 패키지 통합)와 연결돼 있습니다. 해석 결과 화면의 **사진**(`components/JobPhotos`)에서 사진 추가·해석 시작·다시 해석을 하고, `components/PhotoAnnotations`가 1단계가 찾은 글자·기호 위치(`Analysis.vision`의 bbox)를 사진 위 박스로 보여 줍니다 (확률 80% 미만은 주황). 단계 패키지에 실제 모델이 아직 없으면 찾은 것이 없어 '확인 필요'가 됩니다.
 
-### 사이드바 (노션 사이드바 구성)
+### 사이드바 (노션 사이드바 구성, 맨 아래는 클로드처럼 내 계정)
 
-- 맨 위 **워크스페이스 전환 메뉴** (노션과 같은 구성): 지금 워크스페이스, 설정·팀원 초대·계정 추가하기, 로그인한 **계정마다** 워크스페이스 목록과 새 워크스페이스, 모든 계정에서 로그아웃. 다른 계정의 워크스페이스를 누르면 그 계정으로 바뀝니다.
+- 맨 위 **워크스페이스 메뉴** (노션과 같은 구성): 지금 워크스페이스와 **팀원 초대** 버튼, 워크스페이스 설정·계정 추가하기, 로그인한 **계정마다** 워크스페이스 목록과 새 워크스페이스, 모든 계정에서 로그아웃. 다른 계정의 워크스페이스를 누르면 그 계정으로 바뀝니다.
   - 로그인한 계정 목록과 지금 계정은 `src/lib/accounts.ts`가 브라우저에 저장하고, API 요청마다 `X-User-Id` 헤더로 보냅니다 (TODO 인증: 실제 로그인 세션으로 교체).
-- 검색 ⌘K, 홈
+- 검색 ⌘K, **워크스페이스 홈**
 - **작업**: 블록 목록. 펼치면 작업 목록·조립 트리. 보고 있는 블록은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 블록.
-- **워크스페이스**: 문자·기호 사전, 용접 기준, 설정 (`layouts/SettingsLayout`: 왼쪽에 내 설정 / 워크스페이스 묶음)
-- 맨 아래 팀원 초대, 서버 연결이 끊겼을 때만 뜨는 안내
+- **워크스페이스 사전**: 문자·기호 사전, 용접 기준
+- 맨 아래 **내 계정** (`components/AccountMenu`, 위로 열림): 환경설정, 워크스페이스 설정, 화면 모드(시스템/라이트/다크), 로그아웃. 서버 연결이 끊기면 그 위에 안내
 
 현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. 데스크톱에서는 사이드바 위쪽의 닫기 버튼(마우스를 올리면 보임)이나 **⌘\\ / Ctrl+\\**로 사이드바를 접고 펼 수 있고, 접은 상태는 브라우저에 기억합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.
 
@@ -133,20 +133,22 @@ export function ExamplePage() {
 
 ## 스타일
 
-- `src/index.css`: 디자인 토큰(CSS 변수)과 여러 화면이 같이 쓰는 클래스 — `.page`, `.page-header`, `.btn`, `.table`, `.pill`, `.notice`, `.tabs`, `.props`, `.form`/`.field`/`.input` 등.
+- `src/index.css`: 디자인 토큰(CSS 변수)과 여러 화면이 같이 쓰는 클래스 — `.page`, `.page-header`, `.btn`(캡슐), `.segmented`, `.chip`, `.group`/`.group-row`(회색 묶음 면), `.table`, `.notice`, `.status`, `.form`/`.field`/`.input` 등. 맨 위 주석에 디자인 원칙이 있습니다.
 - 컴포넌트 전용 스타일은 `*.module.css` (예: `layouts/WorkspaceLayout.module.css`, `components/SearchDialog.module.css`).
-- 디자인 토큰 (라이트 테마 기준):
+- 디자인 토큰 (라이트 / 다크):
 
-  | 토큰 | 값 | 용도 |
-  | --- | --- | --- |
-  | `--text` / `--text-secondary` / `--text-muted` | `#37352F` / `#5F5E5B` / `#73726E` | 본문 / 보조 / 흐린 글자 |
-  | `--sidebar-bg` / `--border` / `--hover` | `#F7F7F5` / `#E9E9E7` / `#EBEBE9` | 사이드바 / 구분선 / 호버 |
-  | `--accent` | `#0B6BCB` | 링크·주요 버튼·포커스 |
-  | `--warning-bg` / `--warning-text` | `#FAEBDD` / `#8A3F05` | 확인 필요, 501 안내 |
-  | `--info-bg` / `--info-text` | `#E7F0FA` / `#0B4F94` | 승인 대기, 안내 |
+  | 토큰 | 라이트 | 다크 | 용도 |
+  | --- | --- | --- | --- |
+  | `--label` / `--secondary` / `--tertiary` | `#1D1D1F` / `#6E6E73` / `#86868B` | `#F5F5F7` / `#A1A1A6` / `#8E8E93` | 본문 / 보조 / 흐린 글자 |
+  | `--bg` / `--fill` / `--fill-strong` | `#FFFFFF` / `#F5F5F7` / `#E8E8ED` | `#161617` / `#222224` / `#2E2E31` | 바탕 / 묶음 면·사이드바 / 호버·보조 버튼 |
+  | `--accent` / `--on-accent` | `#9AD6F6` / `#0B3954` | `#7CC4EC` / `#062A40` | 포인트 색(연한 하늘색) 면: 주요 버튼·선택된 칩 / 그 위 글자 |
+  | `--accent-text` | `#1A73A8` | `#8FD3FA` | 바탕 위 포인트 색 글자·아이콘·테두리 (링크, 포커스) |
+  | `--attention` / `--danger` | `#C93400` / `#D70015` | `#FF9F0A` / `#FF6961` | 확인 필요 / 오류 |
+  | `--radius` / `--radius-small` | `10px` / `6px` | | 모든 면·줄·입력칸 / 30px 미만 아이콘 타일 (버튼은 캡슐) |
 
-  글꼴은 `'Noto Sans KR', system-ui`입니다 (웹폰트는 불러오지 않고 기기에 설치된 글꼴을 씁니다).
-- 다크 모드는 시안이 없어 대비만 맞춘 대체 팔레트(`prefers-color-scheme: dark`)를 둡니다.
+  포인트 색 대비(WCAG AA): 하늘색 버튼 위 글자 7.7:1, 흰 바탕 위 `--accent-text` 5.2:1.
+  글꼴은 시스템 글꼴(맥·아이폰은 SF + Apple SD Gothic Neo, 그 외 Noto Sans KR)이고 웹폰트는 불러오지 않습니다.
+- 화면 모드는 시스템 설정을 따르고, 환경설정(또는 사이드바 맨 아래 내 계정 메뉴)에서 라이트·다크로 고정할 수 있습니다 (`lib/preferences.ts`).
 
 ## API 프록시
 

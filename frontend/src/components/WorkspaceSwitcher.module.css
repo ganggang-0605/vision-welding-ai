@@ -77,6 +77,11 @@
   padding: 8px 8px 12px;
 }
 
+.invite {
+  width: calc(100% - 16px);
+  margin: 0 8px 8px;
+}
+
 .currentText {
   display: grid;
   min-width: 0;
@@ -208,7 +213,7 @@
 
 .create,
 .create .itemIcon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .footer {

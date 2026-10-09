@@ -3,7 +3,7 @@
  * 특정 컴포넌트 전용 스타일은 *.module.css 에 둔다.
  *
  * 디자인 원칙 (Figma 'Vision Welding AI' 기준, 노션형 구조 + 애플 시스템 앱 느낌)
- * - 강조색은 파랑 하나. 상태는 색 태그 대신 글자로 쓰고, 확인이 필요한 것만 주황 글자로 표시한다.
+ * - 강조색은 연한 하늘색 하나(배경의 회색과 톤을 맞춤). 상태는 색 태그 대신 글자로 쓰고, 확인이 필요한 것만 주황 글자로 표시한다.
  * - 선과 상자를 줄이고 여백과 글자 크기로 구분한다. 묶음이 필요하면 회색 그룹 면(.group) 하나만 쓴다.
  * - 모서리 규칙: 버튼은 캡슐(999px), 나머지(면·목록 줄·입력칸·메뉴·창·타일)는 모두 10px(--radius).
  *   30px보다 작은 아이콘 타일·아이콘 버튼만 6px(--radius-small), 세그먼트 안쪽 버튼은 바깥보다 2px 작은 8px.
@@ -17,9 +17,11 @@
   --fill: #f5f5f7;
   --fill-strong: #e8e8ed;
   --separator: rgb(0 0 0 / 0.08);
-  --accent: #0071e3;
-  --on-accent: #ffffff;
-  --accent-soft: rgb(0 113 227 / 0.1);
+  /* 포인트 색: 연한 하늘색. 면(버튼·선택)은 --accent + 진한 글자, 흰 바탕 위 글자·아이콘·테두리는 --accent-text */
+  --accent: #9ad6f6;
+  --on-accent: #0b3954;
+  --accent-text: #1a73a8;
+  --accent-soft: rgb(154 214 246 / 0.32);
   --attention: #c93400;
   --danger: #d70015;
   --code-string: #c41a16;
@@ -62,9 +64,10 @@
     --fill: #222224;
     --fill-strong: #2e2e31;
     --separator: rgb(255 255 255 / 0.1);
-    --accent: #2997ff;
-    --on-accent: #ffffff;
-    --accent-soft: rgb(41 151 255 / 0.16);
+    --accent: #7cc4ec;
+    --on-accent: #062a40;
+    --accent-text: #8fd3fa;
+    --accent-soft: rgb(124 196 236 / 0.2);
     --attention: #ff9f0a;
     --danger: #ff6961;
     --code-string: #ff8170;
@@ -82,9 +85,10 @@
   --fill: #222224;
   --fill-strong: #2e2e31;
   --separator: rgb(255 255 255 / 0.1);
-  --accent: #2997ff;
-  --on-accent: #ffffff;
-  --accent-soft: rgb(41 151 255 / 0.16);
+  --accent: #7cc4ec;
+  --on-accent: #062a40;
+  --accent-text: #8fd3fa;
+  --accent-soft: rgb(124 196 236 / 0.2);
   --attention: #ff9f0a;
   --danger: #ff6961;
   --code-string: #ff8170;
@@ -126,7 +130,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -145,7 +149,7 @@ textarea {
 :focus-visible {
   outline: 3px solid var(--accent-soft);
   outline-offset: 1px;
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-text);
 }
 
 h1,
@@ -398,12 +402,12 @@ p {
 }
 
 .btn--primary:hover {
-  filter: brightness(1.08);
+  filter: brightness(0.95);
 }
 
 .btn--plain {
   padding-inline: 8px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: transparent;
 }
 
@@ -818,7 +822,7 @@ dl.group {
 }
 
 .input:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   outline: 3px solid var(--accent-soft);
   outline-offset: 0;
   box-shadow: none;

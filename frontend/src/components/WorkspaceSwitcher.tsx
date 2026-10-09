@@ -18,7 +18,7 @@ interface WorkspaceSwitcherProps {
 
 /**
  * 사이드바 맨 위 워크스페이스 전환 메뉴 (노션과 같은 구성).
- * 위: 지금 워크스페이스, 설정·팀원 초대·계정 추가 / 가운데: 로그인한 계정마다 워크스페이스 목록과 새 워크스페이스 /
+ * 위: 지금 워크스페이스와 팀원 초대, 워크스페이스 설정·계정 추가 / 가운데: 로그인한 계정마다 워크스페이스 목록과 새 워크스페이스 /
  * 아래: 모든 계정에서 로그아웃. 바깥을 누르거나 Esc 를 누르면 닫힌다.
  */
 export function WorkspaceSwitcher({ workspaceId, workspace }: WorkspaceSwitcherProps) {
@@ -98,18 +98,17 @@ function WorkspaceMenu({ id, currentId, current, onClose }: WorkspaceMenuProps) 
           </div>
         </div>
       )}
+      {/* 이 워크스페이스에 사람을 부르는 일이라 맨 위에 크게 (개인이면 초대하는 순간 팀이 된다) */}
+      <Link className={`btn btn--primary ${styles.invite}`} to={paths.members(currentId)} onClick={onClose}>
+        <UserPlus size={15} aria-hidden="true" />
+        팀원 초대
+      </Link>
 
       <ul className={styles.list}>
         <li>
           <Link className={styles.item} to={paths.settings(currentId)} onClick={onClose}>
             <Gear className={styles.itemIcon} size={17} aria-hidden="true" />
-            설정
-          </Link>
-        </li>
-        <li>
-          <Link className={styles.item} to={paths.members(currentId)} onClick={onClose}>
-            <UserPlus className={styles.itemIcon} size={17} aria-hidden="true" />
-            팀원 초대
+            워크스페이스 설정
           </Link>
         </li>
         <li>

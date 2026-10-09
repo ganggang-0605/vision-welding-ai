@@ -56,7 +56,7 @@
 }
 
 .item[aria-current='page'] svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .content {

@@ -21,7 +21,7 @@
 .code {
   margin-right: 6px;
   font-family: var(--font-mono);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .text {

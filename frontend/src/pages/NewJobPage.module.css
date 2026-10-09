@@ -17,7 +17,7 @@
 
 .capture:focus-within {
   outline: 3px solid var(--accent-soft);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-text);
 }
 
 .prompt {
@@ -25,7 +25,7 @@
   justify-items: center;
   gap: 10px;
   font-weight: 500;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .preview {

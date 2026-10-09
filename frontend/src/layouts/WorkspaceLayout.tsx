@@ -2,7 +2,6 @@ import {
   BookOpen,
   Cube,
   CaretRight,
-  Gear,
   House,
   List,
   ListBullets,
@@ -11,7 +10,6 @@ import {
   Ruler,
   SidebarSimple,
   TreeStructure,
-  UserPlus,
 } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useState, type MouseEvent } from 'react'
 import { Link, Navigate, NavLink, Outlet, useParams } from 'react-router'
@@ -20,6 +18,7 @@ import { listProjects } from '../api/projects'
 import type { Project } from '../api/types'
 import { getMe } from '../api/users'
 import { getWorkspace } from '../api/workspaces'
+import { AccountMenu } from '../components/AccountMenu'
 import { BackendStatus } from '../components/BackendStatus'
 import { ErrorNotice } from '../components/Notice'
 import { PageHeader } from '../components/PageHeader'
@@ -170,7 +169,7 @@ export function WorkspaceLayout() {
               <li>
                 <NavLink end to={paths.workspaceHome(workspaceId)} className={styles.navItem}>
                   <House aria-hidden="true" />
-                  홈
+                  워크스페이스 홈
                 </NavLink>
               </li>
             </ul>
@@ -199,7 +198,7 @@ export function WorkspaceLayout() {
               />
             )}
 
-            <h2 className={styles.sectionTitle}>워크스페이스</h2>
+            <h2 className={styles.sectionTitle}>워크스페이스 사전</h2>
             <ul className={styles.navList}>
               <li>
                 <NavLink to={paths.symbols(workspaceId)} className={styles.navItem}>
@@ -213,24 +212,14 @@ export function WorkspaceLayout() {
                   용접 기준
                 </NavLink>
               </li>
-              <li>
-                <NavLink to={paths.settings(workspaceId)} className={styles.navItem}>
-                  <Gear aria-hidden="true" />
-                  설정
-                </NavLink>
-              </li>
             </ul>
           </nav>
         )}
 
+        {/* 작업과 상관없는 내 계정·환경설정은 클로드처럼 맨 아래. 팀원 초대는 맨 위 워크스페이스 메뉴에 있다. */}
         <footer className={styles.sidebarFooter}>
-          {!notFound && (
-            <Link className={styles.navItem} to={paths.members(workspaceId)}>
-              <UserPlus aria-hidden="true" />
-              팀원 초대
-            </Link>
-          )}
           <BackendStatus />
+          <AccountMenu workspaceId={workspaceId} me={me.data} />
         </footer>
       </aside>
 

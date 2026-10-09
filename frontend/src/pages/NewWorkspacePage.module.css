@@ -65,7 +65,7 @@
 }
 
 .inlineField:focus-within label {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .choices {
@@ -119,7 +119,7 @@
 
 .check {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .actions {
@@ -133,7 +133,7 @@
 .back {
   justify-self: start;
   margin: -48px 0 16px -8px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* 어느 계정에 만드는지 (전환 메뉴의 계정별 '새 워크스페이스') */

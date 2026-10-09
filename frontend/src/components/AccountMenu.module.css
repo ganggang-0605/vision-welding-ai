@@ -1,0 +1,136 @@
+.root {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--fill-strong);
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.who {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sub {
+  overflow: hidden;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tertiary);
+}
+
+.chevron {
+  flex: none;
+  color: var(--tertiary);
+}
+
+/* 계정 버튼 위로 열린다 */
+.menu {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  padding: 6px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-float);
+}
+
+.email {
+  overflow: hidden;
+  margin: 4px 8px 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tertiary);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--label);
+  text-decoration: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible {
+  text-decoration: none;
+  background: var(--fill);
+}
+
+.item svg {
+  flex: none;
+  color: var(--secondary);
+}
+
+.theme {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 8px 8px 10px;
+  border-top: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
+  font-size: 0.75rem;
+  color: var(--tertiary);
+}
+
+.theme :global(.segmented) {
+  display: flex;
+}
+
+.signOut {
+  color: var(--secondary);
+}

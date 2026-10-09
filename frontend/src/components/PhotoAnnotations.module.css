@@ -22,7 +22,7 @@
 .box {
   position: absolute;
   padding: 0;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--accent-text);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
@@ -34,7 +34,7 @@
 
 .box:hover,
 .box[aria-pressed='true'] {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent-text) 18%, transparent);
 }
 
 .box[data-low]:hover,
