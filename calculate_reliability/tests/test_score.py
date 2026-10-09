@@ -132,3 +132,14 @@ def test_vlm_only_extra_markings_do_not_lower_agreement():
     context = {**REV1["context"], "vlm": {**REV1["context"]["vlm"], "reading": reading}}
     before = run(REV1)["factors"]["visual"]["ocr_vlm_agreement"]
     assert score(REV1["vision"], context, [], 80)["factors"]["visual"]["ocr_vlm_agreement"] == before
+
+
+def test_arrow_attached_to_text_still_agrees():
+    """1단계가 화살표까지 한 줄로 읽은 →F7.5 와 VLM 이 읽은 F7.5 는 같은 표기 (예전엔 일치도 0 → 시각 신뢰도 0)"""
+    from calculate_reliability.visual import same_reading
+
+    assert same_reading("→F7.5", "F7.5") and same_reading("p－10 ", "P-10")
+    assert not same_reading("P-1O", "P-10")
+    vision = {**REV1["vision"], "texts": [{**t, "text": "→" + t["text"]} for t in REV1["vision"]["texts"]]}
+    assert score(vision, REV1["context"], [], 80)["factors"]["visual"]["ocr_vlm_agreement"] == \
+        run(REV1)["factors"]["visual"]["ocr_vlm_agreement"]

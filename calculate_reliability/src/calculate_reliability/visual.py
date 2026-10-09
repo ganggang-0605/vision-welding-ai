@@ -1,4 +1,6 @@
 """a. 시각 인식 신뢰도: OCR/기호 인식 확률, 전처리 보정 강도, OCR↔VLM 교차 검증 일치도"""
+import re
+import unicodedata
 
 STRONG_CORRECTION = 0.5  # 전처리 보정 강도가 이보다 세면 원본에서 멀어진 만큼 깎음 (최대 20%)
 MAX_CORRECTION_PENALTY = 0.2
@@ -19,6 +21,18 @@ def visual_factors(vision: dict, context: dict, corrections: list[dict]) -> dict
     }
 
 
+ARROWS = re.compile(r"[\u2190-\u21ff\u2794\u279c\u27a1\u25b6\u25ba\u25c0\u25c4]")  # → ← ⇒ ➔ ▶ ◀ …
+
+
+def same_reading(a: str | None, b: str | None) -> bool:
+    """같은 표기로 읽었는지 — 공백·대소문자·전각·대시 모양과 글자에 붙은 화살표는 무시.
+    1단계는 화살표를 글자와 한 줄로 읽고(→F7.5) VLM은 화살표를 기호로 따로 읽어서(F7.5 + →) 그대로 비교하면 불일치가 됨"""
+    def key(value: str | None) -> str:
+        value = ARROWS.sub("", unicodedata.normalize("NFKC", value or "").upper())
+        return re.sub(r"\s+", "", re.sub(r"[‐‑‒–—―−_]", "-", value))
+    return key(a) == key(b)
+
+
 def ocr_vlm_agreement(vision: dict, context: dict, confirmed: set[str] = frozenset()) -> float | None:
     """1단계가 읽은 표기 중 VLM도 같게 읽은 비율 (VLM이 놓친 1단계 결과는 불일치, 작업자가 확인한 표기는 일치).
     VLM만 읽은 v*는 비교할 1단계 읽기가 없어 빼고, 시각 점수에서 따로 봄(vlm_only_reading).
@@ -28,7 +42,7 @@ def ocr_vlm_agreement(vision: dict, context: dict, confirmed: set[str] = frozens
         return None
     reading = context["vlm"]["reading"]
     by_ref = {x["ref_id"]: x.get("text") or x.get("label") for x in reading["texts"] + reading["symbols"]}
-    agreed = sum(1 for ref, value in read.items() if ref in confirmed or by_ref.get(ref) == value)
+    agreed = sum(1 for ref, value in read.items() if ref in confirmed or (ref in by_ref and same_reading(by_ref[ref], value)))
     return round(agreed / len(read), 2)
 
 
