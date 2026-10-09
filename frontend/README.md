@@ -181,6 +181,20 @@ API 요청도 Vite 프록시를 거쳐 PC의 `localhost:8000`으로 전달되므
 
 > 휴대폰 카메라 API(`getUserMedia`)는 HTTPS 또는 localhost에서만 동작합니다. 지금처럼 `<input type="file" accept="image/*" capture>`로 촬영하는 방식은 HTTP에서도 동작합니다.
 
+## 다른 곳에서 접속하기 (팀원·시연용 임시 주소)
+
+같은 Wi‑Fi가 아니어도 Cloudflare 임시 터널로 지금 PC의 개발 서버에 공개 주소(`https://….trycloudflare.com`, HTTPS)를 붙일 수 있습니다.
+백엔드·프론트를 켠 상태에서:
+
+```bash
+brew install cloudflared                          # 처음 한 번
+cloudflared tunnel --url http://localhost:5173    # 출력에 나오는 https://….trycloudflare.com 을 공유
+```
+
+- 터널 하나로 충분합니다 — `/api` 는 Vite 프록시가 백엔드로 넘깁니다 (`vite.config.ts` 의 `allowedHosts` 가 이 주소를 허용).
+- PC가 켜져 있고 명령이 돌아가는 동안만 열리며, 다시 켜면 주소가 바뀝니다. 끄려면 Ctrl+C.
+- 로그인이 없어서 주소를 아는 사람은 누구나 작업을 보고·승인하고·해석(Claude API 비용)할 수 있습니다. 필요한 사람에게만 공유하고 다 쓰면 끄세요.
+
 ## 스크립트
 
 | 명령 | 설명 |

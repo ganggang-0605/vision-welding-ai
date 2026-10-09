@@ -23,6 +23,8 @@ export default defineConfig({
     // 0.0.0.0 으로 열어 같은 Wi-Fi의 휴대폰에서 http://<PC IP>:5173 으로 접속 가능
     host: true,
     port: 5173,
+    // Cloudflare 임시 터널(cloudflared tunnel --url http://localhost:5173)로 팀원·시연용 공개 주소를 붙일 때
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       // /api/health → http://localhost:8000/health
       [API_PREFIX]: {
