@@ -13,8 +13,11 @@ def _to_utc(value: datetime) -> datetime:
 # (stdlib UTC 로 바꿔 두면 pydantic-core TzInfo 가 남지 않는다 — Python 3.12 -X dev 종료 시 GC segfault 회피)
 UtcDatetime = Annotated[AwareDatetime, AfterValidator(_to_utc)]
 NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]  # 워크스페이스·프로젝트 이름
 Score = Annotated[float, Field(ge=0, le=100)]
 
+WorkspaceKind = Literal["personal", "team"]  # 개인 / 팀(협업)
+MemberRole = Literal["owner", "member"]
 SymbolKind = Literal["text", "symbol"]
 AssemblyLevel = Literal["BLOCK", "LARGE", "MID", "SUB", "PART"]
 JobStatus = Literal["draft", "analyzing", "needs_review", "awaiting_approval", "approved"]
@@ -33,18 +36,43 @@ class ErrorDetail(ApiModel):
     detail: str
 
 
+def _require_at(value: str) -> str:
+    if "@" not in value:
+        raise ValueError("이메일 형식이 아닙니다 ('@' 가 필요합니다)")
+    return value
+
+
+# 이메일은 '@' 포함 여부만 확인한다 (email-validator 의존성 없이)
+Email = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1), AfterValidator(_require_at)]
+
+
+# ── 사용자 ────────────────────────────────────────────────────
+
+class User(ApiModel):
+    id: str
+    name: str
+    email: str
+
+
 # ── 워크스페이스 ──────────────────────────────────────────────
 
 class Workspace(ApiModel):
+    """kind: 개인(personal) / 팀(team). 개인 워크스페이스에 멤버를 초대하면 팀으로 바뀐다."""
+
     id: str
     name: str
     description: str | None = None
+    kind: WorkspaceKind
+    member_count: int  # 멤버 수 (소유자 포함) — 저장소가 멤버 목록에서 계산
     created_at: UtcDatetime
 
 
 class WorkspaceCreate(ApiModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    """현재 사용자가 새 워크스페이스의 소유자(owner) 멤버가 된다."""
+
+    name: Name
     description: str | None = None
+    kind: WorkspaceKind = "personal"
     dictionary_source: Literal["empty", "copy"] = "empty"
     copy_from_workspace_id: str | None = None  # dictionary_source 가 "copy" 일 때만 사용
 
@@ -53,6 +81,49 @@ class WorkspaceCreate(ApiModel):
         if self.dictionary_source == "copy" and not self.copy_from_workspace_id:
             raise ValueError("dictionary_source 가 'copy' 이면 copy_from_workspace_id 가 필요합니다")
         return self
+
+
+class WorkspaceUpdate(ApiModel):
+    """부분 수정 — 보낸 필드만 바뀐다. null 로 비울 수 있는 필드는 description 뿐.
+
+    kind 를 team → personal 로 바꾸는 것은 멤버가 1명(소유자)일 때만 (아니면 409).
+    """
+
+    name: Name = None
+    description: str | None = None
+    kind: WorkspaceKind = None
+
+
+class Member(ApiModel):
+    user_id: str
+    name: str
+    email: str
+    role: MemberRole
+    joined_at: UtcDatetime
+
+
+class MemberInvite(ApiModel):
+    """이메일이 같은 사용자(대소문자 무시)가 있으면 그 사용자를, 없으면 새 사용자를 만들어 초대한다."""
+
+    name: NonEmptyStr
+    email: Email
+
+
+# ── 프로젝트 (호선) ───────────────────────────────────────────
+
+class Project(ApiModel):
+    """워크스페이스 안의 호선 하나 — 조립 트리와 작업이 프로젝트에 속한다."""
+
+    id: str
+    workspace_id: str
+    name: str
+    description: str | None = None
+    created_at: UtcDatetime
+
+
+class ProjectCreate(ApiModel):
+    name: Name
+    description: str | None = None
 
 
 # ── 문자/기호 사전 ────────────────────────────────────────────
@@ -88,7 +159,7 @@ class SymbolEntryUpdate(ApiModel):
     welding_joint_type: str | None = None
 
 
-# ── 조립 트리 ─────────────────────────────────────────────────
+# ── 조립 트리 (프로젝트별) ────────────────────────────────────
 
 class AssemblyNode(ApiModel):
     node_id: str
@@ -124,6 +195,7 @@ class Confidence(ApiModel):
 class Job(ApiModel):
     id: str
     workspace_id: str
+    project_id: str
     name: str
     status: JobStatus
     assembly_path: str | None = None
@@ -140,6 +212,7 @@ class Job(ApiModel):
 
 class JobCreate(ApiModel):
     name: NonEmptyStr
+    project_id: NonEmptyStr  # 같은 워크스페이스의 프로젝트만 (아니면 422)
     assembly_path: str | None = None
     related_job_ids: list[str] = []
 
@@ -174,6 +247,7 @@ class RobotOutput(ApiModel):
 
     job_id: str
     workspace_id: str
+    project_id: str
     created_at: UtcDatetime
     assembly_path: str
     marking: Marking

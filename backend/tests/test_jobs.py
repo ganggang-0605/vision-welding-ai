@@ -9,10 +9,11 @@ from app.schemas import ApproveRequest
 from app.store import JobStatusConflict
 
 JOBS = "/workspaces/demo/jobs"
+HULL = "hull_3201"  # 데모 작업이 속한 프로젝트(호선)
 P1, P2, P3 = "A1-P1 부재 표기", "A1-P2 부재 표기", "A1-P3 부재 표기"
 
 JOB_KEYS = {
-    "id", "workspace_id", "name", "status", "assembly_path", "related_job_ids", "created_at",
+    "id", "workspace_id", "project_id", "name", "status", "assembly_path", "related_job_ids", "created_at",
     "approved_at", "approved_by", "marking", "welding_condition", "confidence", "evidence", "needs_review",
 }
 
@@ -28,7 +29,7 @@ def test_demo_jobs_newest_first(client):
     created = [datetime.fromisoformat(j["created_at"]) for j in jobs]
     assert created == sorted(created, reverse=True)
     assert all(j["created_at"].endswith("Z") for j in jobs)  # UTC 로 정규화
-    assert all(set(j) == JOB_KEYS and j["workspace_id"] == "demo" for j in jobs)
+    assert all(set(j) == JOB_KEYS and j["workspace_id"] == "demo" and j["project_id"] == HULL for j in jobs)
 
     by_name = {j["name"]: j for j in jobs}
     p1, p2, p3 = by_name[P1], by_name[P2], by_name[P3]
@@ -58,6 +59,12 @@ def test_demo_jobs_newest_first(client):
     ({"status": "draft"}, []),
     ({"q": "fw", "status": "needs_review"}, [P1]),
     ({"q": "fw", "status": "approved"}, [P2]),
+    ({"project_id": HULL}, [P3, P2, P1]),
+    ({"project_id": ""}, [P3, P2, P1]),       # 빈 값은 필터 없음
+    ({"project_id": "hull_3202"}, []),         # 작업 없는 프로젝트
+    ({"project_id": "nope"}, []),              # 없는 프로젝트 id 도 빈 목록
+    ({"project_id": "practice"}, []),          # 다른 워크스페이스의 프로젝트
+    ({"q": "fw", "project_id": HULL}, [P2, P1]),
 ])
 def test_search_jobs(client, params, expected):
     assert _names(client.get(JOBS, params=params)) == expected
@@ -68,12 +75,15 @@ def test_search_jobs_invalid_status(client):
 
 
 def test_create_job(client):
-    res = client.post(JOBS, json={"name": "A1-P4 부재 표기", "assembly_path": "A1/L1/M2/S2/P-4", "related_job_ids": ["job_demo_p3"]})
+    res = client.post(JOBS, json={
+        "name": "A1-P4 부재 표기", "project_id": HULL, "assembly_path": "A1/L1/M2/S2/P-4", "related_job_ids": ["job_demo_p3"],
+    })
     assert res.status_code == 201
     job = res.json()
     assert set(job) == JOB_KEYS
     assert job["status"] == "draft"
     assert job["workspace_id"] == "demo"
+    assert job["project_id"] == HULL
     assert job["related_job_ids"] == ["job_demo_p3"]
     assert job["marking"] is job["confidence"] is job["approved_at"] is None
     assert job["evidence"] == job["needs_review"] == []
@@ -84,25 +94,54 @@ def test_create_job(client):
 
 
 def test_create_job_defaults(client):
-    job = client.post(JOBS, json={"name": "이름만"}).json()
+    job = client.post(JOBS, json={"name": "이름만", "project_id": HULL}).json()
     assert job["assembly_path"] is None
     assert job["related_job_ids"] == []
 
 
-@pytest.mark.parametrize("body", [{}, {"name": ""}, {"name": "  "}, {"assembly_path": "A1"}])
+@pytest.mark.parametrize("body", [
+    {}, {"name": "", "project_id": HULL}, {"name": "  ", "project_id": HULL}, {"assembly_path": "A1", "project_id": HULL},
+])
 def test_create_job_validation(client, body):
     assert client.post(JOBS, json=body).status_code == 422
+
+
+def test_job_in_other_project_filter(client):
+    """같은 워크스페이스의 다른 프로젝트 작업은 ?project_id= 로 나뉜다."""
+    job = client.post(JOBS, json={"name": "3202 첫 작업", "project_id": "hull_3202"}).json()
+    assert job["project_id"] == "hull_3202"
+    assert _names(client.get(JOBS, params={"project_id": "hull_3202"})) == ["3202 첫 작업"]
+    assert _names(client.get(JOBS, params={"project_id": HULL})) == [P3, P2, P1]
+    assert _names(client.get(JOBS)) == ["3202 첫 작업", P3, P2, P1]
+
+
+@pytest.mark.parametrize("project_id", [None, "", "  ", "nope", "practice"])  # 누락·빈 값·없는 id·다른 워크스페이스
+def test_create_job_requires_project(client, project_id):
+    body = {"name": "x"} if project_id is None else {"name": "x", "project_id": project_id}
+    res = client.post(JOBS, json=body)
+    assert res.status_code == 422
+    assert [e["loc"] for e in res.json()["detail"]] == [["body", "project_id"]]
+    assert _names(client.get(JOBS)) == [P3, P2, P1]
+
+
+def test_create_job_reports_project_and_related_errors_together(client):
+    res = client.post(JOBS, json={"name": "x", "project_id": "nope", "related_job_ids": ["job_demo_p1", "gone"]})
+    assert res.status_code == 422
+    assert [(e["loc"], e["input"]) for e in res.json()["detail"]] == [
+        (["body", "project_id"], "nope"), (["body", "related_job_ids", 1], "gone"),
+    ]
 
 
 def test_create_job_rejects_unknown_related_jobs(client):
     """관련 작업은 같은 워크스페이스의 작업만 — 없는 id·다른 워크스페이스의 id 면 422"""
     other = client.post("/workspaces", json={"name": "다른 조선소"}).json()["id"]
-    res = client.post(f"/workspaces/{other}/jobs", json={"name": "x", "related_job_ids": ["job_demo_p1"]})
+    project = client.post(f"/workspaces/{other}/projects", json={"name": "1001호선"}).json()["id"]
+    res = client.post(f"/workspaces/{other}/jobs", json={"name": "x", "project_id": project, "related_job_ids": ["job_demo_p1"]})
     assert res.status_code == 422
     assert res.json()["detail"][0]["loc"] == ["body", "related_job_ids", 0]
     assert client.get(f"/workspaces/{other}/jobs").json() == []
 
-    res = client.post(JOBS, json={"name": "x", "related_job_ids": ["job_demo_p1", "nope"]})
+    res = client.post(JOBS, json={"name": "x", "project_id": HULL, "related_job_ids": ["job_demo_p1", "nope"]})
     assert res.status_code == 422
     assert [e["input"] for e in res.json()["detail"]] == ["nope"]
     assert _names(client.get(JOBS)) == [P3, P2, P1]
@@ -123,8 +162,11 @@ def test_jobs_isolated_per_workspace(client):
     assert client.get(f"{other_jobs}/job_demo_p2/export").status_code == 404
     assert client.get(f"{JOBS}/job_demo_p3").json()["status"] == "awaiting_approval"
 
-    own = client.post(other_jobs, json={"name": "다른 작업"}).json()
-    assert own["workspace_id"] == other
+    # 데모 프로젝트에도 작업을 만들 수 없다 (422)
+    assert client.post(other_jobs, json={"name": "다른 작업", "project_id": HULL}).status_code == 422
+    project = client.post(f"/workspaces/{other}/projects", json={"name": "1001호선"}).json()["id"]
+    own = client.post(other_jobs, json={"name": "다른 작업", "project_id": project}).json()
+    assert (own["workspace_id"], own["project_id"]) == (other, project)
     assert client.get(f"{JOBS}/{own['id']}").status_code == 404
     assert _names(client.get(other_jobs)) == ["다른 작업"]
     assert _names(client.get(JOBS)) == [P3, P2, P1]
@@ -169,7 +211,7 @@ def test_approve(client, job_id):
 
 
 def test_approve_draft_conflict(client):
-    job = client.post(JOBS, json={"name": "초안"}).json()
+    job = client.post(JOBS, json={"name": "초안", "project_id": HULL}).json()
     res = client.post(f"{JOBS}/{job['id']}/approve", json={"approved_by": "김용접"})
     assert res.status_code == 409
     assert client.get(f"{JOBS}/{job['id']}").json() == job

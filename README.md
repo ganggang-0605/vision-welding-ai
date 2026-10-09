@@ -12,12 +12,14 @@
 
 ## 주요 기능
 
-서비스는 **워크스페이스 단위**로 동작합니다. 워크스페이스(조선소·공정 하나)마다 작업, 문자/기호 사전, 조립 트리를 따로 가지며
-검색·내보내기도 워크스페이스 안에서 이뤄집니다. **표준 용접 기준**만 모든 워크스페이스가 공유하는 공통(읽기 전용) 데이터입니다.
+서비스는 Notion 처럼 **워크스페이스 단위**로 동작합니다. 워크스페이스(조선소·공정 하나)는 **개인**(기본) 또는 **팀**이며,
+개인 워크스페이스에 멤버를 초대하면 팀 워크스페이스로 바뀝니다. 워크스페이스 안에는 호선(선박) 하나를 뜻하는 **프로젝트**가 있고,
+**조립 트리와 작업은 프로젝트에 속합니다**. **문자/기호 사전**은 워크스페이스 단위로 프로젝트들이 함께 쓰고,
+**표준 용접 기준**은 모든 워크스페이스가 공유하는 공통(읽기 전용) 데이터입니다. 검색·내보내기는 워크스페이스 안에서 이뤄집니다.
 
 1. **워크스페이스 & 문자/기호 체계 등록** — 조선소·공정별 자체 문자/기호 체계를 직접 등록·수정해 어떤 현장이든 이식
    (새 워크스페이스는 빈 사전으로 시작하거나 기존 워크스페이스의 사전을 복사)
-2. **작업 생성 & 이미지 입력** — 작업 단위로 이미지를 촬영·첨부, 같은 워크스페이스의 과거 작업과 연결
+2. **작업 생성 & 이미지 입력** — 프로젝트(호선)를 골라 작업 단위로 이미지를 촬영·첨부, 같은 워크스페이스의 과거 작업과 연결
 3. **표기 정보 해석**
    - **[1단계] 시각 인식**: 전처리(노이즈·오염·스크래치 제거) → 문자는 OCR, 기호·그림은 YOLO
    - **[2단계] DB 기반 맥락 해석**: VLM이 1단계 결과를 용접 기준 DB · 문자/기호 DB · 조립 경로 DB와 대조
@@ -29,7 +31,7 @@
 
 ![조립 트리](docs/images/assembly-tree.webp)
 
-데모 워크스페이스(`demo`)의 조립 트리 — [`data/seed/workspaces/demo/assembly_tree.csv`](data/seed/workspaces/demo/assembly_tree.csv)
+데모 워크스페이스(`demo`) 3201호선(`hull_3201`)의 조립 트리 — [`data/seed/workspaces/demo/projects/hull_3201/assembly_tree.csv`](data/seed/workspaces/demo/projects/hull_3201/assembly_tree.csv)
 
 | node_id | parent_id | level | path |
 | --- | --- | --- | --- |
@@ -66,33 +68,42 @@
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
 | GET | `/health` | 상태 확인 → `{"status": "ok"}` |
-| GET | `/workspaces` | 워크스페이스 목록 |
-| POST | `/workspaces` | 워크스페이스 생성 (201). `dictionary_source`: `empty`(기본) \| `copy` + `copy_from_workspace_id` → 해당 사전 복사 |
-| GET | `/workspaces/{workspace_id}` | 워크스페이스 조회 |
+| GET | `/me` | 현재 사용자 `{id, name, email}` — 인증 전까지 고정 데모 사용자 |
+| GET | `/workspaces` | 워크스페이스 목록 — 시드(`demo`, `personal`) 다음에 새로 만든 워크스페이스가 생성 순 |
+| POST | `/workspaces` | 워크스페이스 생성 (201). `kind`: `personal`(기본) \| `team`, 현재 사용자가 소유자(`owner`). `dictionary_source`: `empty`(기본) \| `copy` + `copy_from_workspace_id` → 해당 사전 복사 |
+| GET | `/workspaces/{workspace_id}` | 워크스페이스 조회 — `kind`, `member_count`(소유자 포함) 포함 |
+| PATCH | `/workspaces/{workspace_id}` | 부분 수정 (`name`, `description`, `kind`). `team` → `personal` 은 멤버가 1명일 때만 (아니면 409) |
+| GET | `/workspaces/{workspace_id}/members` | 멤버 목록 `{user_id, name, email, role, joined_at}` — 소유자 먼저, 그다음 가입 순 |
+| POST | `/workspaces/{workspace_id}/members` | 멤버 초대 `{"name", "email"}` (201, `role: member`). 같은 이메일(대소문자 무시)의 사용자가 있으면 재사용. 개인 워크스페이스는 팀으로 전환. 이미 멤버면 409, 이메일에 `@` 가 없으면 422 |
 | GET · POST | `/workspaces/{workspace_id}/symbols` | 문자/기호 사전 목록 · 항목 추가 (201) |
 | PATCH · DELETE | `/workspaces/{workspace_id}/symbols/{symbol_id}` | 항목 부분 수정 · 삭제 (204) |
-| GET | `/workspaces/{workspace_id}/assembly-tree` | 조립 트리 노드 목록 |
-| GET | `/workspaces/{workspace_id}/jobs?q=&status=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status` 필터(빈 값이면 전체), 최신순 |
-| POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
+| GET · POST | `/workspaces/{workspace_id}/projects` | 프로젝트(호선) 목록(생성 순) · 생성 (201, 빈 조립 트리) |
+| GET | `/workspaces/{workspace_id}/projects/{project_id}` | 프로젝트 조회 |
+| GET | `/workspaces/{workspace_id}/projects/{project_id}/assembly-tree` | 프로젝트의 조립 트리 노드 목록 |
+| GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
+| POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 필수 — 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}` | 작업 조회 |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 이미지 업로드 (multipart `file`) — **501 미구현** |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 표기 정보 해석 — **501 미구현** |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 (`reinterpret` \| `manual`) — **501 미구현** |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "..."}` → `approved`. `awaiting_approval`·`needs_review` 가 아니면 409 |
-| GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`schemas/robot_output.schema.json`](schemas/robot_output.schema.json)). 승인 전이면 409 |
+| GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`schemas/robot_output.schema.json`](schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
-- 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
-- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(데모 워크스페이스 `demo`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
-- 인증·멤버 관리는 아직 없습니다 (TODO).
+- 워크스페이스 종류: `personal`(개인) → 멤버 초대 시 `team`(팀). 직접 `PATCH` 로 바꿀 수도 있습니다 (팀 → 개인은 멤버 1명일 때만).
+- 작업 경로는 워크스페이스 하위(`/workspaces/{workspace_id}/jobs`) 그대로이고, 작업의 `project_id` 로 프로젝트(호선)에 속합니다.
+  예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
+- 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
+- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`)로 돌아갑니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
+- 인증은 아직 없습니다 (TODO) — 고정 데모 사용자(`GET /me`)가 현재 사용자를 대신하며, 멤버 목록은 있지만 권한 검사는 하지 않습니다.
 
 ## 디렉터리 구조
 
 ```
 backend/
   app/
-    api/            # REST API (FastAPI) — workspaces · jobs · standards
+    api/            # REST API (FastAPI) — users(/me) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
     schemas.py      # API 스키마 (Pydantic) — 프론트엔드와 공유하는 계약
     store.py        # 임시 인메모리 저장소 (실제 DB 로 교체 예정)
     pipeline/
@@ -106,7 +117,13 @@ backend/
   tests/
 data/seed/
   welding_standards.csv   # 표준 용접 기준 (공통)
-  workspaces/demo/        # 데모 워크스페이스 (workspace.json, 문자/기호 사전, 조립 트리, 데모 작업)
+  users.json              # 사용자 + current_user_id (인증 전 고정 데모 사용자)
+  workspaces/<workspace_id>/
+    workspace.json, members.json, symbol_dictionary.json  # 워크스페이스(kind)·멤버·문자/기호 사전(없으면 빈 사전)
+    projects/<project_id>/                                # 프로젝트(호선) — 폴더 이름이 id
+      project.json, assembly_tree.csv, jobs.json          # 트리·작업 파일은 없으면 빈 것으로 봄
+  # demo: 팀(멤버 3명) — hull_3201(조립 트리·데모 작업 3건), hull_3202(빈 호선)
+  # personal: 개인 — practice("연습용 호선", 빈 호선)
 schemas/            # 로봇 출력 JSON 스키마
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
@@ -125,7 +142,8 @@ uvicorn app.main:app --reload
 ```
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-시작 시 데모 워크스페이스 `demo`("데모 조선소 · 1도크")와 데모 작업 3건이 시드됩니다.
+시작 시 데모 사용자, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·3202호선, 데모 작업 3건)와
+개인 워크스페이스 `personal`("개인 워크스페이스")이 시드됩니다.
 
 테스트: `cd backend && python -m pytest -q`
 

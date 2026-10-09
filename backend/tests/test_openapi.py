@@ -13,7 +13,8 @@ def _error_schema(path: str, method: str, code: str) -> dict:
 
 
 @pytest.mark.parametrize("name", [
-    "Workspace", "SymbolEntry", "AssemblyNode", "Job", "Marking", "WeldingCondition", "Confidence", "WeldingStandard",
+    "User", "Workspace", "Member", "Project", "SymbolEntry", "AssemblyNode", "Job", "Marking", "WeldingCondition",
+    "Confidence", "WeldingStandard",
 ])
 def test_response_fields_required(name):
     """응답 JSON 에는 기본값이 있는 필드도 항상 들어 있다 → 응답 스키마에서 모두 필수"""
@@ -21,8 +22,17 @@ def test_response_fields_required(name):
 
 
 def test_request_defaults_optional():
-    assert SCHEMAS["JobCreate"]["required"] == ["name"]
+    assert SCHEMAS["JobCreate"]["required"] == ["name", "project_id"]
     assert SCHEMAS["WorkspaceCreate"]["required"] == ["name"]
+    assert SCHEMAS["ProjectCreate"]["required"] == ["name"]
+    assert SCHEMAS["MemberInvite"]["required"] == ["name", "email"]
+    assert "required" not in SCHEMAS["WorkspaceUpdate"]
+
+
+def test_workspace_kind_enum():
+    assert SCHEMAS["Workspace"]["properties"]["kind"]["enum"] == ["personal", "team"]
+    assert SCHEMAS["WorkspaceCreate"]["properties"]["kind"]["default"] == "personal"
+    assert SCHEMAS["Member"]["properties"]["role"]["enum"] == ["owner", "member"]
 
 
 def test_symbol_update_nullability():
@@ -30,6 +40,13 @@ def test_symbol_update_nullability():
     props = SCHEMAS["SymbolEntryUpdate"]["properties"]
     nullable = {name for name, prop in props.items() if {"type": "null"} in prop.get("anyOf", [])}
     assert nullable == {"welding_joint_type"}
+
+
+def test_workspace_update_nullability():
+    """PATCH 본문에서 null 을 받는 필드는 description 뿐"""
+    props = SCHEMAS["WorkspaceUpdate"]["properties"]
+    nullable = {name for name, prop in props.items() if {"type": "null"} in prop.get("anyOf", [])}
+    assert nullable == {"description"}
 
 
 def test_error_responses_documented():
@@ -41,5 +58,7 @@ def test_error_responses_documented():
     assert _error_schema("/workspaces", "post", "404") == ERROR_DETAIL  # 복사할 사전의 워크스페이스
     jobs = "/workspaces/{workspace_id}/jobs/{job_id}"
     for method, path, code in [("post", f"{jobs}/approve", "409"), ("get", f"{jobs}/export", "409"),
-                               ("post", f"{jobs}/analyze", "501")]:
+                               ("post", f"{jobs}/analyze", "501"),
+                               ("patch", "/workspaces/{workspace_id}", "409"),
+                               ("post", "/workspaces/{workspace_id}/members", "409")]:
         assert _error_schema(path, method, code) == ERROR_DETAIL

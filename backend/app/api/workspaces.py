@@ -1,39 +1,87 @@
-"""1. 워크스페이스 생성 및 문자/기호 체계 등록 (+ 조립 트리)
+"""1. 워크스페이스 생성·수정, 멤버 초대, 문자/기호 체계 등록
 
-TODO: 인증·멤버 관리 없음 — 지금은 누구나 모든 워크스페이스를 조회·수정할 수 있다.
+워크스페이스는 개인(personal) 또는 팀(team). 개인 워크스페이스에 멤버를 초대하면 팀으로 바뀐다.
+프로젝트(호선)·조립 트리는 api/projects.py, 작업은 api/jobs.py.
+TODO(인증): 로그인 없음 — 고정 데모 사용자가 현재 사용자다. 권한 검사 없이 누구나 모든 워크스페이스를 조회·수정할 수 있다.
 """
 from fastapi import APIRouter, HTTPException
 
-from app.api.deps import NOT_FOUND, StoreDep, WorkspaceDep, get_workspace
+from app.api.deps import NOT_FOUND, CurrentUserDep, StoreDep, WorkspaceDep, error_response, get_workspace
 from app.schemas import (
-    AssemblyNode,
+    Member,
+    MemberInvite,
     SymbolEntry,
     SymbolEntryCreate,
     SymbolEntryUpdate,
     Workspace,
     WorkspaceCreate,
+    WorkspaceUpdate,
 )
+from app.store import MemberAlreadyExists, WorkspaceKindConflict
 
 router = APIRouter()
 
 
 @router.get("")
 def list_workspaces(store: StoreDep) -> list[Workspace]:
+    """시드(demo, personal) 다음에 새로 만든 워크스페이스가 생성 순으로 온다."""
     return store.list_workspaces()
 
 
 @router.post("", status_code=201, responses=NOT_FOUND)
-def create_workspace(body: WorkspaceCreate, store: StoreDep) -> Workspace:
-    """dictionary_source="copy" 면 copy_from_workspace_id 의 문자/기호 사전을 복제 (없는 워크스페이스면 404)"""
+def create_workspace(body: WorkspaceCreate, store: StoreDep, user: CurrentUserDep) -> Workspace:
+    """현재 사용자가 소유자(owner) 멤버가 된다 (kind 기본값 "personal").
+
+    dictionary_source="copy" 면 copy_from_workspace_id 의 문자/기호 사전을 복제 (없는 워크스페이스면 404)
+    """
     copy_from = body.copy_from_workspace_id if body.dictionary_source == "copy" else None
     if copy_from:
         get_workspace(copy_from, store)
-    return store.create_workspace(body.name, body.description, copy_symbols_from=copy_from)
+    return store.create_workspace(
+        body.name, owner=user, description=body.description, kind=body.kind, copy_symbols_from=copy_from
+    )
 
 
 @router.get("/{workspace_id}", responses=NOT_FOUND)
 def read_workspace(workspace: WorkspaceDep) -> Workspace:
     return workspace
+
+
+@router.patch(
+    "/{workspace_id}", responses={**NOT_FOUND, 409: error_response("멤버가 여럿인 워크스페이스를 개인으로 전환")}
+)
+def update_workspace(body: WorkspaceUpdate, workspace: WorkspaceDep, store: StoreDep) -> Workspace:
+    """부분 수정. team → personal 은 멤버가 1명(소유자)일 때만 (아니면 409)."""
+    try:
+        updated = store.update_workspace(workspace.id, body.model_dump(exclude_unset=True))
+    except WorkspaceKindConflict as e:
+        raise HTTPException(
+            409, f"멤버가 1명일 때만 개인 워크스페이스로 바꿀 수 있습니다 (현재 멤버: {e.member_count}명)"
+        ) from e
+    if updated is None:
+        raise HTTPException(404, f"워크스페이스를 찾을 수 없습니다: {workspace.id}")
+    return updated
+
+
+# ── 멤버 ──
+
+@router.get("/{workspace_id}/members", responses=NOT_FOUND)
+def list_members(workspace: WorkspaceDep, store: StoreDep) -> list[Member]:
+    """소유자 먼저, 그다음 가입 순"""
+    return store.list_members(workspace.id)
+
+
+@router.post(
+    "/{workspace_id}/members", status_code=201, responses={**NOT_FOUND, 409: error_response("이미 멤버인 이메일")}
+)
+def invite_member(body: MemberInvite, workspace: WorkspaceDep, store: StoreDep) -> Member:
+    """이메일로 멤버 초대 (role "member"). 같은 이메일(대소문자 무시)의 사용자가 있으면 그 사용자를 초대한다
+    (이름은 기존 사용자 이름 유지). 개인 워크스페이스는 팀 워크스페이스로 바뀐다.
+    """
+    try:
+        return store.invite_member(workspace.id, body.name, body.email)
+    except MemberAlreadyExists as e:
+        raise HTTPException(409, f"이미 이 워크스페이스의 멤버입니다: {e.email}") from e
 
 
 # ── 문자/기호 사전 ──
@@ -62,10 +110,3 @@ def update_symbol(
 def delete_symbol(symbol_id: str, workspace: WorkspaceDep, store: StoreDep) -> None:
     if not store.delete_symbol(workspace.id, symbol_id):
         raise HTTPException(404, f"문자/기호를 찾을 수 없습니다: {symbol_id}")
-
-
-# ── 조립 트리 ──
-
-@router.get("/{workspace_id}/assembly-tree", responses=NOT_FOUND)
-def get_assembly_tree(workspace: WorkspaceDep, store: StoreDep) -> list[AssemblyNode]:
-    return store.get_assembly_tree(workspace.id)
