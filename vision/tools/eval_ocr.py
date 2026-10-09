@@ -8,6 +8,7 @@
   --prep none|up|clahe|up+clahe|up+denoise|default : 전처리 비교 (기본 none = 전처리 없이 OCR만)
   --rec-model, --det-model, --limit-side 로 설정 비교, --out 으로 결과 JSON 저장
   --charset steel-ocr : 표기에 쓰일 수 있는 글자만 남기는 후처리 효과 측정 (헷갈리는 글자는 바꾸고 나머지는 버림)
+  --zoom : 확대 재판독 켜기 (찾은 영역을 원본 해상도로 잘라 다시 읽음)
 
 데이터셋 설명: vision/DATASETS.md, data/annotations/README.md
 """
@@ -252,6 +253,7 @@ def main() -> int:
     parser.add_argument("--rec-model")
     parser.add_argument("--limit-side", type=int, help="검출 전 긴 변 크기")
     parser.add_argument("--orientation", action="store_true", help="뒤집힌 글자 줄 보정 켜기")
+    parser.add_argument("--zoom", action="store_true", help="확대 재판독 켜기")
     parser.add_argument("--charset", help="허용 글자 후처리: steel-ocr 또는 글자 목록 파일(한 줄에 한 글자)")
     parser.add_argument("--prep", choices=list(PREP), default="none", help="전처리 (기본 none: 전처리 없이)")
     parser.add_argument("--limit", type=int, help="앞에서 N장만")
@@ -264,6 +266,8 @@ def main() -> int:
             config = replace(config, **{field: value})
     if args.orientation:
         config = replace(config, use_textline_orientation=True)
+    if args.zoom:
+        config = replace(config, zoom_reread=True)
 
     if not models_available():
         parser.error('PaddleOCR이 없습니다: pip install -e "vision[models]"')

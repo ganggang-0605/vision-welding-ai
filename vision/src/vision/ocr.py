@@ -20,6 +20,10 @@ class OcrConfig:
     use_textline_orientation: bool = True  # 뒤집힌(180°) 글자 줄 보정 — 쌓아 둔 부재는 표기가 거꾸로 찍히는 경우가 많음
     # Linux CPU 가속(oneDNN). paddlepaddle 3.3.1 + PP-OCRv6 검출 모델은 켜면 Linux에서 바로 오류가 나서 끔 (Mac은 원래 안 씀)
     enable_mkldnn: bool = False
+    # 확대 재판독: 찾은 글자 영역을 원본 해상도로 넉넉히 잘라 한 번 더 검출+인식 (긴 변 1280px로 줄여 검출하면 작은 글씨가 뭉개짐)
+    zoom_reread: bool = False
+    zoom_margin: float = 0.15  # 영역 크기 대비 여백
+    zoom_max_side: int = 960  # 잘라낸 영역이 이보다 크면 줄임
 
     def models(self) -> dict[str, str]:
         return {"ocr_det": self.det_model, "ocr_rec": self.rec_model}
@@ -64,7 +68,57 @@ def recognize_text(image: np.ndarray, config: OcrConfig = DEFAULT_CONFIG) -> lis
         _warn_no_models()
         return []
     result = _engine(config).predict(image)[0]
-    return to_text_detections(result["rec_texts"], result["rec_scores"], result["rec_polys"])
+    detections = to_text_detections(result["rec_texts"], result["rec_scores"], result["rec_polys"])
+    if config.zoom_reread:
+        detections = [_reread(image, d, config) for d in detections]
+    return detections
+
+
+def _reread(image: np.ndarray, detection: dict, config: OcrConfig) -> dict:
+    from vision.recognition import assign_ids  # recognition이 이 모듈을 import하므로 여기서
+
+    zoom = zoom_crop(image, detection["bbox"], config.zoom_margin, config.zoom_max_side)
+    if zoom is None:
+        return detection
+    crop, inner = zoom
+    result = _engine(config).predict(crop)[0]
+    parts = assign_ids(to_text_detections(result["rec_texts"], result["rec_scores"], result["rec_polys"]), "t")
+    return pick_reread(detection, [d for d in parts if _center_inside(d["bbox"], inner)])
+
+
+def zoom_crop(image: np.ndarray, bbox, margin: float, max_side: int):
+    """bbox 주변을 여백과 함께 잘라 (잘린 이미지, 잘린 이미지 좌표의 원래 bbox) 반환. 너무 작으면 None"""
+    import cv2
+
+    height, width = image.shape[:2]
+    x1, y1, x2, y2 = bbox
+    mx, my = (x2 - x1) * margin, (y2 - y1) * margin
+    cx1, cy1 = int(max(0, x1 - mx)), int(max(0, y1 - my))
+    cx2, cy2 = int(min(width, x2 + mx)), int(min(height, y2 + my))
+    if cx2 - cx1 < 8 or cy2 - cy1 < 8:
+        return None
+    crop = image[cy1:cy2, cx1:cx2]
+    scale = min(1.0, max_side / max(crop.shape[:2]))
+    if scale < 1:
+        crop = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    inner = [(x1 - cx1) * scale, (y1 - cy1) * scale, (x2 - cx1) * scale, (y2 - cy1) * scale]
+    return crop, inner
+
+
+def _center_inside(bbox, outer) -> bool:
+    cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+    return outer[0] <= cx <= outer[2] and outer[1] <= cy <= outer[3]
+
+
+def pick_reread(detection: dict, parts: list[dict]) -> dict:
+    """확대 재판독 조각들(읽는 순서)을 이어 붙여, 글자 수로 가중한 평균 확률이 원래보다 높으면 글자·확률만 바꿈 (위치는 그대로)"""
+    text = "".join(d["text"] for d in parts)
+    if not text:
+        return detection
+    prob = sum(d["prob"] * len(d["text"]) for d in parts) / len(text)
+    if prob <= detection["prob"]:
+        return detection
+    return {**detection, "text": text, "prob": round(prob, 4)}
 
 
 def to_text_detections(texts, scores, polys) -> list[dict]:

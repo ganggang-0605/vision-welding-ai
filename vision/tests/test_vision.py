@@ -74,3 +74,24 @@ def test_preprocess_keeps_large_image_size(image):
     assert clean.shape == image.shape
     assert prep == {"correction_strength": 0, "steps": []}
     assert np.allclose(to_original, np.eye(3))
+
+
+def test_zoom_crop_maps_bbox_into_crop():
+    """확대 재판독: bbox 주변을 여백과 함께 잘라내고, 원래 bbox를 잘린 이미지 좌표로 돌려줌"""
+    from vision.ocr import zoom_crop
+
+    image = np.zeros((1000, 2000, 3), np.uint8)
+    crop, inner = zoom_crop(image, [100, 100, 300, 200], margin=0.5, max_side=10000)
+    assert crop.shape[:2] == (200, 400)
+    assert inner == [100, 50, 300, 150]
+    assert zoom_crop(image, [0, 0, 3, 3], margin=0.1, max_side=960) is None
+
+
+def test_pick_reread_replaces_text_only_when_more_confident():
+    from vision.ocr import pick_reread
+
+    original = {"text": "B1S630N", "prob": 0.7, "bbox": [0, 0, 10, 10], "source": "paddleocr"}
+    better = pick_reread(original, [{"text": "B1Sb", "prob": 0.9}, {"text": "30N", "prob": 0.8}])
+    assert better == {**original, "text": "B1Sb30N", "prob": round((0.9 * 4 + 0.8 * 3) / 7, 4)}
+    assert pick_reread(original, [{"text": "B1S", "prob": 0.5}]) is original
+    assert pick_reread(original, []) is original
