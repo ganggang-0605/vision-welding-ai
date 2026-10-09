@@ -43,7 +43,8 @@ STROKES = {
           [[(0.8, 0.0), (0.3, 0.2), (0.35, 0.5), (0.75, 0.62), (0.5, 1.0), (0.1, 0.9)]]],
     "5": [[[(0.85, 0.0), (0.25, 0.0)], [(0.25, 0.0), (0.2, 0.45), (0.6, 0.38), (0.85, 0.65), (0.6, 1.0), (0.1, 0.9)]],
           [[(0.8, -0.15), (0.55, 0.15), (0.45, 0.55), (0.35, 0.9), (0.15, 1.05), (0.05, 0.95)], [(0.15, 0.3), (0.95, 0.25)]],  # ʃ + 가로획
-          [[(0.3, 0.05), (0.95, 0.05)], [(0.75, 0.05), (0.1, 0.55), (0.7, 1.0)]]],  # < + 가로획
+          [[(0.3, 0.05), (0.95, 0.05)], [(0.75, 0.05), (0.1, 0.55), (0.7, 1.0)]],  # < + 가로획
+          [[(0.85, -0.2), (0.6, 0.15), (0.5, 0.55), (0.38, 0.95), (0.15, 1.1), (0.05, 1.0)], [(0.1, 0.42), (0.95, 0.36)]]],  # 긴 ʃ를 가로획이 가로지름
     "0": [[[(0.45 + 0.38 * np.sin(t), 0.5 - 0.5 * np.cos(t)) for t in np.linspace(0, 2 * np.pi, 13)]]],
     "1": [[[(0.3, 0.2), (0.55, 0.0), (0.5, 1.0)]], [[(0.5, 0.0), (0.45, 1.0)]]],
     "2": [[[(0.15, 0.25), (0.45, 0.0), (0.8, 0.15), (0.75, 0.4), (0.1, 1.0), (0.9, 1.0)]]],
@@ -56,6 +57,7 @@ STROKES = {
     "9": [[[(0.8, 0.3), (0.5, 0.0), (0.2, 0.2), (0.3, 0.5), (0.75, 0.4), (0.8, 0.3), (0.7, 1.0)]]],
 }
 F_TAIL = [(0.0, 0.5), (0.75, 0.45), (0.55, 1.0)]  # 가운데 가로획이 아래로 꺾인 꼬리 (예시 1·3)
+F_TAIL_LONG = [(0.0, 0.5), (1.1, 0.42), (0.75, 1.15)]  # 7처럼 오른쪽으로 나갔다 꺾여 다음 글자(5)와 겹침 — 겹치면 6처럼 보임
 MIN_GAP = 30  # 글씨와 배경 밝기 차이 하한 — 예시 2(흰 철판 위 흐린 흰 글씨)처럼 흐리되 사람은 읽을 수 있게
 
 
@@ -87,20 +89,37 @@ def chaikin(points: np.ndarray, iters: int = 2) -> np.ndarray:
     return points
 
 
-def glyph_stroke(ch: str, height: int, thickness: int, rng: np.random.Generator) -> tuple[np.ndarray, int]:
+def glyph_stroke(ch: str, height: int, thickness: int, rng: np.random.Generator,
+                 tail: bool = False) -> tuple[np.ndarray, int, float]:
+    """(마스크, 글자 위 기준 세로 위치, 다음 글자와 겹칠 정도(글자 높이 비율)).
+    tail: 끝 글자의 획을 오른쪽으로 길게 끎 — 5는 가로획이 늘어나 꼬리가 됨 (예시 2 V5.5, 예시 3 S6.5)"""
     strokes = [list(s) for s in STROKES[ch][int(rng.integers(len(STROKES[ch])))]]
-    if ch == "F" and len(strokes) == 3 and rng.random() < 0.5:
-        strokes[2] = F_TAIL
+    overlap = 0.0
+    if ch == "F" and len(strokes) == 3:
+        r = rng.random()
+        if r < 0.35:
+            strokes[2] = F_TAIL
+        elif r < 0.7:
+            strokes[2] = F_TAIL_LONG
+            overlap = rng.uniform(0.15, 0.4)
+    tail_len = rng.uniform(1.5, 3.0) if tail else 0.0
+    if tail:
+        flat = [s for s in strokes if len(s) == 2 and abs(s[0][1] - s[1][1]) < 0.15]  # 가로획이 있으면 그걸 늘임
+        k = strokes.index(flat[0]) if flat else len(strokes) - 1
+        x, y = max(strokes[k], key=lambda q: q[0])
+        if strokes[k][-1][0] != x:
+            strokes[k] = strokes[k][::-1]
+        strokes[k] = strokes[k] + [(x + tail_len * 0.5, y + rng.uniform(-0.1, 0.15)), (x + tail_len, y + rng.uniform(0.0, 0.4))]
     width = height * rng.uniform(0.5, 0.8)
     pad = int(height * 0.5) + thickness
-    canvas = np.zeros((int(height * 2) + 2 * pad, int(width * 1.6) + 2 * pad), np.uint8)
+    canvas = np.zeros((int(height * 2) + 2 * pad, int(width * (1.6 + tail_len)) + 2 * pad), np.uint8)
     for s in strokes:
         pts = np.asarray(s, np.float64) + rng.normal(0, 0.045, (len(s), 2))
         pts = chaikin(pts) * [width, height] + [pad + 0.3 * width, pad + 0.4 * height]
         cv2.polylines(canvas, [np.round(pts).astype(np.int32)], False, 255, thickness, cv2.LINE_AA)
     ys, xs = np.nonzero(canvas > 20)
     top = ys.min() - (pad + 0.4 * height)  # 글자 위(y 0)에서 마스크 위까지 — F 세로획처럼 위로 넘치면 음수
-    return canvas[ys.min():ys.max() + 1, xs.min():xs.max() + 1], int(round(top))
+    return canvas[ys.min():ys.max() + 1, xs.min():xs.max() + 1], int(round(top)), overlap
 
 
 def glyph_hershey(ch: str, font: int, height: int, thickness: int, italic: bool) -> np.ndarray:
@@ -142,6 +161,7 @@ def render_line(text: str, style: dict, rng: np.random.Generator, height: int | 
     height = height or int(rng.integers(40, 72))
     thickness = int(rng.integers(2, 6))
     small_after_dot = rng.random() < 0.5
+    end_tail = style["kind"] == "stroke" and text[-1].isdigit() and rng.random() < 0.4
     placed = []  # (마스크, 글자 위에서의 세로 위치)
     after_dot = False
     gaps = []  # 글자 뒤 간격 — 점 앞뒤는 띄움 (겹치면 점이 묻혀 F5.5가 F55처럼 보임)
@@ -149,16 +169,20 @@ def render_line(text: str, style: dict, rng: np.random.Generator, height: int | 
         near_dot = ch == "." or (k + 1 < len(text) and text[k + 1] == ".")
         gaps.append(rng.uniform(0.04, 0.2) if near_dot else rng.uniform(-0.15, 0.25))
         h = int(height * (rng.uniform(0.6, 0.9) if after_dot and small_after_dot else 1.0))
-        if ch == ".":
-            r = max(2, int(thickness * rng.uniform(0.8, 1.5)))
+        if ch == ".":  # 실제 점은 작고 흐리거나 거의 안 보임 — 정답에는 점을 둠
+            r = max(1, int(thickness * rng.uniform(0.6, 1.3)))
             dot = np.zeros((2 * r + 2, 2 * r + 2), np.uint8)
-            cv2.circle(dot, (r + 1, r + 1), r, 255, -1, cv2.LINE_AA)
+            look = rng.random()
+            if look >= 0.12:
+                cv2.circle(dot, (r + 1, r + 1), r, 255 if look >= 0.37 else 115, -1, cv2.LINE_AA)
             placed.append((dot, height - dot.shape[0]))
             after_dot = True
             continue
         if style["kind"] == "stroke":
-            g, top = glyph_stroke(ch, h, thickness, rng)
+            g, top, overlap = glyph_stroke(ch, h, thickness, rng, tail=end_tail and k == len(text) - 1)
             top += height - h
+            if overlap:
+                gaps[-1] = -overlap
         elif style["kind"] == "ttf":
             g = jitter_glyph(trim(glyph_ttf(ch, style["font"], h, max(0, thickness - 2))), rng)
             top = height - g.shape[0]
@@ -195,7 +219,7 @@ def add_strokes(mask: np.ndarray, text_mask: np.ndarray, height: int, thickness:
         else:
             cv2.line(mask, (tip, mid), (tip - d * head, mid - head // 2), 255, t, cv2.LINE_AA)
             cv2.line(mask, (tip, mid), (tip - d * head, mid + head // 2), 255, t, cv2.LINE_AA)
-    if rng.random() < 0.35:  # 글자 끝에서 길게 끌린 꼬리 (예시 2·3의 아랫줄)
+    if rng.random() < 0.15:  # 따로 그은 꼬리 선 (끝 숫자에서 이어진 꼬리는 glyph_stroke 의 tail)
         pts = np.array([[x2 - int(0.3 * height), y2 - int(0.2 * height)],
                         [min(mask.shape[1] - 1, x2 + int(rng.uniform(0.8, 2) * height)), y2 - int(rng.uniform(0, 0.5) * height)]])
         cv2.polylines(mask, [pts.astype(np.int32)], False, 255, t, cv2.LINE_AA)
