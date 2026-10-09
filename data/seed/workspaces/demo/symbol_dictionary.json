@@ -1,0 +1,7 @@
+{
+  "entries": [
+    { "id": "sym_fw", "code": "FW", "kind": "text", "meaning": "필렛 용접 (Fillet Weld)", "aliases": ["F/W"], "welding_joint_type": "FILLET" },
+    { "id": "sym_bv", "code": "BV", "kind": "text", "meaning": "V형 맞대기 용접 (Butt V-groove)", "aliases": [], "welding_joint_type": "BUTT_V" },
+    { "id": "sym_field", "code": "▲", "kind": "symbol", "meaning": "현장 용접 표시", "aliases": [], "welding_joint_type": null }
+  ]
+}

@@ -1,0 +1,181 @@
+/* 데스크톱: 고정 사이드바 + 본문 / 768px 미만: 상단 바 + 접히는 사이드바 */
+
+.shell {
+  min-height: 100svh;
+}
+
+.sidebar {
+  position: fixed;
+  z-index: 30;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: var(--sidebar-width);
+  padding: 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+}
+
+.main {
+  min-width: 0;
+  margin-left: var(--sidebar-width);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.nav {
+  flex: 1;
+}
+
+.navList {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.navItem:hover {
+  background: var(--hover);
+}
+
+.navItem[aria-current='page'] {
+  font-weight: 600;
+  color: var(--text);
+  background: var(--hover);
+}
+
+.navItem :global(.kbd),
+.navItem :global(.badge) {
+  margin-left: auto;
+}
+
+/* 터치 기기에서는 키보드 단축키 안내를 숨긴다. */
+@media (hover: none) and (pointer: coarse) {
+  .navItem :global(.kbd) {
+    display: none;
+  }
+}
+
+.navHint {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sectionTitle {
+  margin: 0 0 2px;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sidebarFooter {
+  margin-top: auto; /* 메뉴를 숨겼을 때(없는 워크스페이스)도 맨 아래 */
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.mobileBar,
+.backdrop {
+  display: none;
+}
+
+.iconButton {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--hover);
+}
+
+@media (max-width: 767.98px) {
+  .mobileBar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .mobileTitle {
+    overflow: hidden;
+    flex: 1;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* 닫혀 있을 때는 visibility 로 숨겨 키보드 포커스도 받지 않게 한다. */
+  .sidebar {
+    width: min(280px, 85vw);
+    visibility: hidden;
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-100%);
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+
+  .sidebar[data-open='true'] {
+    visibility: visible;
+    transform: none;
+    transition: transform 0.2s ease;
+  }
+
+  .backdrop {
+    position: fixed;
+    z-index: 25;
+    inset: 0;
+    display: block;
+    background: rgb(15 15 15 / 0.4);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar[data-open='true'] {
+    transition: none;
+  }
+}
