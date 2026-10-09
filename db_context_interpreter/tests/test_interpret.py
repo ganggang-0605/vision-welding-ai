@@ -675,3 +675,14 @@ def test_vlm_image_large_shrunk_to_jpeg():
     shrunk = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     assert max(shrunk.shape[:2]) == MAX_IMAGE_SIDE
     assert shrunk.shape[1] / shrunk.shape[0] == pytest.approx(4000 / 3000, rel=0.01)  # 비율 유지
+
+
+def test_vlm_runs_pick_consensus_per_marking(monkeypatch):
+    """세 번 추론이 화살표 등 다른 표기 때문에 모두 다르더라도, 각장은 다수(F5.5)를 고름 — 일관성은 전체 일치 기준(1/3)"""
+    def response(leg, extra):
+        return {"interpretation": f"각장 {leg}", "texts": [{"text": leg, "ref_id": "new1", "bbox": None}],
+                "symbols": [{"label": "→", "ref_id": "new2", "bbox": None}] * extra, "meanings": []}
+    fake_vlm(monkeypatch, response("F7.5", 0), response("F5.5", 1), response("F5.5", 0))
+    result = run(vision_with([]))
+    assert [x["text"] for x in result["vlm"]["reading"]["texts"]] == ["F5.5"]
+    assert result["vlm"]["consistency"] == 0.33

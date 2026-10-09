@@ -106,11 +106,12 @@ def run_vlm(vision_result: dict, context_input: dict, image=None) -> tuple[VlmOu
 
 def combine(outputs: list[tuple[dict, float | None]], provider: str, model: str, vision_result: dict, context_input: dict,
             scale: tuple[float, float] = (1.0, 1.0)) -> VlmOutput:
-    """여러 번 추론한 결과 → 가장 많이 나온 읽기를 고르고 일치 비율을 consistency로"""
+    """여러 번 추론한 결과 → 다른 추론과 표기 단위로 가장 많이 겹치는 읽기를 고르고(consensus_index),
+    읽기 전체가 같은 비율을 consistency로 (신뢰도는 보수적으로)"""
     resolved = [resolve(out, vision_result, context_input, scale) for out, _ in outputs]
     keys = [reading_key(reading) for reading, _ in resolved]
-    majority, count = Counter(keys).most_common(1)[0]
-    index = keys.index(majority)
+    count = Counter(keys).most_common(1)[0][1]
+    index = consensus_index(keys)
     reading, meanings = resolved[index]
     probs = [p for _, p in outputs if p is not None]
     return VlmOutput(
@@ -191,6 +192,15 @@ def next_free(used: set[int]) -> int:
         n += 1
     used.add(n)
     return n
+
+
+def consensus_index(keys: list[tuple]) -> int:
+    """표기 단위 다수결: 각 추론의 표기마다 같은 표기를 읽은 다른 추론 수를 더하고, 혼자만 읽은 표기는 1씩 뺌 → 가장 높은 추론.
+    읽기 전체가 같은 추론이 여럿이면 그쪽이 자연히 높음. 동점이면 먼저 나온 것.
+    (전체 일치만 보면 화살표 하나만 달라도 셋 다 달라져 첫 추론을 쓰게 됨 — 예: F5.5 · F7.5 · F5.5 에서 F7.5)"""
+    counts = Counter(item for key in keys for item in set(key))
+    scores = [sum(counts[item] - 1 for item in set(key)) - sum(counts[item] == 1 for item in set(key)) for key in keys]
+    return scores.index(max(scores))
 
 
 def reading_key(reading: dict) -> tuple:
