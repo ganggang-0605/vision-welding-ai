@@ -1,4 +1,9 @@
+import os
+
 import pytest
+
+# 테스트는 실제 VLM API 를 부르지 않음 (.env 보다 먼저 정해서 덮어쓰지 않게). VLM 을 켜는 테스트는 monkeypatch 로
+os.environ["VLM_PROVIDER"] = "off"
 from fastapi.testclient import TestClient
 
 from app.main import app
