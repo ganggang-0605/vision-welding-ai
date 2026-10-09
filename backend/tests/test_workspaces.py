@@ -3,12 +3,19 @@ import pytest
 SYMBOLS = "/workspaces/demo/symbols"
 
 
-def test_list_workspaces_includes_demo(client):
+WORKSPACE_KEYS = {"id", "name", "description", "kind", "member_count", "created_at"}
+
+
+def test_list_seed_workspaces(client):
+    """시드: 팀 워크스페이스 demo(멤버 3명) → 개인 워크스페이스 personal(멤버 1명) 순"""
     res = client.get("/workspaces")
     assert res.status_code == 200
-    [demo] = [w for w in res.json() if w["id"] == "demo"]
-    assert demo["name"] == "데모 조선소 · 1도크"
-    assert set(demo) == {"id", "name", "description", "created_at"}
+    demo, personal = res.json()
+    assert all(set(w) == WORKSPACE_KEYS for w in (demo, personal))
+    assert (demo["id"], demo["name"], demo["kind"], demo["member_count"]) == ("demo", "데모 조선소 · 1도크", "team", 3)
+    assert (personal["id"], personal["name"], personal["kind"], personal["member_count"]) == (
+        "personal", "개인 워크스페이스", "personal", 1,
+    )
 
 
 def test_create_and_get_workspace(client):
@@ -18,11 +25,13 @@ def test_create_and_get_workspace(client):
     assert ws["name"] == "2도크"
     assert ws["description"] == "용접 2팀"
     assert ws["id"] != "demo"
+    assert (ws["kind"], ws["member_count"]) == ("personal", 1)  # 기본값 개인, 현재 사용자만 멤버
+    assert set(ws) == WORKSPACE_KEYS
 
     assert client.get(f"/workspaces/{ws['id']}").json() == ws
-    assert ws in client.get("/workspaces").json()
-    # 새 워크스페이스는 사전·조립 트리·작업이 비어 있다 (dictionary_source 기본값 "empty")
-    for sub in ("symbols", "assembly-tree", "jobs"):
+    assert client.get("/workspaces").json()[-1] == ws  # 생성 순 — 시드 다음
+    # 새 워크스페이스는 사전·프로젝트·작업이 비어 있다 (dictionary_source 기본값 "empty")
+    for sub in ("symbols", "projects", "jobs"):
         assert client.get(f"/workspaces/{ws['id']}/{sub}").json() == []
 
 
@@ -39,6 +48,8 @@ def test_create_workspace_without_description(client):
     {"name": "복사", "dictionary_source": "copy"},
     {"name": "복사", "dictionary_source": "copy", "copy_from_workspace_id": None},
     {"name": "잘못된 원본", "dictionary_source": "template"},
+    {"name": "잘못된 종류", "kind": "shared"},
+    {"name": "종류 없음", "kind": None},
 ])
 def test_create_workspace_validation(client, body):
     assert client.post("/workspaces", json=body).status_code == 422
@@ -53,9 +64,15 @@ def test_get_unknown_workspace(client):
     ("POST", "/symbols", {"json": {"code": "FW", "kind": "text", "meaning": "필렛"}}),
     ("PATCH", "/symbols/sym_fw", {"json": {"meaning": "필렛"}}),
     ("DELETE", "/symbols/sym_fw", {}),
-    ("GET", "/assembly-tree", {}),
+    ("PATCH", "", {"json": {"name": "새 이름"}}),
+    ("GET", "/members", {}),
+    ("POST", "/members", {"json": {"name": "김용접", "email": "kim@vision-welding.local"}}),
+    ("GET", "/projects", {}),
+    ("POST", "/projects", {"json": {"name": "3201호선"}}),
+    ("GET", "/projects/hull_3201", {}),
+    ("GET", "/projects/hull_3201/assembly-tree", {}),
     ("GET", "/jobs", {}),
-    ("POST", "/jobs", {"json": {"name": "작업"}}),
+    ("POST", "/jobs", {"json": {"name": "작업", "project_id": "hull_3201"}}),
     ("GET", "/jobs/job_demo_p1", {}),
     ("POST", "/jobs/job_demo_p1/images", {"files": {"file": ("m.jpg", b"\xff\xd8\xff", "image/jpeg")}}),
     ("POST", "/jobs/job_demo_p1/analyze", {}),
@@ -136,8 +153,9 @@ def test_create_workspace_copies_dictionary(client):
     client.patch(f"/workspaces/{ws_id}/symbols/{copied[0]['id']}", json={"aliases": ["바뀜"]})
     client.delete(f"/workspaces/{ws_id}/symbols/{copied[1]['id']}")
     assert client.get(SYMBOLS).json() == demo_symbols
-    # 사전만 복사하고 조립 트리·작업은 복사하지 않는다
-    assert client.get(f"/workspaces/{ws_id}/assembly-tree").json() == []
+    # 사전만 복사하고 프로젝트(조립 트리)·작업·멤버는 복사하지 않는다
+    assert client.get(f"/workspaces/{ws_id}/projects").json() == []
+    assert len(client.get(f"/workspaces/{ws_id}/members").json()) == 1
     assert client.get(f"/workspaces/{ws_id}/jobs").json() == []
 
 

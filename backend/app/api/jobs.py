@@ -1,4 +1,7 @@
-"""2~5. 작업 생성, 이미지 해석, 작업자 확인, 결과 관리 (검색·승인·로봇 JSON) — /workspaces/{workspace_id}/jobs"""
+"""2~5. 작업 생성, 이미지 해석, 작업자 확인, 결과 관리 (검색·승인·로봇 JSON) — /workspaces/{workspace_id}/jobs
+
+작업은 프로젝트(호선)에 속하지만(project_id) 경로는 워크스페이스 하위다 — 워크스페이스 전체 검색 + ?project_id= 필터.
+"""
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -13,8 +16,9 @@ from app.store import JobStatusConflict
 router = APIRouter(responses=NOT_FOUND)  # 모든 경로가 워크스페이스(·작업) 하위 — 없으면 404
 
 NOT_IMPLEMENTED = {501: error_response("해석 파이프라인 미구현")}
-# ?status= 처럼 빈 값이면 필터 없음 (q 와 같게)
+# ?status= · ?project_id= 처럼 빈 값이면 필터 없음 (q 와 같게)
 StatusFilter = Annotated[JobStatus | None, BeforeValidator(lambda v: v or None)]
+ProjectFilter = Annotated[str | None, BeforeValidator(lambda v: v or None)]
 
 
 def get_job(job_id: str, workspace: WorkspaceDep, store: StoreDep) -> Job:
@@ -29,15 +33,26 @@ JobDep = Annotated[Job, Depends(get_job)]
 
 
 @router.get("")
-def list_jobs(workspace: WorkspaceDep, store: StoreDep, q: str | None = None, status: StatusFilter = None) -> list[Job]:
-    """작업 DB 검색 — q: 이름·조립 경로·표기 원문/해석 (대소문자 무시), status: 상태 필터 (빈 값이면 전체). 최신순."""
-    return store.list_jobs(workspace.id, q=q, status=status)
+def list_jobs(
+    workspace: WorkspaceDep,
+    store: StoreDep,
+    q: str | None = None,
+    status: StatusFilter = None,
+    project_id: ProjectFilter = None,
+) -> list[Job]:
+    """작업 DB 검색 — q: 이름·조립 경로·표기 원문/해석 (대소문자 무시), status: 상태 필터,
+    project_id: 프로젝트 필터 (빈 값이면 전체, 없는 id 면 빈 목록). 최신순."""
+    return store.list_jobs(workspace.id, q=q, status=status, project_id=project_id)
 
 
 @router.post("", status_code=201)
 def create_job(body: JobCreate, workspace: WorkspaceDep, store: StoreDep) -> Job:
-    """related_job_ids 는 같은 워크스페이스에 있는 작업만 (아니면 422)"""
-    errors = [
+    """project_id 는 같은 워크스페이스의 프로젝트, related_job_ids 는 같은 워크스페이스에 있는 작업만 (아니면 422)"""
+    errors = []
+    if store.get_project(workspace.id, body.project_id) is None:
+        errors.append({"type": "value_error", "loc": ("body", "project_id"), "input": body.project_id,
+                       "msg": f"같은 워크스페이스에 없는 프로젝트입니다: {body.project_id}"})
+    errors += [
         {"type": "value_error", "loc": ("body", "related_job_ids", i), "input": job_id,
          "msg": f"같은 워크스페이스에 없는 작업입니다: {job_id}"}
         for i, job_id in enumerate(body.related_job_ids)

@@ -4,12 +4,13 @@
   "description": "승인된 작업 결과를 로봇 제어·용접 프로그램에 전달하기 위한 JSON",
   "type": "object",
   "required": [
-    "job_id", "workspace_id", "created_at", "assembly_path", "marking", "welding_condition", "confidence",
+    "job_id", "workspace_id", "project_id", "created_at", "assembly_path", "marking", "welding_condition", "confidence",
     "evidence", "needs_review", "approved", "approved_by"
   ],
   "properties": {
     "job_id": { "type": "string" },
     "workspace_id": { "type": "string" },
+    "project_id": { "type": "string", "description": "프로젝트(호선) id", "examples": ["hull_3201"] },
     "created_at": { "type": "string", "format": "date-time" },
     "assembly_path": { "type": "string", "examples": ["A1/L1/M2/S1/P-1"] },
     "marking": {

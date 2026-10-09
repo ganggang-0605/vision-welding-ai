@@ -14,6 +14,7 @@ def to_robot_json(job: Job) -> dict:
     return RobotOutput.model_validate({
         "job_id": job.id,
         "workspace_id": job.workspace_id,
+        "project_id": job.project_id,
         "created_at": job.created_at,
         "assembly_path": job.assembly_path,
         "marking": job.marking,

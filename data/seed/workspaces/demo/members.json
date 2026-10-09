@@ -1,0 +1,5 @@
+[
+  { "user_id": "user_demo", "role": "owner", "joined_at": "2026-10-01T00:00:00Z" },
+  { "user_id": "user_park", "role": "member", "joined_at": "2026-10-02T00:30:00Z" },
+  { "user_id": "user_choi", "role": "member", "joined_at": "2026-10-03T01:00:00Z" }
+]
