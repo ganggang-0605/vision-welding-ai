@@ -1,6 +1,6 @@
 """[3단계] 진입점: 근거 값(factors) → 세 신뢰도 → 통과 여부 · 판단 근거 · 작업자 확인 항목"""
 from calculate_reliability.db_consistency import db_consistency_factors, db_consistency_score
-from calculate_reliability.review import missing_required, review_items
+from calculate_reliability.review import evidence, missing_required, review_items
 from calculate_reliability.visual import visual_factors, visual_score
 from calculate_reliability.vlm_reasoning import vlm_reasoning_factors, vlm_reasoning_score
 
@@ -15,17 +15,18 @@ def score(vision: dict, context: dict, corrections: list[dict], threshold: float
     }
     visual = visual_score(factors["visual"])
     db_consistency = db_consistency_score(factors["db_consistency"])
-    vlm_reasoning = vlm_reasoning_score(factors["vlm_reasoning"])
+    vlm_reasoning = vlm_reasoning_score(factors["vlm_reasoning"], context["vlm"] is not None, bool(context.get("vlm_error")))
     overall = min(visual, db_consistency, vlm_reasoning)
     missing = missing_required(context, corrections)
+    passed = overall >= threshold and not missing
     return {
         "visual": visual,
         "db_consistency": db_consistency,
         "vlm_reasoning": vlm_reasoning,
         "overall": overall,
         "threshold": threshold,
-        "passed": overall >= threshold and not missing,
+        "passed": passed,
         "factors": factors,
-        "evidence": [],  # TODO: 신뢰도마다 판단 근거 ({"layer", "message", "ref_ids"})
-        "needs_review": review_items(vision, context, corrections, factors, missing),
+        "evidence": evidence(vision, context, corrections, factors),
+        "needs_review": review_items(vision, context, corrections, factors, missing, threshold, passed),
     }

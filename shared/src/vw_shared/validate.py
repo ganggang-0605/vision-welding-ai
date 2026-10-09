@@ -32,8 +32,7 @@ def robot_errors(analysis: dict) -> list[str]:
         "job_id": analysis["job_id"], "workspace_id": analysis["workspace_id"], "project_id": analysis["project_id"],
         "created_at": analysis["created_at"], "approved": True, "approved_by": "검증용",
         **{k: fields[k] for k in ("assembly_path", "marking", "welding_condition", "confidence", "evidence", "needs_review")},
-        # 셀 형태·각장은 아직 파이프라인 출력에 없음 (to_job_fields 가 채우기 전까지 비어 있는 값)
-        "cell": fields.get("cell"), "leg_lengths": fields.get("leg_lengths", []),
+        "cell": fields["cell"], "leg_lengths": fields["leg_lengths"],
     }
     return [f"로봇 JSON: {e}" for e in schema_errors(robot, "robot_output.schema.json")]
 
@@ -67,8 +66,10 @@ def seed_errors(analysis: dict) -> list[str]:
         match = [
             r for r in standards
             if all(r[k] == wc[k] for k in keys)
-            and (wc["thickness_mm"] is None
+            and (wc["thickness_mm"] is None or not r["thickness_min_mm"]
                  or float(r["thickness_min_mm"]) <= wc["thickness_mm"] <= float(r["thickness_max_mm"]))
+            and (wc.get("leg_length_mm") is None or not r["leg_min_mm"]
+                 or float(r["leg_min_mm"]) <= wc["leg_length_mm"] <= float(r["leg_max_mm"]))
         ]
         if not match:
             errors.append("welding_condition: standard_matched인데 용접 기준표에 맞는 행이 없음")

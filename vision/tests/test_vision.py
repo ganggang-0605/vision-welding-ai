@@ -95,3 +95,11 @@ def test_pick_reread_replaces_text_only_when_more_confident():
     assert better == {**original, "text": "B1Sb30N", "prob": round((0.9 * 4 + 0.8 * 3) / 7, 4)}
     assert pick_reread(original, [{"text": "B1S", "prob": 0.5}]) is original
     assert pick_reread(original, []) is original
+
+
+def test_warm_up_without_models(monkeypatch):
+    """모델 패키지가 없으면(CI) 미리 불러오기를 건너뜀"""
+    from vision import ocr
+
+    monkeypatch.setattr(ocr, "models_available", lambda: False)
+    assert ocr.warm_up() is False

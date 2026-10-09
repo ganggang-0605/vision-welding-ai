@@ -12,7 +12,8 @@ EMPTY_PART = {"node_id": None, "assembly_path": None, "level": None, "found_in_t
 
 def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dict], set[str]]:
     """부재 번호로 보이는 표기를 context_input["assembly_tree"]에서 찾아 Part를 만듦 → (Part, Conflict 목록, 부재 표기로 쓴 읽기 key).
-    작업자가 part를 고쳤으면(corrections) 그 조립 경로를 씀. 못 찾으면 빈 Part"""
+    작업자가 part를 고쳤으면(corrections) 그 조립 경로를 씀. 사진에 부재 표기가 없으면 작업에 적은 조립 경로(job_assembly_path),
+    그것도 없으면 빈 Part"""
     tree = context_input["assembly_tree"]
     hits = tree_hits(readings, tree)
     keys = {h["key"] for h in hits}
@@ -60,7 +61,23 @@ def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dic
                 "message": f"부재 표기 '{r['value']}'가 이 프로젝트의 조립 트리에 없음",
                 "ref_ids": [r["ref_id"]],
             }], {r["key"]}
+    if path := context_input.get("job_assembly_path"):
+        return job_part(path, tree)
     return dict(EMPTY_PART), [], keys
+
+
+def job_part(path: str, tree: list[dict]) -> tuple[dict, list[dict], set[str]]:
+    """작업에 적은 조립 경로 → Part (근거 표기 없음). 트리에 없으면 part_not_in_tree"""
+    node = next((n for n in tree if n["path"] == path), None)
+    part = {
+        "node_id": node["node_id"] if node else path.rsplit("/", 1)[-1], "assembly_path": path,
+        "level": node["level"] if node else None, "found_in_tree": node is not None, "ref_ids": [],
+    }
+    conflicts = [] if node else [{
+        "type": "part_not_in_tree", "severity": "warning",
+        "message": f"작업에 적은 조립 경로 '{path}'가 이 프로젝트의 조립 트리에 없음", "ref_ids": [],
+    }]
+    return part, conflicts, set()
 
 
 class TreeIndex:

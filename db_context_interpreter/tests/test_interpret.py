@@ -1,5 +1,6 @@
 import copy
 import json
+import threading
 
 import pytest
 from vw_shared import load_example, schema_errors, semantic_errors
@@ -19,12 +20,15 @@ def vlm_off(monkeypatch):
 
 
 def fake_vlm(monkeypatch, *responses: dict, runs: int | None = None):
-    """VLM_PROVIDER=claude로 켜되 실제 API 대신 responses를 차례로 돌려줌 (마지막 것을 반복)"""
+    """VLM_PROVIDER=claude로 켜되 실제 API 대신 responses를 차례로 돌려줌 (마지막 것을 반복). 추론은 동시에 불리므로 잠금"""
     calls = []
+    lock = threading.Lock()
 
     def generate(system, prompt, image, model):
-        calls.append({"prompt": prompt, "image": image, "model": model})
-        return json.dumps(responses[min(len(calls), len(responses)) - 1], ensure_ascii=False), None
+        with lock:
+            calls.append({"prompt": prompt, "image": image, "model": model})
+            response = responses[min(len(calls), len(responses)) - 1]
+        return json.dumps(response, ensure_ascii=False), None
 
     monkeypatch.setenv("VLM_PROVIDER", "claude")
     monkeypatch.setenv("VLM_RUNS", str(runs or len(responses)))
@@ -117,7 +121,13 @@ def test_leg_length_marking():
     assert [(m["code"], m["meaning"]) for m in result["dictionary_matches"]] == [
         ("F", "3F 용접장 각장 5.5mm"), ("V", "2F 용접장 각장 6.0mm"), ("S", "스티프너 각장 4mm"),
     ]
-    assert result["welding_condition"] is None  # FILLET이지만 판 두께가 없어 기준 행(6~12 · 12~20)을 못 고름
+    assert [(leg["code"], leg["size_mm"], leg["raw_text"], leg["meaning"], leg["ref_ids"]) for leg in result["leg_lengths"]] == [
+        ("F", 5.5, "F5.5", "3F 용접장 각장", ["t1"]), ("V", 6.0, "V6.0", "2F 용접장 각장", ["t2"]),
+        ("S", 4.0, "S4", "스티프너 각장", ["t3"])]
+    # 판 두께가 없어 첫 번째 각장(F5.5 = 3F)으로 기준 행을 고름 — 기준표 3F는 각장 5 · 8 · 12라 가장 가까운 5mm + 작업자 확인
+    wc = result["welding_condition"]
+    assert (wc["position"], wc["current_a"], wc["leg_length_mm"], wc["standard_matched"]) == ("3F", "110-140", 5.5, False)
+    assert ("standard_conflict", "warning") in [(c["type"], c["severity"]) for c in result["conflicts"]]
 
 
 def test_candidate_match():
@@ -243,7 +253,7 @@ def test_part_not_in_tree():
 
 
 def test_no_part():
-    assert run(vision_with([("FW", 0.9)]))["part"]["assembly_path"] is None
+    assert run(vision_with([("FW", 0.9)]), job_assembly_path=None)["part"]["assembly_path"] is None
 
 
 # ── 용접 기준 ──
@@ -283,11 +293,110 @@ def test_position_from_dictionary(marking, position, current):
     assert "t2" in result["welding_condition"]["ref_ids"]
 
 
-def test_position_without_standard():
-    """F = 3F 용접장 각장인데 기준표에 3F 행이 없음 → 다른 자세로 바꾸지 않고 작업자 확인"""
+def test_position_without_thickness_rows_uses_leg_length():
+    """F = 3F 용접장 각장인데 기준표의 3F 행은 각장별 값만 있음 → 판 두께 대신 각장으로 고르고, 다른 자세로 바꾸지 않음"""
     result = run(vision_with([("F5.5", 0.9), ("t=8", 0.9)]))
-    assert result["welding_condition"] is None
+    wc = result["welding_condition"]
+    assert (wc["position"], wc["thickness_mm"], wc["leg_length_mm"]) == ("3F", 8, 5.5)
     assert any(c["type"] == "standard_conflict" and "3F" in c["message"] for c in result["conflicts"])
+
+
+@pytest.mark.parametrize("marking, position, current, matched", [
+    ("V5", "2F", "420-440", True),    # 2F 각장 5 = 판 두께 6mm 행 (표 5·8)
+    ("F8", "3F", "120-150", True),    # 3F 상진 각장 8 (표 5·12)
+    ("F5.0", "3F", "110-140", True),
+    ("V4.5", "2F", "420-440", False),  # 4와 5 사이 → 가까운 쪽(같으면 큰 각장) + 작업자 확인
+])
+def test_standard_row_by_leg_length(marking, position, current, matched):
+    """PAC 손글씨처럼 판 두께 없이 각장만 있으면 각장으로 기준 행을 고름 (data/seed/SOURCES.md 각장 자료)"""
+    result = run(vision_with([(marking, 0.95)]))
+    wc = result["welding_condition"]
+    assert (wc["position"], wc["current_a"], wc["standard_matched"]) == (position, current, matched)
+    assert wc["ref_ids"] == ["t1"]
+    assert ("standard_conflict" in types(result)) != matched
+
+
+def test_several_leg_lengths_use_the_first():
+    result = run(vision_with([("F5.0", 0.95), ("V5", 0.95)]))
+    assert result["welding_condition"]["position"] == "3F"
+    note = next(c for c in result["conflicts"] if c["type"] == "standard_conflict")
+    assert note["severity"] == "info" and note["ref_ids"] == ["t2"]
+
+
+def test_leg_length_missing_decimal_point_is_fixed():
+    """'F55'는 각장 55mm가 아니라 소수점이 빠진 5.5mm로 보고 작업자 확인"""
+    result = run(vision_with([("F55", 0.9)]))
+    (m,) = result["dictionary_matches"]
+    assert (m["raw"], m["meaning"], m["match"]) == ("F5.5", "3F 용접장 각장 5.5mm", "fuzzy")
+    assert result["leg_lengths"][0]["size_mm"] == 5.5
+    assert [(c["type"], c["severity"]) for c in result["conflicts"] if c["type"] == "ambiguous_reading"] == [
+        ("ambiguous_reading", "warning")]
+
+
+def test_implausible_leg_length_is_not_trusted():
+    result = run(vision_with([("F120", 0.9)]))
+    assert result["leg_lengths"] == [] and result["dictionary_matches"][0]["match"] == "none"
+    assert any("현실적인 크기가 아니라" in c["message"] for c in result["conflicts"])
+
+
+def test_dimensions_are_not_warnings():
+    """블록 사진의 치수(350, 835)는 용접 표기가 아니라 경고를 붙이지 않음"""
+    result = run(vision_with([("350", 0.9), ("835", 0.8)]))
+    assert [m["meaning"] for m in result["dictionary_matches"]] == ["치수 350mm (용접 표기 아님)", "치수 835mm (용접 표기 아님)"]
+    assert result["conflicts"] == []
+
+
+# ── 셀 형태 (PAC 과제) ──
+
+def test_cell_sides_from_symbol_position():
+    """셀 형태 기호를 사진 가운데(가로 1920 → 960) 기준 왼쪽·오른쪽 끝으로 나눔"""
+    v = vision_with(symbols=[("scallop", 0.8), ("collar_front", 0.7), ("scallop", 0.9)])
+    v["symbols"][0]["bbox"] = [10, 100, 60, 140]
+    v["symbols"][1]["bbox"] = [1500, 100, 1560, 140]
+    v["symbols"][2]["bbox"] = [1800, 100, 1860, 140]
+    result = run(v)
+    assert result["cell"] == {"left": ["scallop"], "right": ["collar_front", "scallop"], "ref_ids": ["s1", "s2", "s3"]}
+
+
+def test_no_cell_symbols():
+    assert run()["cell"] is None
+
+
+def test_cell_from_vlm_symbol_without_position_needs_review(monkeypatch):
+    response = {**VLM_EXAMPLE, "symbols": VLM_EXAMPLE["symbols"] + [{"label": "slot", "ref_id": "new1", "bbox": None}]}
+    fake_vlm(monkeypatch, response, runs=1)
+    result = run()
+    assert result["cell"] is None
+    assert any(c["type"] == "ambiguous_reading" and "slot" in c["message"] for c in result["conflicts"])
+
+
+def test_corrected_cell_and_leg_lengths():
+    result = run(corrections=[
+        {"target": "cell", "value": {"left": ["slit"], "right": []}},
+        {"target": "leg_lengths", "value": [{"code": "V", "size_mm": 6, "raw_text": "V6"}]},
+    ])
+    assert result["cell"] == {"left": ["slit"], "right": [], "ref_ids": []}
+    assert result["leg_lengths"] == [{"code": "V", "size_mm": 6, "raw_text": "V6", "meaning": "2F 용접장 각장", "ref_ids": []}]
+
+
+# ── 작업에 적은 조립 경로 ──
+
+def test_job_assembly_path_used_when_photo_has_no_part():
+    """PAC 셀 사진처럼 부재 번호가 없으면 작업을 만들 때 적은 경로를 씀"""
+    result = run(vision_with([("FW", 0.9)]), job_assembly_path="A1/L1/M2/S2/P-3")
+    assert result["part"] == {"node_id": "P-3", "assembly_path": "A1/L1/M2/S2/P-3", "level": "PART",
+                              "found_in_tree": True, "ref_ids": []}
+    assert "part_not_in_tree" not in types(result)
+
+
+def test_job_assembly_path_not_in_tree():
+    result = run(vision_with([("FW", 0.9)]), job_assembly_path="Z9/P-9")
+    assert result["part"]["assembly_path"] == "Z9/P-9" and result["part"]["found_in_tree"] is False
+    assert ("part_not_in_tree", "warning") in [(c["type"], c["severity"]) for c in result["conflicts"]]
+
+
+def test_part_marking_wins_over_job_path():
+    assert run(job_assembly_path="A1/L1/M2/S2/P-3")["part"]["assembly_path"] == "A1/L1/M2/S1/P-1"
 
 
 def test_thickness_out_of_range():
@@ -400,12 +509,118 @@ def test_previous_vlm_kept_for_corrected_v_id():
 
 
 def test_vlm_failure_falls_back(monkeypatch):
+    """추론이 모두 실패하면 VLM 없이 해석하고, 실패 이유를 vlm_error에 남김 (조용히 묻히지 않게)"""
     def broken(*args):
         raise RuntimeError("API 키 없음")
 
     monkeypatch.setenv("VLM_PROVIDER", "claude")
     monkeypatch.setitem(vlm_module.PROVIDERS, "claude", broken)
-    assert run()["vlm"] is None
+    result = run()
+    assert result["vlm"] is None
+    assert "API 키 없음" in result["vlm_error"] and result["vlm_error"].startswith("claude(")
+
+
+def test_no_vlm_error_when_off_or_ok(monkeypatch):
+    assert "vlm_error" not in run()
+    fake_vlm(monkeypatch, VLM_EXAMPLE, runs=1)
+    assert "vlm_error" not in run()
+
+
+def _photo(width=1920, height=1080):
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("cv2")
+    return np.full((height, width, 3), 128, np.uint8)
+
+
+def test_vlm_reading_used_when_it_saw_the_photo(monkeypatch):
+    """사진을 본 VLM이 확률 낮은 1단계 읽기를 다르게 읽으면 VLM 값으로 해석 (PAC 손글씨 '—4' → 'F4.5')"""
+    response = {"interpretation": "3F 각장 4.5mm", "texts": [{"text": "F4.5", "ref_id": "t1", "bbox": None}],
+                "symbols": [], "meanings": []}
+    fake_vlm(monkeypatch, response, runs=1)
+    vision = vision_with([("—4", 0.57)])
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo()))
+    (m,) = result["dictionary_matches"]
+    assert (m["raw"], m["code"], m["meaning"]) == ("F4.5", "F", "3F 용접장 각장 4.5mm")
+    assert result["leg_lengths"][0]["size_mm"] == 4.5
+    assert result["vlm"]["image_attached"] is True
+    assert result["vlm"]["reading"]["texts"] == [{"text": "F4.5", "ref_id": "t1", "used": True}]
+    assert [(c["type"], c["severity"]) for c in result["conflicts"] if c["type"] == "ocr_vlm_mismatch"] == [
+        ("ocr_vlm_mismatch", "info")]
+
+
+def test_vlm_reading_not_used_without_photo(monkeypatch):
+    other = copy.deepcopy(VLM_EXAMPLE)
+    other["texts"][1]["text"] = "EW"
+    fake_vlm(monkeypatch, other, runs=1)
+    result = run()
+    assert next(m for m in result["dictionary_matches"] if m["ref_ids"] == ["t2"])["raw"] == "FW"
+    assert not any(x.get("used") for x in result["vlm"]["reading"]["texts"])
+
+
+def test_confident_ocr_kept_over_vlm(monkeypatch):
+    """1단계가 확실하게(≥ 90%) 사전에 있는 값을 읽었으면 VLM이 달라도 1단계 값 + 경고"""
+    response = {"interpretation": "", "texts": [{"text": "BV", "ref_id": "t1", "bbox": None}], "symbols": [], "meanings": []}
+    fake_vlm(monkeypatch, response, runs=1)
+    vision = vision_with([("FW", 0.97)])
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo()))
+    assert result["dictionary_matches"][0]["code"] == "FW"
+    assert ("ocr_vlm_mismatch", "warning") in [(c["type"], c["severity"]) for c in result["conflicts"]]
+
+
+def test_vlm_only_markings_grouped_when_ocr_found_nothing(monkeypatch):
+    """1단계가 아무것도 못 읽은 손글씨 사진은 VLM 표기마다 경고를 붙이지 않고 info 하나로"""
+    response = {"interpretation": "", "texts": [{"text": "F5.0", "ref_id": "new1", "bbox": None},
+                                                {"text": "V5", "ref_id": "new2", "bbox": None}],
+                "symbols": [{"label": "→", "ref_id": "new3", "bbox": None}], "meanings": []}
+    fake_vlm(monkeypatch, response, runs=1)
+    vision = vision_with()
+    result = check(vision, interpret(vision, CONTEXT_INPUT))
+    mismatches = [c for c in result["conflicts"] if c["type"] == "ocr_vlm_mismatch"]
+    assert [(c["severity"], c["ref_ids"]) for c in mismatches] == [("info", ["v1", "v2", "v3"])]
+    assert not [c for c in result["conflicts"] if c["severity"] != "info"]
+    assert [leg["raw_text"] for leg in result["leg_lengths"]] == ["F5.0", "V5"]
+
+
+def test_vlm_bbox_back_to_original_coords(monkeypatch):
+    """원본보다 크게(작은 사진) 또는 작게(큰 사진) 보낸 사진의 bbox를 원본 좌표로 되돌림"""
+    response = {"interpretation": "", "texts": [{"text": "S-3", "ref_id": "new1", "bbox": [512, 256, 1024, 512]}],
+                "symbols": [], "meanings": []}
+    calls = fake_vlm(monkeypatch, response, runs=1)
+    vision = {**vision_with(), "image_size": {"width": 343, "height": 200}}
+    result = check(vision, interpret(vision, CONTEXT_INPUT, image=_photo(343, 200)))
+    assert '"width": 1024' in calls[0]["prompt"]  # 긴 변 343px → 1024px로 키워 보냄
+    x1, y1, x2, y2 = result["vlm"]["reading"]["texts"][0]["bbox"]
+    assert (x1, x2) == (172, 343) and (y1, y2) == (86, 172)  # 세로 200 / 597
+
+
+def test_vlm_consistency_ignores_v_id_order(monkeypatch):
+    """1단계가 놓친 표기를 추론마다 다른 순서로 읽어도(new1 ↔ new2) 같은 읽기로 셈"""
+    first = {"interpretation": "", "texts": [{"text": "F5.0", "ref_id": "new1", "bbox": None},
+                                             {"text": "V5", "ref_id": "new2", "bbox": None}], "symbols": [], "meanings": []}
+    second = {**first, "texts": list(reversed(first["texts"]))}
+    fake_vlm(monkeypatch, first, second, first)
+    assert run(vision_with())["vlm"]["consistency"] == 1.0
+
+
+def test_unknown_vlm_symbol_is_not_a_warning(monkeypatch):
+    response = {"interpretation": "", "texts": [], "symbols": [{"label": "unknown", "ref_id": "new1", "bbox": None}], "meanings": []}
+    fake_vlm(monkeypatch, response, runs=1)
+    result = run(vision_with())
+    assert [c["severity"] for c in result["conflicts"]] == ["info", "info"]
+
+
+def test_vlm_runs_in_parallel(monkeypatch):
+    """VLM_RUNS번 추론을 동시에 보냄 (차례로 보내면 Claude 20초 × 3)"""
+    barrier = threading.Barrier(3, timeout=5)
+
+    def generate(system, prompt, image, model):
+        barrier.wait()  # 3개가 동시에 들어와야 통과
+        return json.dumps(VLM_EXAMPLE, ensure_ascii=False), None
+
+    monkeypatch.setenv("VLM_PROVIDER", "claude")
+    monkeypatch.setenv("VLM_RUNS", "3")
+    monkeypatch.setitem(vlm_module.PROVIDERS, "claude", generate)
+    assert run()["vlm"]["consistency"] == 1.0
 
 
 def test_vlm_image_bytes(monkeypatch):
@@ -421,6 +636,18 @@ def test_unknown_provider(monkeypatch):
 
 
 # ── VLM 에 보내는 사진 크기 (휴대폰 원본은 Claude 10MB 한도를 넘음) ──
+
+def test_vlm_image_tiny_enlarged():
+    """운영측 손글씨 예시(343px)처럼 작은 사진은 VLM이 숫자를 틀려서 긴 변 1024px PNG로 키워 보냄"""
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+
+    from db_context_interpreter.vlm import UPSCALE_SIDE, load_image
+
+    data, media = load_image(np.full((200, 343, 3), 120, np.uint8), {"preprocess": {}})
+    assert media == "image/png"
+    assert cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR).shape[:2] == (597, UPSCALE_SIDE)
+
 
 def test_vlm_image_small_kept_as_is():
     cv2 = pytest.importorskip("cv2")

@@ -9,6 +9,10 @@
   "properties": {
     "workspace_id": { "$ref": "common.schema.json#/$defs/Id" },
     "project_id": { "$ref": "common.schema.json#/$defs/Id" },
+    "job_assembly_path": {
+      "anyOf": [{ "$ref": "common.schema.json#/$defs/AssemblyPath" }, { "type": "null" }],
+      "description": "작업을 만들 때 적은 조립 경로 (Job.assembly_path). 사진에서 부재 표기를 찾지 못하면 2단계가 이 경로를 part로 씀 (PAC 셀 사진처럼 부재 번호가 없는 사진). 생략 = null"
+    },
     "symbols": {
       "type": "array",
       "description": "워크스페이스 문자/기호 사전 (GET /workspaces/{workspace_id}/symbols)",
@@ -79,12 +83,14 @@
     },
     "WeldingStandard": {
       "type": "object",
-      "required": ["joint_type", "thickness_min_mm", "thickness_max_mm", "process", "position", "current_a", "voltage_v", "speed_cm_min"],
+      "required": ["joint_type", "thickness_min_mm", "thickness_max_mm", "leg_min_mm", "leg_max_mm", "process", "position", "current_a", "voltage_v", "speed_cm_min"],
       "additionalProperties": false,
       "properties": {
         "joint_type": { "type": "string" },
-        "thickness_min_mm": { "type": "number", "minimum": 0 },
-        "thickness_max_mm": { "type": "number", "minimum": 0 },
+        "thickness_min_mm": { "type": ["number", "null"], "minimum": 0, "description": "출처가 각장별 값만 주는 행(예: 3F 수직 필렛)은 null" },
+        "thickness_max_mm": { "type": ["number", "null"], "minimum": 0 },
+        "leg_min_mm": { "type": ["number", "null"], "minimum": 0, "description": "이 행이 맞는 각장 범위 (출처에 각장이 없으면 null)" },
+        "leg_max_mm": { "type": ["number", "null"], "minimum": 0 },
         "process": { "type": "string" },
         "position": { "type": "string" },
         "current_a": { "$ref": "common.schema.json#/$defs/RangeValue" },

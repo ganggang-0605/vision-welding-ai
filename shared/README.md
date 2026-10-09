@@ -35,7 +35,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
               └────────────── Analysis (revision 1, 2, …) ──────────────┘
                                            │ to_job_fields()
                                            ▼
-          Job.status · assembly_path · marking · welding_condition · confidence · evidence · needs_review
+   Job.status · assembly_path · marking · welding_condition · cell · leg_lengths · confidence · evidence · needs_review
                          (backend/app/schemas.py) ──▶ GUI · 로봇 JSON
 ```
 
@@ -46,7 +46,7 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | [`common.schema.json`](schemas/common.schema.json) | 좌표, 확률, ID 등 공통 타입 | — | 전체 |
 | [`vision_result.schema.json`](schemas/vision_result.schema.json) | **[1단계]** 전처리 정보, 문자·기호 인식 결과 | 1단계 | 2단계, 3단계, GUI |
 | [`context_input.schema.json`](schemas/context_input.schema.json) | **[2단계 입력]** 사전, 조립 트리, 용접 기준, 작업자 맥락·수정, 이전 VLM 읽기, 연결된 과거 작업 | 백엔드 (`app/pipeline.py`) | 2단계 |
-| [`context_result.schema.json`](schemas/context_result.schema.json) | **[2단계]** 사전 대조, 부재·조립 경로, 용접 조건, DB 불일치, VLM 해석 | 2단계 | 3단계, 백엔드 |
+| [`context_result.schema.json`](schemas/context_result.schema.json) | **[2단계]** 사전 대조, 부재·조립 경로, 용접 조건, 각장·셀 형태(PAC), DB 불일치, VLM 해석·실패 이유 | 2단계 | 3단계, 백엔드 |
 | [`confidence_report.schema.json`](schemas/confidence_report.schema.json) | **[3단계]** 세 가지 신뢰도, 근거, 작업자 확인 항목 | 3단계 (이후) | 백엔드, GUI |
 | [`analysis.schema.json`](schemas/analysis.schema.json) | 사진 한 장의 해석 결과 (1·2·3단계 묶음 + 작업자 수정) | 백엔드 (`app/pipeline.py`) | 백엔드 |
 | [`robot_output.schema.json`](schemas/robot_output.schema.json) | 승인된 작업의 로봇 연계 JSON (`GET .../export`) | 백엔드 (`backend/app/export/robot_json.py`) | 로봇 제어·용접 프로그램 |
@@ -85,10 +85,12 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | --- | --- |
 | `status` | 3단계 `passed`가 true면 `awaiting_approval`, 아니면 `needs_review` (3단계 전에는 항상 `needs_review`). `passed`는 `assembly_path`·`welding_condition`이 모두 있어야 true (로봇 JSON 필수 값) |
 | `assembly_path` | 2단계 `part.assembly_path` (작업자가 `part`를 고쳤으면 그 값) |
-| `marking.raw_text` | 1단계 글자·기호와 VLM만 읽은 `v*`를 읽는 순서(줄 단위, 왼→오른)로 이어 붙인 것 (작업자 수정 반영) |
+| `marking.raw_text` | 1단계 글자·기호와 VLM만 읽은 `v*`를 읽는 순서(줄 단위, 왼→오른)로 이어 붙인 것 (작업자 수정 > 2단계가 쓴 VLM 읽기(`used`) > 1단계 읽기). 이름으로 된 기호 label(`scallop`, `unknown` 등)은 빼고 `marking.symbols`에만 |
 | `marking.symbols` | 1단계 기호 `label` + VLM만 읽은 기호 목록 |
 | `marking.interpretation` | 작업자가 `interpretation`을 고쳤으면 그 값, 아니면 2단계 `vlm.interpretation` (VLM이 꺼져 있으면 사전 대조 의미를 이어 붙임) |
-| `welding_condition` | 2단계 `welding_condition`의 6개 필드 (`thickness_mm`·`standard_matched`·`source`·`ref_ids`는 빠짐) |
+| `welding_condition` | 2단계 `welding_condition`의 6개 필드 (`thickness_mm`·`leg_length_mm`·`standard_matched`·`source`·`ref_ids`는 빠짐) |
+| `cell` | 2단계 `cell`의 `left`·`right` (셀 형태 기호가 없으면 `null`) |
+| `leg_lengths` | 2단계 `leg_lengths`의 `code`·`size_mm`·`raw_text`·`meaning` |
 | `confidence` | 3단계 `visual`·`db_consistency`·`vlm_reasoning`·`overall` |
 | `evidence` | 3단계 `evidence[].message` |
 | `needs_review` | 3단계 `needs_review[].message` |
@@ -118,8 +120,10 @@ POST /workspaces/{workspace_id}/jobs/{job_id}/analyze
 | 확률 | 1·2단계는 **0~1** (`prob`, `score`, `consistency`) |
 | 신뢰도 | 3단계와 `Job.confidence`, 로봇 JSON만 **0~100(%)** |
 | 인식 결과 ID | 1단계가 글자는 `t1, t2, …`, 기호는 `s1, s2, …`로 붙임. 1단계가 놓치고 VLM만 읽은 표기는 2단계가 `v1, v2, …`로 붙임 |
-| 작업자 확인 대상 | 인식 결과 ID(`t*`, `s*`, `v*`), `part`, `welding_condition`, `interpretation` |
-| 확인 이유 | 3단계 `needs_review.reason`은 2단계 `Conflict.type`과 같은 이름 + `low_visual_confidence`, `vlm_inconsistent`, `missing_required` |
+| 작업자 확인 대상 | 인식 결과 ID(`t*`, `s*`, `v*`), `part`, `welding_condition`, `interpretation`, `cell`, `leg_lengths` |
+| 확인 이유 | 3단계 `needs_review.reason`은 2단계 `Conflict.type`과 같은 이름 + `low_visual_confidence`, `vlm_inconsistent`, `vlm_failed`, `missing_required` |
+| VLM 읽기 사용 | 사진을 본 VLM이 1단계와 다르게 읽고, 1단계 확률이 90% 미만이거나 VLM 값만 사전·규칙에 맞으면 2단계가 VLM 값으로 해석하고 `vlm.reading`의 그 항목에 `used: true` |
+| 작업의 조립 경로 | 2단계 입력 `job_assembly_path` — 사진에 부재 표기가 없으면 2단계가 이 경로를 `part`로 씀 (`ref_ids` 빈 배열) |
 | 기호 label | 워크스페이스 사전의 `code`. 사전에 없는 기호는 `"unknown"` |
 | 모르는 값 | 필드를 빼지 말고 `null` (스키마에 null 허용으로 표시된 필드만) |
 | 시간 | ISO 8601, 시간대 포함. 백엔드 API와 같이 UTC(`Z`)로 씀 |
@@ -149,12 +153,6 @@ cd shared && python -m pytest -q # CI와 같음
 
 ## 아직 정할 것
 
-- **셀 형태·각장 (PAC 과제)**: 팀원 계약 `Job`에 `cell`(좌·우 각각 `slit`·`slot`·`collar_front`·`collar_back`·`scallop` 목록)과
-  `leg_lengths`(수기 각장 `F`·`V`·`S` + mm, 예: `F5.5` → 3F 용접장 각장 5.5mm)가 생겼고 로봇 JSON에도 들어감.
-  파이프라인 어느 단계가 셀 형태를 판별하고 각장을 읽을지, `to_job_fields()`에서 어떻게 채울지 정해야 함 (지금은 비어 있는 값)
-
 - 사진 여러 장일 때 "가장 최근 Analysis"로 충분한지, 사진들의 결과를 합칠지
-- `analyze`·`review` API(지금 501) 연결: 이미지 저장, Analysis 저장, 사진 → `image_id`가 정해지면 `app/pipeline.py`를 호출
-- `ReviewRequest(manual).values`의 키: 지금 백엔드 테스트(`test_jobs.py`)는 `{"raw_text": …}`를 쓰는데, 파이프라인은 `t*`·`s*`·`v*`·`part`·`welding_condition`·`interpretation`만 받음 (그 밖의 키는 `AnalysisError`)
-- `Analysis`를 저장·조회하는 API를 둘지 (GUI가 사진 위 `bbox`·후보를 그리려면 필요) — 예: `GET /workspaces/{workspace_id}/jobs/{job_id}/analyses`
-- 이미지 업로드(`POST .../images`) 응답의 `image_id` 형식
+- 각장 표기가 여러 개(`F5.0` + `V5`)일 때: 용접선마다 조건이 다르지만 `Job.welding_condition`은 하나라 지금은 첫 번째 각장 기준 (나머지는 info 항목)
+- `F` = "3F 용접장"이 수직 상진인지 하진인지 (운영측 확인 필요, 지금 기준표는 상진 — `data/seed/SOURCES.md`)

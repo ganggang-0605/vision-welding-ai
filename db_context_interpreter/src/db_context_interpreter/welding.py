@@ -25,14 +25,18 @@ def read_thickness(value: str) -> tuple[float | None, str | None]:
     return None, None
 
 
-def find_welding_condition(matches: list[dict], readings: list[dict], context_input: dict) -> tuple[dict | None, list[dict]]:
-    """사전 항목의 welding_joint_type + 판 두께 표기(예: t=10)로 context_input["welding_standards"]의 행을 찾아
-    WeldingCondition을 만듦 (standard_matched, source="standard_db", ref_ids = 근거 표기) → (WeldingCondition | None, Conflict 목록).
+def find_welding_condition(
+    matches: list[dict], readings: list[dict], context_input: dict, legs: list[dict] | None = None,
+) -> tuple[dict | None, list[dict]]:
+    """사전 항목의 welding_joint_type + 판 두께 표기(예: t=10) 또는 수기 각장(예: F5.5)으로 context_input["welding_standards"]의
+    행을 찾아 WeldingCondition을 만듦 (standard_matched, source="standard_db", ref_ids = 근거 표기) → (WeldingCondition | None, Conflict 목록).
+    판 두께가 있으면 판 두께로, 없으면(PAC 손글씨처럼 각장만 있는 사진) 첫 번째 각장으로 기준 행을 고름.
     작업자가 welding_condition을 고쳤으면 그 값. 판별 못 하면 None"""
     correction = corrections_by_target(context_input).get("welding_condition")
     if correction:
         return dict(correction["value"]), []
 
+    legs = legs or []
     conflicts = []
     joint_types = joint_type_marks(matches, context_input["symbols"])
     thicknesses = [(t, r) for r in readings if r["kind"] == "text" and (t := parse_thickness(r["value"])) is not None]
@@ -64,14 +68,14 @@ def find_welding_condition(matches: list[dict], readings: list[dict], context_in
                 f"표기된 자세({', '.join(sorted(positions))})의 {joint_type} 기준이 표준 용접 기준표에 없음 (있는 자세: {have})",
                 "error", refs))
             return None, conflicts
-    if thickness is None:
-        if len(rows) > 1:  # 판 두께 없이는 기준 행을 고를 수 없음 → 작업자 확인(missing_required)
+    by_thickness = [r for r in rows if r["thickness_min_mm"] is not None]
+    if thickness is not None and (by_thickness or not legs):
+        if not by_thickness:
+            conflicts.append(standard_conflict(f"판 두께로 고를 수 있는 {joint_type} 표준 용접 기준이 없음", "error", refs))
             return None, conflicts
-        row = rows[0]
-    else:
-        inside = [r for r in rows if r["thickness_min_mm"] <= thickness <= r["thickness_max_mm"]]
+        inside = [r for r in by_thickness if r["thickness_min_mm"] <= thickness <= r["thickness_max_mm"]]
         if not inside:
-            have = ", ".join(f"{t:g}" for t in sorted({r["thickness_min_mm"] for r in rows}))
+            have = ", ".join(f"{t:g}" for t in sorted({r["thickness_min_mm"] for r in by_thickness}))
             conflicts.append(standard_conflict(
                 f"판 두께 {thickness:g}mm에 맞는 {joint_type} 표준 용접 기준이 없음 (기준표 판 두께: {have}mm)", "error", refs))
             return None, conflicts
@@ -82,14 +86,69 @@ def find_welding_condition(matches: list[dict], readings: list[dict], context_in
             conflicts.append(standard_conflict(
                 f"자세 표기가 없어 {row['position']} 기준을 씀 (판 두께 {thickness:g}mm {joint_type} 기준 자세: {', '.join(assumed)})",
                 "warning", refs))
-    return {
+        return condition(row, joint_type, thickness, None, refs, True), conflicts
+    if legs:
+        return by_leg_length(rows, legs, joint_type, thickness, refs, conflicts, context_input["symbols"])
+    if len(rows) > 1:  # 판 두께·각장 없이는 기준 행을 고를 수 없음 → 작업자 확인(missing_required)
+        return None, conflicts
+    return condition(rows[0], joint_type, None, None, refs, True), conflicts
+
+
+def by_leg_length(rows: list[dict], legs: list[dict], joint_type: str, thickness: float | None, refs: list[str],
+                  conflicts: list[dict], entries: list[dict]) -> tuple[dict | None, list[dict]]:
+    """첫 번째 각장(읽는 순서)의 자세(사전 뜻: F → 3F, V → 2F)와 크기로 기준 행을 고름.
+    기준표는 각장별 값이라 사이 크기(5.5mm)는 가장 가까운 각장 행을 쓰고 작업자 확인 (standard_matched = false)"""
+    primary = legs[0]
+    entry = next((e for e in entries if e["code"] == primary["code"]), None)
+    leg_positions = set(POSITION.findall(entry["meaning"])) if entry else set()
+    refs = refs + primary["ref_ids"]
+    size = primary["size_mm"]
+    candidates = [r for r in rows if r.get("leg_min_mm") is not None and (not leg_positions or r["position"] in leg_positions)]
+    where = f"{joint_type} {'·'.join(sorted(leg_positions))}".strip()
+    if not candidates:
+        conflicts.append(standard_conflict(
+            f"각장 '{primary['raw_text']}'({size:g}mm)로 고를 수 있는 {where} 표준 용접 기준이 없음", "error", refs))
+        return None, conflicts
+    exact = [r for r in candidates if r["leg_min_mm"] <= size <= r["leg_max_mm"]]
+    if exact:
+        row, matched = min(exact, key=lambda r: position_rank(r["position"])), True
+    else:
+        row = min(candidates, key=lambda r: (leg_distance(r, size), -r["leg_min_mm"], position_rank(r["position"])))
+        have = ", ".join(f"{v:g}" for v in sorted({r["leg_min_mm"] for r in candidates}))
+        conflicts.append(standard_conflict(
+            f"각장 {size:g}mm 기준이 없어 가장 가까운 각장 {leg_label(row)}mm {row['position']} 기준을 씀 "
+            f"(기준표 {where} 각장: {have}mm)", "warning", refs))
+        matched = False
+    others = [leg for leg in legs[1:] if (leg["code"], leg["size_mm"]) != (primary["code"], size)]
+    if others:
+        conflicts.append(standard_conflict(
+            f"각장 표기가 여러 개라 첫 번째 '{primary['raw_text']}' 기준으로 용접 조건을 고름 — "
+            f"{', '.join(repr(leg['raw_text']) for leg in others)}의 용접 조건은 따로 확인",
+            "info", [ref for leg in others for ref in leg["ref_ids"]]))
+    return condition(row, joint_type, thickness, size, refs, matched), conflicts
+
+
+def leg_distance(row: dict, size: float) -> float:
+    return max(row["leg_min_mm"] - size, 0, size - row["leg_max_mm"])
+
+
+def leg_label(row: dict) -> str:
+    low, high = row["leg_min_mm"], row["leg_max_mm"]
+    return f"{low:g}" if low == high else f"{low:g}~{high:g}"
+
+
+def condition(row: dict, joint_type: str, thickness: float | None, leg: float | None, refs: list[str], matched: bool) -> dict:
+    result = {
         "joint_type": joint_type,
         "thickness_mm": thickness,
         **{k: row[k] for k in ("process", "position", "current_a", "voltage_v", "speed_cm_min")},
-        "standard_matched": True,
+        "standard_matched": matched,
         "source": "standard_db",
         "ref_ids": list(dict.fromkeys(refs)),
-    }, conflicts
+    }
+    if leg is not None:
+        result["leg_length_mm"] = leg
+    return result
 
 
 def joint_type_marks(matches: list[dict], entries: list[dict]) -> dict[str, list[dict]]:
@@ -121,7 +180,7 @@ def position_rank(position: str) -> int:
 
 def standard_row(rows: list[dict], thickness: float) -> dict | None:
     """판 두께가 들어가는 기준 행. 경계값(예: 12mm가 6~12 · 12~20 모두)은 그 값에서 시작하는 행을 고름"""
-    inside = [r for r in rows if r["thickness_min_mm"] <= thickness <= r["thickness_max_mm"]]
+    inside = [r for r in rows if r["thickness_min_mm"] is not None and r["thickness_min_mm"] <= thickness <= r["thickness_max_mm"]]
     return next((r for r in inside if thickness < r["thickness_max_mm"]), inside[-1] if inside else None)
 
 

@@ -101,9 +101,10 @@
               "standard_conflict",
               "ocr_vlm_mismatch",
               "vlm_inconsistent",
+              "vlm_failed",
               "missing_required"
             ],
-            "description": "low_visual_confidence 인식 확률 낮음 / vlm_inconsistent 다중 추론 불일치 / missing_required 로봇 JSON 필수 값(assembly_path, welding_condition) 없음 / 나머지(ambiguous_reading, dictionary_unmatched, part_not_in_tree, standard_conflict, ocr_vlm_mismatch)는 2단계 Conflict.type과 같은 이름"
+            "description": "low_visual_confidence 인식 확률 낮음 / vlm_inconsistent 다중 추론 불일치 / vlm_failed VLM 호출 실패(2단계 vlm_error) / missing_required 로봇 JSON 필수 값(assembly_path, welding_condition) 없음 / 나머지(ambiguous_reading, dictionary_unmatched, part_not_in_tree, standard_conflict, ocr_vlm_mismatch)는 2단계 Conflict.type과 같은 이름"
           },
           "message": {
             "type": "string",
@@ -152,7 +153,7 @@
           "properties": {
             "recognition_prob": {
               "$ref": "#/$defs/NullableProbability",
-              "description": "OCR/기호 인식 확률 (1단계 prob)"
+              "description": "OCR/기호 인식 확률 (1단계 prob) — 작업자가 확인하지 않은 것 중 가장 낮은 값. 모두 확인했으면 1, 1단계가 아무것도 못 읽었으면 null"
             },
             "correction_strength": {
               "$ref": "#/$defs/NullableProbability",
@@ -160,7 +161,7 @@
             },
             "ocr_vlm_agreement": {
               "$ref": "#/$defs/NullableProbability",
-              "description": "OCR↔VLM 교차 검증 일치도 (1단계 texts ↔ 2단계 vlm.reading)"
+              "description": "OCR↔VLM 교차 검증 일치도 (1단계 texts ↔ 2단계 vlm.reading). 작업자가 확인한 표기는 일치로 셈"
             }
           }
         },
@@ -175,7 +176,7 @@
           "properties": {
             "dictionary_match_rate": {
               "$ref": "#/$defs/NullableProbability",
-              "description": "사전 규칙에 맞는 표기 비율 (2단계 dictionary_matches)"
+              "description": "사전 규칙(exact · alias · candidate)이나 표기 규칙(판 두께 · 치수, match none + meaning)으로 해석한 표기 비율 (2단계 dictionary_matches)"
             },
             "part_found": {
               "type": [
@@ -187,7 +188,7 @@
             "standard_conflicts": {
               "type": "integer",
               "minimum": 0,
-              "description": "표준 용접 기준과의 충돌 수 (2단계 conflicts)"
+              "description": "표준 용접 기준과의 충돌 수 (2단계 conflicts의 standard_conflict 중 warning · error)"
             }
           }
         },

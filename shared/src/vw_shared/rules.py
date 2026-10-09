@@ -27,11 +27,18 @@ def semantic_errors(analysis: dict) -> list[str]:
     refs = [r for m in context["dictionary_matches"] for r in m["ref_ids"]]
     refs += context["part"]["ref_ids"]
     refs += (context["welding_condition"] or {}).get("ref_ids", [])
+    refs += [r for leg in context.get("leg_lengths", []) for r in leg["ref_ids"]]
+    refs += (context.get("cell") or {}).get("ref_ids", [])
     refs += [r for c in context["conflicts"] for r in c["ref_ids"]]
     if context["vlm"]:
         reading = context["vlm"]["reading"]
         refs += [x["ref_id"] for x in reading["texts"] if x["ref_id"][0] == "t"]
         refs += [x["ref_id"] for x in reading["symbols"] if x["ref_id"][0] == "s"]
+        for x in reading["texts"] + reading["symbols"]:
+            if x.get("used") and x["ref_id"][0] == "v":
+                errors.append(f"context.vlm.reading {x['ref_id']}: used는 1단계 결과(t*·s*)를 대신한 읽기에만 씀")
+    if context.get("vlm_error") and context["vlm"]:
+        errors.append("context: vlm_error가 있으면 vlm은 null이어야 함")
     refs += [c["target"] for c in corrections if is_ref(c["target"])]
     if confidence:
         refs += [r for e in confidence["evidence"] for r in e.get("ref_ids", [])]

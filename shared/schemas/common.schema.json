@@ -75,8 +75,13 @@
     },
     "ReviewTarget": {
       "type": "string",
-      "pattern": "^(t[0-9]+|s[0-9]+|v[0-9]+|part|welding_condition|interpretation)$",
-      "description": "작업자 확인 대상: 인식 결과 ID(t*, s*, v*) 또는 part(부재·조립 경로), welding_condition(용접 조건), interpretation(해석 문장 = Job.marking.interpretation)"
+      "pattern": "^(t[0-9]+|s[0-9]+|v[0-9]+|part|welding_condition|interpretation|cell|leg_lengths)$",
+      "description": "작업자 확인 대상: 인식 결과 ID(t*, s*, v*) 또는 part(부재·조립 경로), welding_condition(용접 조건), interpretation(해석 문장 = Job.marking.interpretation), cell(셀 형태), leg_lengths(각장)"
+    },
+    "CellFeature": {
+      "type": "string",
+      "enum": ["slit", "slot", "collar_front", "collar_back", "scallop"],
+      "description": "셀 한쪽 끝의 관통부 형태 (PAC 과제). 워크스페이스 사전의 셀 형태 기호 code와 같음 (backend/app/schemas.py CellFeature)"
     },
     "TextStyle": {
       "type": "string",

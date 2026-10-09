@@ -40,7 +40,7 @@
       "properties": {
         "target": { "$ref": "common.schema.json#/$defs/ReviewTarget" },
         "value": {
-          "description": "t*·s*·v*: 올바른 글자·기호 code / part: 조립 경로 / interpretation: 해석 문장 / welding_condition: 용접 조건 객체"
+          "description": "t*·s*·v*: 올바른 글자·기호 code / part: 조립 경로 / interpretation: 해석 문장 / welding_condition: 용접 조건 객체 / cell: {left, right} / leg_lengths: [{code, size_mm, raw_text}]"
         },
         "meaning": {
           "type": "string",
@@ -51,19 +51,46 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "target": { "pattern": "^(part|interpretation|welding_condition)$" } } },
+          "if": { "properties": { "target": { "pattern": "^(part|interpretation|welding_condition|cell|leg_lengths)$" } } },
           "then": { "not": { "required": ["meaning"] } }
         },
         {
           "if": { "properties": { "target": { "const": "welding_condition" } } },
           "then": { "properties": { "value": { "$ref": "context_result.schema.json#/$defs/WeldingCondition" } } },
-          "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+          "else": {
+            "if": { "properties": { "target": { "const": "cell" } } },
+            "then": { "properties": { "value": { "$ref": "#/$defs/CellValue" } } },
+            "else": {
+              "if": { "properties": { "target": { "const": "leg_lengths" } } },
+              "then": { "properties": { "value": { "type": "array", "items": { "$ref": "#/$defs/LegLengthValue" } } } },
+              "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+            }
+          }
         },
         {
           "if": { "properties": { "target": { "const": "part" } } },
           "then": { "properties": { "value": { "$ref": "common.schema.json#/$defs/AssemblyPath" } } }
         }
       ]
+    },
+    "CellValue": {
+      "type": "object",
+      "required": ["left", "right"],
+      "additionalProperties": false,
+      "properties": {
+        "left": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/CellFeature" } },
+        "right": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/CellFeature" } }
+      }
+    },
+    "LegLengthValue": {
+      "type": "object",
+      "required": ["code", "size_mm", "raw_text"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "size_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "raw_text": { "type": "string" }
+      }
     }
   }
 }

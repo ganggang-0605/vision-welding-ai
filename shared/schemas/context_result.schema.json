@@ -2,12 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vision-welding-ai.local/shared/schemas/context_result.schema.json",
   "title": "ContextResult",
-  "description": "[2단계] DB 기반 맥락 해석 출력. 입력: VisionResult + 워크스페이스 문자/기호 사전 + 프로젝트 조립 트리 + 공통 용접 기준 (+ 작업자 맥락). 생산: 2단계 / 소비: 3단계, 백엔드(Job 필드 채우기)",
+  "description": "[2단계] DB 기반 맥락 해석 출력. 입력: VisionResult + 워크스페이스 문자/기호 사전 + 프로젝트 조립 트리 + 공통 용접 기준 (+ 작업자 맥락). 생산: 2단계 / 소비: 3단계, 백엔드(Job 필드 채우기). 1단계 결과 대신 VLM 읽기를 해석에 쓴 표기는 vlm.reading의 used가 true",
   "type": "object",
   "required": [
     "dictionary_matches",
     "part",
     "welding_condition",
+    "leg_lengths",
+    "cell",
     "conflicts",
     "vlm"
   ],
@@ -49,6 +51,24 @@
         }
       ]
     },
+    "leg_lengths": {
+      "type": "array",
+      "description": "수기 각장 표기 (읽는 순서, PAC 과제: F·V·S + mm) → Job.leg_lengths. 작업자가 leg_lengths를 고쳤으면 그 값",
+      "items": {
+        "$ref": "#/$defs/LegLength"
+      }
+    },
+    "cell": {
+      "description": "셀 좌·우 끝 형태 (PAC 과제) → Job.cell. 셀 형태 기호(사전 code slit·slot·collar_front·collar_back·scallop)를 사진 가운데 기준 왼쪽·오른쪽으로 나눔. 셀 형태 기호가 없으면 null",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Cell"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "conflicts": {
       "type": "array",
       "description": "DB 불일치 항목 → 3단계 DB 정합성, GUI 작업자 확인 화면",
@@ -66,6 +86,13 @@
           "type": "null"
         }
       ]
+    },
+    "vlm_error": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "VLM을 켰는데 추론이 모두 실패한 이유 (API 키 없음 · 네트워크 · 응답 형식 오류 등). 이때 vlm은 null. 키 값 같은 비밀은 넣지 않음. 생략하면 실패 없음"
     }
   },
   "$defs": {
@@ -234,9 +261,87 @@
             "$ref": "common.schema.json#/$defs/RefId"
           },
           "description": "판별 근거가 된 표기 (예: 이음 형태 FW, 판 두께 t=10). GUI가 사진 위에 강조할 때 씀. 작업자가 직접 입력(manual)하면 생략"
+        },
+        "leg_length_mm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "description": "판별 근거가 된 각장 (판 두께 표기 없이 각장 표기로 기준 행을 고른 경우)"
         }
       },
-      "description": "Job.welding_condition의 6개 필드 + 판별 근거(thickness_mm, standard_matched, source)"
+      "description": "Job.welding_condition의 6개 필드 + 판별 근거(thickness_mm, leg_length_mm, standard_matched, source)"
+    },
+    "LegLength": {
+      "type": "object",
+      "required": [
+        "code",
+        "size_mm",
+        "raw_text",
+        "meaning",
+        "ref_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "사전 code (데모 사전: F 3F 용접장, V 2F 용접장, S 스티프너)"
+        },
+        "size_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "raw_text": {
+          "type": "string",
+          "description": "해석에 쓴 표기 (예: F5.5). 소수점이 빠진 읽기를 고쳤으면 고친 값"
+        },
+        "meaning": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "사전 뜻 (예: 3F 용접장 각장)"
+        },
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          },
+          "description": "근거 표기. 작업자가 직접 입력했으면 빈 배열"
+        }
+      }
+    },
+    "Cell": {
+      "type": "object",
+      "required": [
+        "left",
+        "right",
+        "ref_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/CellFeature"
+          }
+        },
+        "right": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/CellFeature"
+          }
+        },
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          },
+          "description": "근거 기호. 작업자가 직접 입력했으면 빈 배열"
+        }
+      }
     },
     "Conflict": {
       "type": "object",
@@ -306,6 +411,10 @@
           "type": "string",
           "description": "자연어 해석 한두 문장 → Job.marking.interpretation"
         },
+        "image_attached": {
+          "type": "boolean",
+          "description": "VLM이 사진을 보고 해석했는지 (사진 없이 1단계 결과만 보면 false). 생략하면 모름"
+        },
         "reading": {
           "description": "VLM이 이미지에서 직접 읽은 글자·기호 → 3단계 OCR↔VLM 교차 검증. 1단계가 놓친 표기는 2단계가 v1, v2, …를 붙여 뒤 단계가 다른 인식 결과처럼 가리킬 수 있게 함",
           "type": "object",
@@ -343,6 +452,10 @@
                   "bbox": {
                     "$ref": "common.schema.json#/$defs/BBox",
                     "description": "VLM이 알려 준 대략적 위치 (선택). v* 표기를 사진 위에 그리거나 읽는 순서를 정할 때 씀"
+                  },
+                  "used": {
+                    "type": "boolean",
+                    "description": "1단계(t*·s*)와 다르게 읽었고 2단계가 이 VLM 읽기를 해석에 썼는지 — 사진을 본 VLM이 읽은 값이 사전·판 두께 규칙에 맞거나 1단계 확률이 낮을 때. Job.marking도 이 값을 씀"
                   }
                 }
               }
@@ -375,6 +488,10 @@
                   "bbox": {
                     "$ref": "common.schema.json#/$defs/BBox",
                     "description": "VLM이 알려 준 대략적 위치 (선택). v* 표기를 사진 위에 그리거나 읽는 순서를 정할 때 씀"
+                  },
+                  "used": {
+                    "type": "boolean",
+                    "description": "1단계(t*·s*)와 다르게 읽었고 2단계가 이 VLM 읽기를 해석에 썼는지 — 사진을 본 VLM이 읽은 값이 사전·판 두께 규칙에 맞거나 1단계 확률이 낮을 때. Job.marking도 이 값을 씀"
                   }
                 }
               }

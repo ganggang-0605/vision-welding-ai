@@ -58,6 +58,15 @@ def _warn_no_models() -> None:
     log.warning('PaddleOCR이 설치되지 않아 문자 인식을 건너뜁니다 (pip install -e "vision[models]")')
 
 
+def warm_up(config: OcrConfig = DEFAULT_CONFIG) -> bool:
+    """모델을 미리 불러 둠 — 첫 해석이 모델 로드로 1분 가까이 걸리지 않게 (backend 가 시작할 때 백그라운드로 부름).
+    모델 패키지가 없으면 False"""
+    if not models_available():
+        return False
+    _engine(config).predict(np.full((64, 256, 3), 255, np.uint8))
+    return True
+
+
 def recognize_text(image: np.ndarray, config: OcrConfig = DEFAULT_CONFIG) -> list[dict]:
     """VisionResult.texts 항목에서 id를 뺀 것의 목록 (id는 recognize가 읽는 순서로 붙임).
 

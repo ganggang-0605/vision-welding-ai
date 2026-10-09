@@ -6,12 +6,13 @@ SDK는 함수 안에서 import (기본 설치에는 없음, pip install -e "db_c
 환경 변수
 - VLM_PROVIDER: 비어 있거나 none · off면 VLM을 쓰지 않음 (ContextResult.vlm = null)
 - VLM_MODEL: 모델 이름 (없으면 DEFAULT_MODELS)
-- VLM_RUNS: 같은 입력으로 추론할 횟수 (기본 3) → consistency. 1이면 consistency = null
+- VLM_RUNS: 같은 입력으로 추론할 횟수 (기본 3, 동시에 보냄) → consistency. 1이면 consistency = null
 - VLM_BASE_URL · VLM_API_KEY: 로컬 모델(qwen3-vl · internvl)의 OpenAI 호환 서버
 """
 import logging
 import os
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,39 +55,59 @@ class VlmOutput:
 
 
 def interpret_with_vlm(vision_result: dict, context_input: dict, image=None) -> VlmOutput | None:
-    """VlmResult (provider, model, interpretation, reading, token_prob, consistency, runs) + 표기별 의미. VLM을 안 쓰면 None.
+    """run_vlm의 결과만 (실패 이유는 버림)"""
+    return run_vlm(vision_result, context_input, image)[0]
 
-    image: 원본 사진 (인코딩된 bytes · 파일 경로 · numpy 배열). 없으면 vision_result의 preprocessed_image_uri(로컬 파일),
-    그것도 없으면 사진 없이 1단계 결과와 DB만으로 해석.
+
+def run_vlm(vision_result: dict, context_input: dict, image=None) -> tuple[VlmOutput | None, str | None]:
+    """(VlmOutput | None, 실패 이유 | None). VlmOutput = VlmResult (provider, model, interpretation, image_attached, reading,
+    token_prob, consistency, runs) + 표기별 의미. VLM을 안 쓰면 (None, None).
+
+    image: 원본 사진 (인코딩된 bytes · 파일 경로 · numpy 배열). 없으면 vision_result의
+    preprocessed_image_uri(로컬 파일), 그것도 없으면 사진 없이 1단계 결과와 DB만으로 해석.
+    보낸 사진 크기가 원본과 다르면(줄이기 · 키우기) 프롬프트의 좌표는 보낸 사진 기준으로 바꾸고, 응답 bbox는 원본 좌표로 되돌림.
     reading: VLM이 이미지에서 직접 읽은 글자·기호. 1단계 결과에 대응하면 그 ID(t*, s*),
     1단계가 놓친 표기면 v1, v2, … — context_input["previous_reading"]에 같은 표기가 있으면 그 v* ID를 그대로 씀.
-    provider 호출이 모두 실패하면 경고를 남기고 None (VLM 없이 해석을 이어 감)
+    VLM_RUNS번을 동시에 보내고, 모두 실패하면 경고를 남기고 (None, 이유) — VLM 없이 해석을 이어 감
     """
     provider = os.environ.get("VLM_PROVIDER", "").split("#")[0].strip().lower()
     if provider in ("", "none", "off"):
-        return None
+        return None, None
     if provider not in PROVIDERS:
         raise ValueError(f"VLM_PROVIDER '{provider}'를 모름 (가능한 값: {', '.join(PROVIDERS)})")
     model = os.environ.get("VLM_MODEL") or DEFAULT_MODELS[provider]
     runs = max(1, int(os.environ.get("VLM_RUNS", 3)))
     picture = load_image(image, vision_result)
-    prompt = build_prompt(vision_result, context_input, picture is not None)
+    original = vision_result["image_size"]
+    sent = encoded_size(picture[0]) if picture else None
+    scale = (original["width"] / sent[0], original["height"] / sent[1]) if sent else (1.0, 1.0)
+    prompt = build_prompt(vision_result, context_input, picture is not None,
+                          {"width": sent[0], "height": sent[1]} if sent else None)
+
+    def call() -> tuple[str, float | None]:
+        return PROVIDERS[provider](SYSTEM, prompt, picture, model)
 
     outputs: list[tuple[dict, float | None]] = []
-    for _ in range(runs):
-        try:
-            text, token_prob = PROVIDERS[provider](SYSTEM, prompt, picture, model)
-            outputs.append((parse_response(text), token_prob))
-        except Exception as e:  # SDK 미설치 · API 키 없음 · 네트워크 · 형식 오류
-            log.warning("VLM(%s) 추론 실패: %s", provider, e)
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=runs) as pool:
+        for future in [pool.submit(call) for _ in range(runs)]:
+            try:
+                text, token_prob = future.result()
+                outputs.append((parse_response(text), token_prob))
+            except Exception as e:  # SDK 미설치 · API 키 없음 · 네트워크 · 형식 오류
+                log.warning("VLM(%s) 추론 실패: %s", provider, e)
+                errors.append(f"{type(e).__name__}: {e}")
     if not outputs:
-        return None
-    return combine(outputs, provider, model, vision_result, context_input)
+        return None, f"{provider}({model}) 추론 {runs}번 모두 실패 — {errors[0]}"[:500]
+    output = combine(outputs, provider, model, vision_result, context_input, scale)
+    output.result["image_attached"] = picture is not None
+    return output, None
 
 
-def combine(outputs: list[tuple[dict, float | None]], provider: str, model: str, vision_result: dict, context_input: dict) -> VlmOutput:
+def combine(outputs: list[tuple[dict, float | None]], provider: str, model: str, vision_result: dict, context_input: dict,
+            scale: tuple[float, float] = (1.0, 1.0)) -> VlmOutput:
     """여러 번 추론한 결과 → 가장 많이 나온 읽기를 고르고 일치 비율을 consistency로"""
-    resolved = [resolve(out, vision_result, context_input) for out, _ in outputs]
+    resolved = [resolve(out, vision_result, context_input, scale) for out, _ in outputs]
     keys = [reading_key(reading) for reading, _ in resolved]
     majority, count = Counter(keys).most_common(1)[0]
     index = keys.index(majority)
@@ -106,8 +127,11 @@ def combine(outputs: list[tuple[dict, float | None]], provider: str, model: str,
     )
 
 
-def resolve(out: dict, vision_result: dict, context_input: dict) -> tuple[dict, dict[str, str]]:
-    """VLM 응답의 ref_id 정리: 1단계에 있는 t*·s*는 그대로, 나머지(new1 …·모르는 ID)는 v* (이전 revision의 같은 표기면 같은 v*)"""
+def resolve(out: dict, vision_result: dict, context_input: dict,
+            scale: tuple[float, float] = (1.0, 1.0)) -> tuple[dict, dict[str, str]]:
+    """VLM 응답의 ref_id 정리: 1단계에 있는 t*·s*는 그대로, 나머지(new1 …·모르는 ID)는 v* (이전 revision의 같은 표기면 같은 v*).
+    bbox는 보낸 사진 좌표 → 원본 좌표 (scale = 원본 / 보낸 사진)"""
+    width, height = vision_result["image_size"]["width"], vision_result["image_size"]["height"]
     known = {"texts": {t["id"] for t in vision_result["texts"]}, "symbols": {s["id"] for s in vision_result["symbols"]}}
     previous = context_input["previous_reading"] or {"texts": [], "symbols": []}
     previous_ids = {
@@ -134,7 +158,12 @@ def resolve(out: dict, vision_result: dict, context_input: dict) -> tuple[dict, 
             entry = {field: value, "ref_id": ref}
             bbox = item.get("bbox")
             if isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(n, int | float) and n >= 0 for n in bbox):
-                entry["bbox"] = list(bbox)
+                if scale == (1.0, 1.0):
+                    entry["bbox"] = list(bbox)
+                else:
+                    x1, y1, x2, y2 = bbox
+                    entry["bbox"] = [min(round(x1 * scale[0]), width), min(round(y1 * scale[1]), height),
+                                     min(round(x2 * scale[0]), width), min(round(y2 * scale[1]), height)]
             reading[kind].append(entry)
 
     keep_corrected_vlm_ids(reading, previous, context_input, seen)
@@ -165,9 +194,10 @@ def next_free(used: set[int]) -> int:
 
 
 def reading_key(reading: dict) -> tuple:
-    """추론끼리 같은 읽기인지 비교하는 키 (위치·순서 무시)"""
+    """추론끼리 같은 읽기인지 비교하는 키 (위치·순서 무시). VLM만 읽은 표기의 v* 번호는 추론마다 붙는 순서가 달라
+    번호는 빼고 글자만 비교 (같은 표기를 다른 순서로 읽었다고 불일치로 세지 않게)"""
     return tuple(sorted(
-        (kind, x["ref_id"], normalize(x.get("text") or x.get("label")))
+        (kind, "v" if x["ref_id"][0] == "v" else x["ref_id"], normalize(x.get("text") or x.get("label")))
         for kind in ("texts", "symbols") for x in reading[kind]
     ))
 
@@ -196,14 +226,18 @@ def load_image(image, vision_result: dict) -> tuple[bytes, str] | None:
 
 # provider 이미지 한도: Claude 10MB(요청 본문은 base64 라 더 큼) · 긴 변 1568px 넘으면 Claude 가 알아서 줄임.
 # 휴대폰 원본(4000px PNG 30MB 등)은 그대로 보내면 400 오류라, 넘으면 긴 변 1568px JPEG 로 줄여 보낸다.
-# Claude 가 서버에서 줄이는 크기와 같아서 bbox 좌표를 다루는 방식은 바뀌지 않는다.
+# 반대로 운영측 손글씨 예시(343px)처럼 작은 사진은 VLM 이 숫자를 틀려서(F5.0 → F6.0) 긴 변 1024px 로 키워 보낸다.
+# 크기를 바꾸면 run_vlm 이 프롬프트 좌표와 응답 bbox 를 그 배율로 맞춘다.
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_IMAGE_SIDE = 1568
+MIN_IMAGE_SIDE = 512
+UPSCALE_SIDE = 1024
 
 
 def fit_for_vlm(data: bytes, media_type: str, decoded=None) -> tuple[bytes, str]:
-    """크기·용량 한도 안이면 그대로, 넘으면 긴 변 MAX_IMAGE_SIDE 의 JPEG(품질 90)로 다시 인코딩.
-    OpenCV 가 없으면(이 패키지만 설치한 CI 등) 그대로 보낸다 — backend 는 vision 패키지와 함께 OpenCV 가 깔려 있음"""
+    """크기·용량 한도 안이면 그대로. 넘으면 긴 변 MAX_IMAGE_SIDE 의 JPEG(품질 90), 긴 변이 MIN_IMAGE_SIDE 보다 작으면
+    긴 변 UPSCALE_SIDE 의 PNG 로 다시 인코딩. OpenCV 가 없으면(이 패키지만 설치한 CI 등) 그대로 보낸다
+    — backend 는 vision 패키지와 함께 OpenCV 가 깔려 있음"""
     try:
         import cv2
         import numpy as np
@@ -214,6 +248,13 @@ def fit_for_vlm(data: bytes, media_type: str, decoded=None) -> tuple[bytes, str]
     if image is None:  # 읽을 수 없는 형식이면 손대지 않고 provider 에 맡김
         return data, media_type
     height, width = image.shape[:2]
+    if max(height, width) < MIN_IMAGE_SIDE:
+        scale = UPSCALE_SIDE / max(height, width)
+        image = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_CUBIC)
+        ok, encoded = cv2.imencode(".png", image)
+        if not ok:
+            raise ValueError("이미지를 PNG로 인코딩하지 못함")
+        return encoded.tobytes(), "image/png"
     if len(data) <= MAX_IMAGE_BYTES and max(height, width) <= MAX_IMAGE_SIDE:
         return data, media_type
     scale = min(1.0, MAX_IMAGE_SIDE / max(height, width))
@@ -223,3 +264,14 @@ def fit_for_vlm(data: bytes, media_type: str, decoded=None) -> tuple[bytes, str]
     if not ok:
         raise ValueError("이미지를 JPEG로 인코딩하지 못함")
     return encoded.tobytes(), "image/jpeg"
+
+
+def encoded_size(data: bytes) -> tuple[int, int] | None:
+    """인코딩된 사진의 (가로, 세로). OpenCV 가 없거나 읽을 수 없으면 None (좌표 배율을 맞추지 않음)"""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+    image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+    return (image.shape[1], image.shape[0]) if image is not None else None
