@@ -20,6 +20,13 @@
       ],
       "description": "재해석 때 작업자가 추가한 맥락 (없으면 null)"
     },
+    "related_job_ids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/Id"
+      },
+      "description": "맥락으로 참고한 같은 워크스페이스의 과거 작업 (Job.related_job_ids 중 실제로 쓴 것). 없으면 빈 배열 또는 생략"
+    },
     "dictionary_matches": {
       "type": "array",
       "description": "문자/기호 사전 대조 결과. 1단계 인식 결과 하나 이상을 사전 항목 하나에 대응",
@@ -28,10 +35,11 @@
       }
     },
     "part": {
-      "$ref": "#/$defs/Part"
+      "$ref": "#/$defs/Part",
+      "description": "부재·조립 경로. assembly_path가 null이면 3단계는 통과(passed)시킬 수 없음 (로봇 JSON에 assembly_path가 필수)"
     },
     "welding_condition": {
-      "description": "용접 기준 DB로 판별한 조건. 판별 못 하면 null",
+      "description": "용접 기준 DB로 판별한 조건. 판별 못 하면 null. null이면 3단계는 통과(passed)시킬 수 없음 (로봇 JSON에 welding_condition이 필수)",
       "anyOf": [
         {
           "$ref": "#/$defs/WeldingCondition"
@@ -219,6 +227,13 @@
             "manual"
           ],
           "description": "standard_db 기준표 조회 / vlm VLM 추론 / manual 작업자 직접 입력"
+        },
+        "ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/RefId"
+          },
+          "description": "판별 근거가 된 표기 (예: 이음 형태 FW, 판 두께 t=10). GUI가 사진 위에 강조할 때 씀. 작업자가 직접 입력(manual)하면 생략"
         }
       },
       "description": "Job.welding_condition의 6개 필드 + 판별 근거(thickness_mm, standard_matched, source)"
@@ -241,7 +256,8 @@
             "standard_conflict",
             "ocr_vlm_mismatch",
             "ambiguous_reading"
-          ]
+          ],
+          "description": "3단계 needs_review.reason에 같은 이름으로 이어짐"
         },
         "severity": {
           "type": "string",
@@ -291,7 +307,7 @@
           "description": "자연어 해석 한두 문장 → Job.marking.interpretation"
         },
         "reading": {
-          "description": "VLM이 이미지에서 직접 읽은 글자·기호 → 3단계 OCR↔VLM 교차 검증",
+          "description": "VLM이 이미지에서 직접 읽은 글자·기호 → 3단계 OCR↔VLM 교차 검증. 1단계가 놓친 표기는 2단계가 v1, v2, …를 붙여 뒤 단계가 다른 인식 결과처럼 가리킬 수 있게 함",
           "type": "object",
           "required": [
             "texts",
@@ -319,10 +335,14 @@
                         "$ref": "common.schema.json#/$defs/TextId"
                       },
                       {
-                        "type": "null"
+                        "$ref": "common.schema.json#/$defs/VlmId"
                       }
                     ],
-                    "description": "대응하는 1단계 결과. 1단계가 놓친 표기면 null"
+                    "description": "대응하는 1단계 결과(t*). 1단계가 놓친 표기면 2단계가 붙인 v*"
+                  },
+                  "bbox": {
+                    "$ref": "common.schema.json#/$defs/BBox",
+                    "description": "VLM이 알려 준 대략적 위치 (선택). v* 표기를 사진 위에 그리거나 읽는 순서를 정할 때 씀"
                   }
                 }
               }
@@ -347,9 +367,14 @@
                         "$ref": "common.schema.json#/$defs/SymbolId"
                       },
                       {
-                        "type": "null"
+                        "$ref": "common.schema.json#/$defs/VlmId"
                       }
-                    ]
+                    ],
+                    "description": "대응하는 1단계 결과(s*). 1단계가 놓친 기호면 2단계가 붙인 v*"
+                  },
+                  "bbox": {
+                    "$ref": "common.schema.json#/$defs/BBox",
+                    "description": "VLM이 알려 준 대략적 위치 (선택). v* 표기를 사진 위에 그리거나 읽는 순서를 정할 때 씀"
                   }
                 }
               }

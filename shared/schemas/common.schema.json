@@ -13,7 +13,7 @@
     "Timestamp": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601, 시간대 포함 (예: 2026-10-09T13:00:00+09:00)"
+      "description": "ISO 8601, 시간대 포함. 백엔드 API와 같이 UTC(Z)로 씀 (예: 2026-10-09T04:00:00Z)"
     },
     "Probability": {
       "type": "number",
@@ -64,14 +64,19 @@
       "pattern": "^s[0-9]+$",
       "description": "1단계가 붙이는 기호 인식 결과 ID (s1, s2, ...). 이미지 한 장 안에서 유일"
     },
+    "VlmId": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "1단계가 놓쳤지만 VLM이 읽은 표기에 2단계가 붙이는 ID (v1, v2, ...). 2단계를 다시 돌려도 같은 표기는 이전 revision의 ID를 그대로 씀"
+    },
     "RefId": {
-      "description": "1단계 인식 결과를 가리키는 ID. 2·3단계와 GUI가 어떤 글자·기호를 말하는지 지정할 때 씀",
-      "anyOf": [{ "$ref": "#/$defs/TextId" }, { "$ref": "#/$defs/SymbolId" }]
+      "description": "인식 결과를 가리키는 ID. 1단계 결과(t*, s*) 또는 VLM만 읽은 표기(v*). 2·3단계와 GUI가 어떤 글자·기호를 말하는지 지정할 때 씀",
+      "anyOf": [{ "$ref": "#/$defs/TextId" }, { "$ref": "#/$defs/SymbolId" }, { "$ref": "#/$defs/VlmId" }]
     },
     "ReviewTarget": {
       "type": "string",
-      "pattern": "^(t[0-9]+|s[0-9]+|part|welding_condition)$",
-      "description": "작업자 확인 대상: 인식 결과 ID 또는 part(부재·조립 경로), welding_condition(용접 조건)"
+      "pattern": "^(t[0-9]+|s[0-9]+|v[0-9]+|part|welding_condition|interpretation)$",
+      "description": "작업자 확인 대상: 인식 결과 ID(t*, s*, v*) 또는 part(부재·조립 경로), welding_condition(용접 조건), interpretation(해석 문장 = Job.marking.interpretation)"
     },
     "TextStyle": {
       "type": "string",

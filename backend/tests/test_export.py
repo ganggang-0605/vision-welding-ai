@@ -9,7 +9,7 @@ from app.main import app
 from app.schemas import Confidence, Job, Marking, RobotOutput, WeldingCondition
 
 SCHEMA = json.loads(
-    (Path(__file__).resolve().parents[2] / "schemas" / "robot_output.schema.json").read_text(encoding="utf-8")
+    (Path(__file__).resolve().parents[2] / "shared" / "schemas" / "robot_output.schema.json").read_text(encoding="utf-8")
 )
 JOBS = "/workspaces/demo/jobs"
 

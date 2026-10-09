@@ -39,7 +39,7 @@
     },
     "passed": {
       "type": "boolean",
-      "description": "overall ≥ threshold. true면 Job.status = awaiting_approval, false면 needs_review"
+      "description": "overall ≥ threshold이고, 로봇 JSON에 필요한 assembly_path(2단계 part 또는 작업자 수정)와 welding_condition이 모두 있어야 true. 하나라도 null이면 false로 두고 needs_review에 part / welding_condition 항목을 넣음. true면 Job.status = awaiting_approval, false면 needs_review"
     },
     "factors": {
       "$ref": "#/$defs/Factors"
@@ -95,12 +95,15 @@
             "type": "string",
             "enum": [
               "low_visual_confidence",
+              "ambiguous_reading",
               "dictionary_unmatched",
               "part_not_in_tree",
               "standard_conflict",
               "ocr_vlm_mismatch",
-              "vlm_inconsistent"
-            ]
+              "vlm_inconsistent",
+              "missing_required"
+            ],
+            "description": "low_visual_confidence 인식 확률 낮음 / vlm_inconsistent 다중 추론 불일치 / missing_required 로봇 JSON 필수 값(assembly_path, welding_condition) 없음 / 나머지(ambiguous_reading, dictionary_unmatched, part_not_in_tree, standard_conflict, ocr_vlm_mismatch)는 2단계 Conflict.type과 같은 이름"
           },
           "message": {
             "type": "string",

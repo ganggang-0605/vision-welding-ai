@@ -50,7 +50,11 @@
     "voltage_v": "26-30",
     "speed_cm_min": "30-40",
     "standard_matched": true,
-    "source": "standard_db"
+    "source": "standard_db",
+    "ref_ids": [
+      "t2",
+      "t3"
+    ]
   },
   "conflicts": [
     {

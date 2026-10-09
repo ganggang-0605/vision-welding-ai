@@ -88,7 +88,7 @@
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 표기 정보 해석 — **501 미구현** |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 (`reinterpret` \| `manual`) — **501 미구현** |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "..."}` → `approved`. `awaiting_approval`·`needs_review` 가 아니면 409 |
-| GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`schemas/robot_output.schema.json`](schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
+| GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`shared/schemas/robot_output.schema.json`](shared/schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
@@ -130,7 +130,7 @@ data/seed/
   # demo: 팀(멤버 3명) — hull_3201(조립 트리·데모 작업 3건), hull_3202(빈 호선)
   # park: 개인(박지훈) — hull_3301("3301호선", 빈 호선)
   # personal: 개인(데모 사용자) — practice("연습용 호선", 빈 호선)
-schemas/            # 로봇 출력 JSON 스키마
+shared/             # JSON 스키마 전체 (파이프라인 1·2·3단계 · 로봇 출력) — shared/README.md
 frontend/           # UI (React + Vite + TypeScript)
 docs/               # 기획 문서·이미지
 ```

@@ -1,4 +1,4 @@
-"""승인된 작업 결과 → 로봇 연계용 JSON (schemas/robot_output.schema.json)"""
+"""승인된 작업 결과 → 로봇 연계용 JSON (shared/schemas/robot_output.schema.json)"""
 from app.schemas import Job, RobotOutput
 
 REQUIRED_FIELDS = ("assembly_path", "marking", "welding_condition", "confidence", "approved_by")

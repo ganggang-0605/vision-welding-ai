@@ -5,6 +5,7 @@
 import csv
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import get_args
 
@@ -58,6 +59,10 @@ def semantic_errors(analysis: dict) -> list[str]:
     known = set(text_ids) | set(symbol_ids)
     if len(known) != len(text_ids) + len(symbol_ids):
         errors.append("vision: 인식 결과 id가 중복됨")
+    vlm_ids = [x["ref_id"] for x in vlm_only(context)]
+    if len(set(vlm_ids)) != len(vlm_ids):
+        errors.append("context.vlm.reading: v* id가 중복됨")
+    known |= set(vlm_ids)
 
     for t in vision["texts"]:
         if "char_probs" in t and len(t["char_probs"]) != len(t["text"]):
@@ -67,34 +72,63 @@ def semantic_errors(analysis: dict) -> list[str]:
 
     refs = [r for m in context["dictionary_matches"] for r in m["ref_ids"]]
     refs += context["part"]["ref_ids"]
+    refs += (context["welding_condition"] or {}).get("ref_ids", [])
     refs += [r for c in context["conflicts"] for r in c["ref_ids"]]
     if context["vlm"]:
         reading = context["vlm"]["reading"]
-        refs += [x["ref_id"] for x in reading["texts"] + reading["symbols"] if x["ref_id"]]
-    refs += [c["target"] for c in corrections if c["target"][0] in "ts"]
+        refs += [x["ref_id"] for x in reading["texts"] if x["ref_id"][0] == "t"]
+        refs += [x["ref_id"] for x in reading["symbols"] if x["ref_id"][0] == "s"]
+    refs += [c["target"] for c in corrections if is_ref(c["target"])]
     if confidence:
         refs += [r for e in confidence["evidence"] for r in e.get("ref_ids", [])]
-        refs += [n["target"] for n in confidence["needs_review"] if n["target"][0] in "ts"]
+        refs += [n["target"] for n in confidence["needs_review"] if is_ref(n["target"])]
         expected = min(confidence["visual"], confidence["db_consistency"], confidence["vlm_reasoning"])
         if confidence["overall"] != expected:
             errors.append(f"confidence: overall({confidence['overall']})은 세 신뢰도의 최솟값({expected})이어야 함")
-        if confidence["passed"] != (confidence["overall"] >= confidence["threshold"]):
-            errors.append("confidence: passed가 overall ≥ threshold와 다름")
+        fields = to_job_fields(analysis)
+        missing = [k for k in ("assembly_path", "welding_condition") if fields[k] is None]
+        if confidence["passed"] != (confidence["overall"] >= confidence["threshold"] and not missing):
+            errors.append(f"confidence: passed는 overall ≥ threshold이고 필수 값이 모두 있을 때만 true (빠진 값: {missing})")
+        targets = {n["target"] for n in confidence["needs_review"]}
+        for key, target in (("assembly_path", "part"), ("welding_condition", "welding_condition")):
+            if key in missing and target not in targets:
+                errors.append(f"confidence: {key}가 없는데 needs_review에 '{target}' 항목이 없음")
         corrected = {c["target"] for c in corrections}
         for n in confidence["needs_review"]:
             if n["target"] in corrected:
                 errors.append(f"confidence: 작업자가 이미 고친 '{n['target']}'가 needs_review에 남아 있음")
 
     for r in sorted(set(refs) - known):
-        errors.append(f"'{r}'를 참조하지만 vision 결과에 없음")
+        errors.append(f"'{r}'를 참조하지만 인식 결과(vision, vlm.reading의 v*)에 없음")
     if (analysis.get("revision", 1) > 1) != bool(corrections or context.get("user_context")):
         errors.append("revision 2 이상은 작업자 확인(corrections 또는 user_context)으로만 생김")
     return errors
 
 
-def reading_order(vision: dict, corrected: dict[str, str]) -> list[str]:
-    """글자·기호를 줄 단위로 묶어 왼→오른, 위→아래 순서로 (작업자가 고친 값 반영)"""
-    items = [(d["bbox"], corrected.get(d["id"], d.get("text") or d.get("label"))) for d in vision["texts"] + vision["symbols"]]
+def is_ref(target: str) -> bool:
+    """작업자 확인 대상이 인식 결과 ID(t*, s*, v*)인지"""
+    return target[0] in "tsv" and target[1:].isdigit()
+
+
+def vlm_only(context: dict) -> list[dict]:
+    """1단계가 놓치고 VLM만 읽은 표기 (ref_id가 v*)"""
+    if not context["vlm"]:
+        return []
+    reading = context["vlm"]["reading"]
+    return [x for x in reading["texts"] + reading["symbols"] if x["ref_id"][0] == "v"]
+
+
+def latest_analysis(analyses: list[dict]) -> dict:
+    """작업 하나의 Analysis 여러 개(사진 여러 장 · revision 여러 개) 중 Job에 반영할 것 = 가장 최근 created_at"""
+    return max(analyses, key=lambda a: datetime.fromisoformat(a["created_at"]))
+
+
+def reading_order(vision: dict, context: dict, corrected: dict[str, str]) -> list[str]:
+    """글자·기호를 줄 단위로 묶어 왼→오른, 위→아래 순서로 (작업자가 고친 값 반영). 위치를 모르는 v* 표기는 맨 뒤"""
+    items = [(d["bbox"], d["id"], d.get("text") or d.get("label")) for d in vision["texts"] + vision["symbols"]]
+    items += [(x["bbox"], x["ref_id"], x.get("text") or x.get("label")) for x in vlm_only(context) if "bbox" in x]
+    no_bbox = [corrected.get(x["ref_id"], x.get("text") or x.get("label")) for x in vlm_only(context) if "bbox" not in x]
+    items = [(bbox, corrected.get(ref, value)) for bbox, ref, value in items]
     items.sort(key=lambda it: (it[0][1] + it[0][3]) / 2)
     lines: list[list] = []
     for bbox, value in items:
@@ -103,24 +137,27 @@ def reading_order(vision: dict, corrected: dict[str, str]) -> list[str]:
             lines[-1][2].append((bbox[0], value))
         else:
             lines.append([center, bbox[3] - bbox[1], [(bbox[0], value)]])
-    return [value for _, _, line in lines for _, value in sorted(line)]
+    return [value for _, _, line in lines for _, value in sorted(line)] + no_bbox
 
 
 def to_job_fields(analysis: dict) -> dict:
     """Analysis → 팀원 Job(backend/app/schemas.py)의 해석 결과 필드. 백엔드 analyze·review에서 가져다 쓸 수 있음"""
     vision, context, confidence = analysis["vision"], analysis["context"], analysis["confidence"]
     corrections = {c["target"]: c["value"] for c in analysis.get("corrections", [])}
-    texts = {c: v for c, v in corrections.items() if c[0] in "ts"}
+    meanings = {c["target"]: c["meaning"] for c in analysis.get("corrections", []) if "meaning" in c}
+    texts = {c: v for c, v in corrections.items() if is_ref(c)}
     wc = corrections.get("welding_condition") or context["welding_condition"]
     vlm = context["vlm"]
+    symbols = [s["id"] for s in vision["symbols"]] + [x["ref_id"] for x in vlm_only(context) if "label" in x]
+    labels = {s["id"]: s["label"] for s in vision["symbols"]} | {x["ref_id"]: x["label"] for x in vlm_only(context) if "label" in x}
     return {
         "status": "awaiting_approval" if confidence and confidence["passed"] else "needs_review",
         "assembly_path": corrections.get("part") or context["part"]["assembly_path"],
         "marking": {
-            "raw_text": " ".join(reading_order(vision, texts)),
-            "symbols": [texts.get(s["id"], s["label"]) for s in vision["symbols"]],
-            "interpretation": vlm["interpretation"] if vlm else ", ".join(
-                m["meaning"] for m in context["dictionary_matches"] if m["meaning"]),
+            "raw_text": " ".join(reading_order(vision, context, texts)),
+            "symbols": [texts.get(i, labels[i]) for i in symbols],
+            "interpretation": corrections.get("interpretation") or (vlm["interpretation"] if vlm else ", ".join(
+                m for m in (meanings.get(d["ref_ids"][0], d["meaning"]) for d in context["dictionary_matches"]) if m)),
         },
         "welding_condition": {k: wc[k] for k in api.WeldingCondition.model_fields} if wc else None,
         "confidence": {k: confidence[k] for k in api.Confidence.model_fields} if confidence else None,
@@ -129,8 +166,8 @@ def to_job_fields(analysis: dict) -> dict:
     }
 
 
-def api_errors(analysis: dict) -> list[str]:
-    """to_job_fields 결과가 팀원 Pydantic Job 모델을 통과하는지"""
+def api_errors(analysis: dict, registry: Registry) -> list[str]:
+    """to_job_fields 결과가 팀원 Pydantic Job 모델을 통과하는지, 통과(awaiting_approval)면 로봇 JSON 스키마도 통과하는지"""
     fields = to_job_fields(analysis)
     job = {
         "id": analysis["job_id"], "workspace_id": analysis["workspace_id"], "project_id": analysis["project_id"],
@@ -143,6 +180,13 @@ def api_errors(analysis: dict) -> list[str]:
         api.Job.model_validate(job)
     except Exception as e:  # pydantic.ValidationError
         errors.append(f"팀원 Job 모델 검증 실패: {e}")
+    if fields["status"] == "awaiting_approval":  # 승인하면 바로 로봇 JSON을 만들 수 있어야 함
+        robot = {
+            "job_id": job["id"], "workspace_id": job["workspace_id"], "project_id": job["project_id"],
+            "created_at": job["created_at"], "approved": True, "approved_by": "검증용",
+            **{k: fields[k] for k in ("assembly_path", "marking", "welding_condition", "confidence", "evidence", "needs_review")},
+        }
+        errors += [f"로봇 JSON: {e}" for e in schema_errors(robot, "robot_output.schema.json", registry)]
     return errors
 
 
@@ -216,7 +260,7 @@ def main() -> int:
     for name, ref in EXAMPLE_SCHEMAS.items():
         errors = schema_errors(examples[name], ref, registry)
         if not errors and ref == "analysis.schema.json":
-            errors = semantic_errors(examples[name]) + seed_errors(examples[name]) + api_errors(examples[name])
+            errors = semantic_errors(examples[name]) + seed_errors(examples[name]) + api_errors(examples[name], registry)
         results.append(report(name, errors))
     if all(results):
         results.append(report("흐름: 1→2→3단계 → 작업자 확인 → revision 2", flow_errors(examples)))
