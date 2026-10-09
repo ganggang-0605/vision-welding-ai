@@ -2,10 +2,12 @@
 import re
 from difflib import SequenceMatcher
 
+from db_context_interpreter.ocr_text import ocr_variants
 from db_context_interpreter.readings import normalize
-from db_context_interpreter.welding import parse_thickness
+from db_context_interpreter.welding import read_thickness
 
 FUZZY_MIN = 0.8          # 유사 일치로 볼 최소 유사도 (difflib ratio)
+FIXED_PENALTY = 0.9     # 헷갈리는 글자를 고쳐서 맞힌 읽기의 점수 배수
 AMBIGUOUS_MARGIN = 0.2   # 1단계 후보 확률이 이만큼 이내로 붙어 있고 사전 해석이 달라지면 ambiguous_reading
 CODE_VALUE = re.compile(r"^([A-Z]+)([0-9]+(?:\.[0-9]+)?)$")  # 코드 + 숫자 (수기 각장 F5.5, V6, S4.5)
 
@@ -61,9 +63,9 @@ class Dictionary:
 
 def match_dictionary(
     readings: list[dict], context_input: dict, vlm_meanings: dict[str, str], vlm_prob: float, skip: set[str],
-) -> list[dict]:
-    """1단계 글자·기호(작업자가 고친 값 우선)를 context_input["symbols"]의 code·aliases와 대조 → DictionaryMatch 목록.
-    skip: 부재 번호로 쓴 표기 (조립 경로 DB에서 해석)
+) -> list[tuple[dict, dict]]:
+    """1단계 글자·기호(작업자가 고친 값 우선)를 context_input["symbols"]의 code·aliases와 대조 → [(읽기, DictionaryMatch)].
+    읽기는 줄을 나눈 표기 단위(ocr_text.segment). skip: 부재 번호로 쓴 읽기의 key (조립 경로 DB에서 해석)
 
     match: exact 그대로 일치 / alias 별칭 일치 / candidate 1단계 후보 중 하나가 일치 / fuzzy 유사 일치 /
            vlm 사전에 없지만 VLM이 해석 / none 해석 못 함
@@ -71,12 +73,13 @@ def match_dictionary(
     dictionary = Dictionary(context_input["symbols"])
     matches = []
     for r in readings:
-        if r["ref_id"] in skip:
+        if r["key"] in skip:
             continue
-        m = match_one(r, dictionary, vlm_meanings.get(r["ref_id"]), vlm_prob)
-        if r["meaning"]:  # 작업자가 직접 정한 의미가 사전보다 우선
+        whole = r["value"] == r["line"]  # VLM 의미 · 작업자 의미는 1단계 ID(줄 전체) 단위
+        m = match_one(r, dictionary, vlm_meanings.get(r["ref_id"]) if whole else None, vlm_prob)
+        if r["meaning"] and whole:  # 작업자가 직접 정한 의미가 사전보다 우선
             m["meaning"] = r["meaning"]
-        matches.append(m)
+        matches.append((r, m))
     return matches
 
 
@@ -98,37 +101,44 @@ def match_one(r: dict, dictionary: Dictionary, vlm_meaning: str | None, vlm_prob
         if found := dictionary.lookup(candidate) or dictionary.code_with_value(candidate):
             entry, extra = found
             return result(candidate, entry, "candidate", candidate_prob, None if extra in ("exact", "alias") else extra)
-    if value != "unknown" and (found := dictionary.fuzzy(value)):
-        return result(value, found[0], "fuzzy", prob * found[1])
+    if value != "unknown":
+        for fixed in ocr_variants(value):  # OCR이 헷갈린 글자를 고쳐 다시 대조 (F5,5 → F5.5, 54.5 → S4.5)
+            if found := dictionary.lookup(fixed) or dictionary.code_with_value(fixed):
+                entry, extra = found
+                return result(fixed, entry, "fuzzy", prob * FIXED_PENALTY, None if extra in ("exact", "alias") else extra)
+        if found := dictionary.fuzzy(value):
+            return result(value, found[0], "fuzzy", prob * found[1])
     if vlm_meaning:
         return result(value, None, "vlm", vlm_prob, vlm_meaning)
-    thickness = parse_thickness(value)
-    return result(value, None, "none", prob if thickness is not None else 0.0,
-                  f"판 두께 {thickness:g}mm" if thickness is not None else None)
+    thickness, read_as = read_thickness(value)
+    if thickness is None:
+        return result(value, None, "none", 0.0)
+    fixed = read_as != normalize(value)
+    return result(read_as if fixed else value, None, "none", prob * (FIXED_PENALTY if fixed else 1), f"판 두께 {thickness:g}mm")
 
 
-def dictionary_conflicts(matches: list[dict], readings: list[dict], context_input: dict) -> list[dict]:
+def dictionary_conflicts(pairs: list[tuple[dict, dict]], context_input: dict) -> list[dict]:
     """dictionary_unmatched(사전에 없음: fuzzy · vlm · none) · ambiguous_reading(후보마다 사전 해석이 달라짐 — 각장은 숫자까지).
     작업자가 고치거나 확인한 표기는 넣지 않음"""
     dictionary = Dictionary(context_input["symbols"])
-    corrected = {r["ref_id"] for r in readings if r["corrected"]}
-    by_ref = {r["ref_id"]: r for r in readings}
     conflicts = []
-    for m in matches:
+    for r, m in pairs:
         ref = m["ref_ids"][0]
-        if ref in corrected:
+        if r["corrected"]:
             continue
         raw = m["raw"]
-        if m["match"] == "fuzzy":
-            conflicts.append(unmatched(f"'{raw}' 표기는 사전에 그대로 없어 비슷한 '{m['code']}'({m['meaning']})로 봄", "info", ref))
+        read = f"'{r['value']}' 표기를 '{raw}'로 보정해" if normalize(raw) != normalize(r["value"]) else f"'{raw}' 표기는"
+        if m["match"] == "fuzzy" and normalize(raw) != normalize(r["value"]):
+            conflicts.append(unmatched(f"{read} '{m['code']}'({m['meaning']})로 봄 — OCR이 비슷한 글자를 헷갈렸을 수 있음", "info", ref))
+        elif m["match"] == "fuzzy":
+            conflicts.append(unmatched(f"{read} 사전에 그대로 없어 비슷한 '{m['code']}'({m['meaning']})로 봄", "info", ref))
         elif m["match"] == "vlm":
-            conflicts.append(unmatched(f"'{raw}' 표기는 문자/기호 사전에 없어 VLM 해석({m['meaning']})을 사용함", "info", ref))
+            conflicts.append(unmatched(f"{read} 문자/기호 사전에 없어 VLM 해석({m['meaning']})을 사용함", "info", ref))
         elif m["match"] == "none" and m["meaning"]:
-            conflicts.append(unmatched(f"'{raw}' 표기는 문자/기호 사전에 없어 표기 규칙으로 해석함({m['meaning']})", "info", ref))
+            conflicts.append(unmatched(f"{read} 문자/기호 사전에 없어 표기 규칙으로 해석함({m['meaning']})", "info", ref))
         elif m["match"] == "none":
-            conflicts.append(unmatched(f"'{raw}' 표기는 문자/기호 사전에 없고 해석하지 못함", "warning", ref))
+            conflicts.append(unmatched(f"{read} 문자/기호 사전에 없고 해석하지 못함", "warning", ref))
 
-        r = by_ref[ref]
         chosen = dictionary.reading_key(m["raw"])
         rivals = [
             (value, p) for value, p in r["candidates"]

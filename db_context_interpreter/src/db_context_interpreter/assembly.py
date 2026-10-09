@@ -1,18 +1,21 @@
 """c. 조립 경로 DB: 블록 → 대조립 → 중조립 → 소조립 → 부재"""
 import re
 
+from db_context_interpreter.ocr_text import ocr_variants
 from db_context_interpreter.readings import corrections_by_target, normalize
 
 DEPTH = {"BLOCK": 0, "LARGE": 1, "MID": 2, "SUB": 3, "PART": 4}
 PART_LIKE = re.compile(r"^[A-Z]{1,3}-[0-9]+[A-Z]?$")  # 트리에 없어도 부재 번호로 보이는 표기 (예: P-4)
+FIXED_PENALTY = 0.9  # 헷갈리는 글자를 고쳐서 맞힌 읽기의 확률 배수
 EMPTY_PART = {"node_id": None, "assembly_path": None, "level": None, "found_in_tree": False, "ref_ids": []}
 
 
-def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dict]]:
-    """부재 번호로 보이는 표기를 context_input["assembly_tree"]에서 찾아 Part를 만듦 → (Part, Conflict 목록).
+def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dict], set[str]]:
+    """부재 번호로 보이는 표기를 context_input["assembly_tree"]에서 찾아 Part를 만듦 → (Part, Conflict 목록, 부재 표기로 쓴 읽기 key).
     작업자가 part를 고쳤으면(corrections) 그 조립 경로를 씀. 못 찾으면 빈 Part"""
     tree = context_input["assembly_tree"]
     hits = tree_hits(readings, tree)
+    keys = {h["key"] for h in hits}
 
     correction = corrections_by_target(context_input).get("part")
     if correction:
@@ -23,8 +26,8 @@ def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dic
             "assembly_path": path,
             "level": node["level"] if node else None,
             "found_in_tree": node is not None,
-            "ref_ids": [h["ref_id"] for h in hits if on_path(h["node"], path)],
-        }, []
+            "ref_ids": unique(h["ref_id"] for h in hits if on_path(h["node"], path)),
+        }, [], keys
 
     if hits:
         best = max(hits, key=lambda h: (DEPTH[h["node"]["level"]], h["prob"]))
@@ -39,11 +42,16 @@ def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dic
                 "message": f"조립 트리의 서로 다른 갈래에 있는 부재 표기가 함께 읽힘({names}) — {best['node']['node_id']}로 판단함",
                 "ref_ids": unique(h["ref_id"] for h in [best] + others),
             })
+        conflicts += [{
+            "type": "ambiguous_reading", "severity": "info",
+            "message": f"'{h['value']}' 표기를 '{h['fixed']}'로 보정해 조립 트리의 {h['node']['node_id']}로 봄",
+            "ref_ids": [h["ref_id"]],
+        } for h in same if h["fixed"]]
         node = best["node"]
         return {
             "node_id": node["node_id"], "assembly_path": node["path"], "level": node["level"],
             "found_in_tree": True, "ref_ids": unique(h["ref_id"] for h in same),
-        }, conflicts
+        }, conflicts, keys
 
     for r in readings:
         if r["kind"] == "text" and PART_LIKE.match(normalize(r["value"])):
@@ -51,30 +59,46 @@ def find_part(readings: list[dict], context_input: dict) -> tuple[dict, list[dic
                 "type": "part_not_in_tree", "severity": "error",
                 "message": f"부재 표기 '{r['value']}'가 이 프로젝트의 조립 트리에 없음",
                 "ref_ids": [r["ref_id"]],
-            }]
-    return dict(EMPTY_PART), []
+            }], {r["key"]}
+    return dict(EMPTY_PART), [], keys
+
+
+class TreeIndex:
+    """조립 트리 노드를 node_id · 전체 경로로 찾기. 대시를 빠뜨린 읽기(P1 ↔ P-1)도 같은 것으로 봄"""
+
+    def __init__(self, tree: list[dict]) -> None:
+        self.index: dict[str, dict] = {}
+        for node in tree:
+            for key in (node["node_id"], node["path"]):
+                self.index.setdefault(normalize(key), node)
+                self.index.setdefault(normalize(key).replace("-", ""), node)
+
+    def lookup(self, value: str) -> dict | None:
+        key = normalize(value)
+        return self.index.get(key) or self.index.get(key.replace("-", ""))
+
+    def lookup_fixed(self, value: str) -> tuple[dict, str | None] | None:
+        """(노드, 보정한 읽기 — 그대로 맞으면 None). 그대로 안 맞으면 OCR이 헷갈린 글자를 고쳐 봄 (P-I → P-1)"""
+        if node := self.lookup(value):
+            return node, None
+        return next(((node, v) for v in ocr_variants(value) if (node := self.lookup(v))), None)
 
 
 def tree_hits(readings: list[dict], tree: list[dict]) -> list[dict]:
-    """조립 트리 노드(node_id 또는 전체 경로)와 같은 표기 → [{ref_id, node, prob}].
-    대시를 빠뜨린 읽기(P1 ↔ P-1)도 같은 것으로 봄. 바로 읽은 표기가 하나도 안 맞으면 1단계 후보까지 봄"""
-    index: dict[str, dict] = {}
-    for node in tree:
-        for key in (node["node_id"], node["path"]):
-            index.setdefault(normalize(key), node)
-            index.setdefault(normalize(key).replace("-", ""), node)
-
-    def lookup(value: str) -> dict | None:
-        key = normalize(value)
-        return index.get(key) or index.get(key.replace("-", ""))
-
+    """조립 트리 노드와 같은 표기 → [{ref_id, key, value, fixed, node, prob}].
+    바로 읽은 표기(보정 포함)가 하나도 안 맞으면 1단계 후보까지 봄"""
+    index = TreeIndex(tree)
     texts = [r for r in readings if r["kind"] == "text"]
-    hits = [{"ref_id": r["ref_id"], "node": node, "prob": r["prob"]} for r in texts if (node := lookup(r["value"]))]
+    hits = [
+        {"ref_id": r["ref_id"], "key": r["key"], "value": r["value"], "fixed": found[1], "node": found[0],
+         "prob": r["prob"] * (FIXED_PENALTY if found[1] else 1)}
+        for r in texts if (found := index.lookup_fixed(r["value"]))
+    ]
     if hits:
         return hits
     return [
-        {"ref_id": r["ref_id"], "node": node, "prob": prob}
-        for r in texts for value, prob in r["candidates"] if (node := lookup(value))
+        {"ref_id": r["ref_id"], "key": r["key"], "value": r["value"], "fixed": None, "node": node, "prob": prob}
+        for r in texts for value, prob in r["candidates"] if (node := index.lookup(value))
     ]
 
 

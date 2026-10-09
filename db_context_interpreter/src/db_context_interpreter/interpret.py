@@ -1,9 +1,12 @@
-"""[2단계] 진입점: VLM 해석 → 부재·조립 경로 → 사전 대조 → 용접 조건 → DB 불일치"""
-from db_context_interpreter.assembly import find_part, tree_hits
-from db_context_interpreter.dictionary import dictionary_conflicts, match_dictionary
+"""[2단계] 진입점: VLM 해석 → 읽기 정리(줄 나누기) → 부재·조립 경로 → 사전 대조 → 용접 조건 → DB 불일치"""
+from collections.abc import Callable
+
+from db_context_interpreter.assembly import TreeIndex, find_part
+from db_context_interpreter.dictionary import Dictionary, dictionary_conflicts, match_dictionary
+from db_context_interpreter.ocr_text import ocr_variants, segment
 from db_context_interpreter.readings import collect_readings, normalize
 from db_context_interpreter.vlm import VlmOutput, interpret_with_vlm
-from db_context_interpreter.welding import find_welding_condition
+from db_context_interpreter.welding import find_welding_condition, parse_thickness
 
 
 def interpret(vision_result: dict, context_input: dict, image=None, previous_vlm: dict | None = None) -> dict:
@@ -17,11 +20,12 @@ def interpret(vision_result: dict, context_input: dict, image=None, previous_vlm
     vlm_result = vlm.result if vlm else None
     vlm_prob = vlm.prob if vlm else 0.0
     readings = collect_readings(vision_result, context_input, vlm_result["reading"] if vlm_result else None, vlm_prob)
+    readings = segment(readings, known_marking(context_input))  # OCR이 한 줄로 읽은 표기 나누기 (P-1 FW t=10)
 
-    part, part_conflicts = find_part(readings, context_input)
-    # 부재 번호로 쓴 표기는 사전 대조에서 뺌 (고른 부재와 다른 갈래의 부재 표기도)
-    part_refs = set(part["ref_ids"]) | {h["ref_id"] for h in tree_hits(readings, context_input["assembly_tree"])}
-    matches = match_dictionary(readings, context_input, vlm.meanings if vlm else {}, vlm_prob, part_refs)
+    # 부재 번호로 쓴 읽기는 사전 대조에서 뺌 (고른 부재와 다른 갈래의 부재 표기도)
+    part, part_conflicts, part_keys = find_part(readings, context_input)
+    pairs = match_dictionary(readings, context_input, vlm.meanings if vlm else {}, vlm_prob, part_keys)
+    matches = [m for _, m in pairs]
     welding_condition, welding_conflicts = find_welding_condition(matches, readings, context_input)
     return {
         "user_context": context_input["user_context"],
@@ -30,10 +34,23 @@ def interpret(vision_result: dict, context_input: dict, image=None, previous_vlm
         "dictionary_matches": matches,
         "part": part,
         "welding_condition": welding_condition,
-        "conflicts": part_conflicts + dictionary_conflicts(matches, readings, context_input)
+        "conflicts": part_conflicts + dictionary_conflicts(pairs, context_input)
                      + welding_conflicts + find_conflicts(vision_result, readings, vlm_result),
         "vlm": vlm_result,
     }
+
+
+def known_marking(context_input: dict) -> Callable[[str], bool]:
+    """사전 · 조립 트리 · 판 두께로 해석되는 표기인지 (OCR이 헷갈린 글자를 고친 읽기 포함) — 줄 나누기 기준"""
+    dictionary, tree = Dictionary(context_input["symbols"]), TreeIndex(context_input["assembly_tree"])
+
+    def known(value: str) -> bool:
+        if parse_thickness(value) is not None:
+            return True
+        return any(dictionary.lookup(v) or dictionary.code_with_value(v) or tree.lookup(v)
+                   for v in [value, *ocr_variants(value)])
+
+    return known
 
 
 def find_conflicts(vision_result: dict, readings: list[dict], vlm: dict | None) -> list[dict]:
@@ -41,7 +58,9 @@ def find_conflicts(vision_result: dict, readings: list[dict], vlm: dict | None) 
     나머지 Conflict(dictionary_unmatched · part_not_in_tree · standard_conflict · ambiguous_reading)는 각 DB 모듈이 만듦"""
     if not vlm:
         return []
-    current = {r["ref_id"]: r for r in readings}
+    current: dict[str, dict] = {}
+    for r in readings:  # 1단계 ID마다 하나 (줄을 나눈 읽기는 line이 줄 전체)
+        current.setdefault(r["ref_id"], r)
     conflicts = []
     for kind, field in (("texts", "text"), ("symbols", "label")):
         for x in vlm["reading"][kind]:
@@ -53,10 +72,10 @@ def find_conflicts(vision_result: dict, readings: list[dict], vlm: dict | None) 
                     "type": "ocr_vlm_mismatch", "severity": "warning",
                     "message": f"1단계 인식이 놓친 표기 '{x[field]}'를 VLM이 읽음", "ref_ids": [x["ref_id"]],
                 })
-            elif normalize(x[field]) != normalize(r["value"]):
+            elif normalize(x[field]) != normalize(r["line"]):
                 conflicts.append({
                     "type": "ocr_vlm_mismatch", "severity": "warning",
-                    "message": f"1단계는 '{r['value']}', VLM은 '{x[field]}'로 읽음", "ref_ids": [x["ref_id"]],
+                    "message": f"1단계는 '{r['line']}', VLM은 '{x[field]}'로 읽음", "ref_ids": [x["ref_id"]],
                 })
     read_by_vlm = {x["ref_id"] for kind in ("texts", "symbols") for x in vlm["reading"][kind]}
     for d in vision_result["texts"] + vision_result["symbols"]:

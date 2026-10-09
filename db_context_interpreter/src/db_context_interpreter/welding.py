@@ -1,6 +1,7 @@
 """a. 용접 기준 DB: 표준 용접 기준표 대조"""
 import re
 
+from db_context_interpreter.ocr_text import ocr_variants
 from db_context_interpreter.readings import corrections_by_target, normalize
 
 # 판 두께 표기: t=10, T10, t:12mm, 10t, 10.5T
@@ -8,8 +9,15 @@ THICKNESS = re.compile(r"^(?:T[=:]?([0-9]+(?:\.[0-9]+)?)(?:MM)?|([0-9]+(?:\.[0-9
 
 
 def parse_thickness(value: str) -> float | None:
-    m = THICKNESS.match(normalize(value))
-    return float(m.group(1) or m.group(2)) if m else None
+    return read_thickness(value)[0]
+
+
+def read_thickness(value: str) -> tuple[float | None, str | None]:
+    """(판 두께 mm, 그렇게 읽은 표기). 그대로 안 읽히면 OCR이 헷갈린 글자를 고쳐 봄 (t=1O → T=10)"""
+    for candidate in [normalize(value), *ocr_variants(value)]:
+        if m := THICKNESS.match(candidate):
+            return float(m.group(1) or m.group(2)), candidate
+    return None, None
 
 
 def find_welding_condition(matches: list[dict], readings: list[dict], context_input: dict) -> tuple[dict | None, list[dict]]:

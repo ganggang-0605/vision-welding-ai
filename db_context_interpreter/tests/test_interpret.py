@@ -154,6 +154,73 @@ def test_unknown_symbol():
     assert result["dictionary_matches"][0]["match"] == "none"
 
 
+# ── 실제 OCR 출력: 한 줄로 붙은 표기 · 헷갈리는 글자 (vision/reports/phase1_baseline.md) ──
+
+def test_one_line_is_split_into_markings():
+    """PaddleOCR이 표기 여러 개를 한 줄(t1)로 읽어도 나눠서 해석하고, 근거는 모두 t1"""
+    result = run(vision_with([("P-1 FW t=10", 0.95)]))
+    assert result["part"]["assembly_path"] == "A1/L1/M2/S1/P-1" and result["part"]["ref_ids"] == ["t1"]
+    assert [(m["raw"], m["code"], m["ref_ids"]) for m in result["dictionary_matches"]] == [
+        ("FW", "FW", ["t1"]), ("t=10", None, ["t1"])]
+    assert result["welding_condition"]["current_a"] == "220-260" and result["welding_condition"]["ref_ids"] == ["t1"]
+
+
+def test_leg_lengths_on_one_line():
+    result = run(vision_with([("P-2", 0.95), ("F5.5 V6.0", 0.93)]))
+    assert [(m["code"], m["meaning"], m["ref_ids"]) for m in result["dictionary_matches"]] == [
+        ("F", "3F 용접장 각장 5.5mm", ["t2"]), ("V", "2F 용접장 각장 6.0mm", ["t2"])]
+
+
+@pytest.mark.parametrize("line", ["t = 10", "t=10", "T 10"])
+def test_spaced_marking_kept_together(line):
+    """공백이 끼어도 붙여야 뜻이 되는 표기(t = 10)는 나누지 않음"""
+    result = run(vision_with([("FW", 0.9), (line, 0.9)]))
+    assert result["welding_condition"]["thickness_mm"] == 10
+    assert len(result["dictionary_matches"]) == 2
+
+
+def test_confused_characters_in_part_and_thickness():
+    """1→I, 0→O로 읽어도 조립 트리 · 판 두께를 찾고, 보정했다는 항목을 남김"""
+    result = run(vision_with([("P-I", 0.99), ("FW", 0.9), ("t=1O", 0.98)]))
+    assert result["part"]["assembly_path"] == "A1/L1/M2/S1/P-1"
+    assert result["welding_condition"]["thickness_mm"] == 10
+    t3 = next(m for m in result["dictionary_matches"] if m["ref_ids"] == ["t3"])
+    assert (t3["raw"], t3["meaning"]) == ("T=10", "판 두께 10mm")
+    assert ("ambiguous_reading", "info", ["t1"]) in [(c["type"], c["severity"], c["ref_ids"]) for c in result["conflicts"]]
+
+
+@pytest.mark.parametrize("text, code, meaning", [
+    ("F5,5", "F", "3F 용접장 각장 5.5mm"),   # 소수점을 쉼표로
+    ("V6.O", "V", "2F 용접장 각장 6.0mm"),   # 0 → O
+    ("54.5", "S", "스티프너 각장 4.5mm"),    # S → 5
+])
+def test_confused_characters_in_leg_length(text, code, meaning):
+    (m,) = run(vision_with([(text, 0.9)]))["dictionary_matches"]
+    assert (m["code"], m["meaning"], m["match"], m["score"]) == (code, meaning, "fuzzy", 0.81)
+
+
+def test_exact_reading_wins_over_fix():
+    """그대로 맞는 읽기는 보정하지 않음 (FW · S1 · 10t)"""
+    result = run(vision_with([("S1", 0.9), ("FW", 0.9), ("10t", 0.9)]))
+    assert result["part"]["node_id"] == "S1"
+    assert [m["match"] for m in result["dictionary_matches"]] == ["exact", "none"]
+    assert "ambiguous_reading" not in types(result)
+
+
+def test_corrected_line_is_split_too():
+    result = run(vision_with([("PI FVV", 0.6)]), corrections=[{"target": "t1", "value": "P-1 FW t=10"}])
+    assert result["welding_condition"]["current_a"] == "220-260"
+    assert result["conflicts"] == []  # 작업자가 고친 값은 확인된 것
+
+
+def test_vlm_compares_whole_line(monkeypatch):
+    """줄을 나눠도 OCR↔VLM 비교는 1단계가 읽은 줄 전체 기준"""
+    fake_vlm(monkeypatch, {"interpretation": "부재 P-1, 필렛 용접, 판 두께 10mm",
+                           "texts": [{"text": "P-1 FW t=10", "ref_id": "t1", "bbox": None}], "symbols": [], "meanings": []}, runs=1)
+    result = run(vision_with([("P-1 FW t=10", 0.95)]))
+    assert "ocr_vlm_mismatch" not in types(result)
+
+
 # ── 조립 경로 ──
 
 def test_part_without_dash_and_deepest_node():
