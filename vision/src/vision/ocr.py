@@ -31,6 +31,10 @@ class OcrConfig:
     zoom_reread: bool = False
     zoom_margin: float = 0.15  # 영역 크기 대비 여백
     zoom_max_side: int = 960  # 잘라낸 영역이 이보다 크면 줄임
+    # 유사 문자 후보: 확률이 이보다 낮은 글자 줄은 인식 모델로 한 번 더 읽어 2·3순위 읽기를 candidates 로 붙임 (0이면 끔)
+    # → 2단계가 후보까지 DB와 대조(P-1O → P-10), 작업자 확인 화면이 후보와 비율을 보여 줌 (vision/candidates.py)
+    candidates_below: float = 0.9
+    max_candidates: int = 3
 
     def models(self) -> dict[str, str]:
         return {"ocr_det": _model_label(self.det_model, self.det_model_dir),
@@ -108,6 +112,11 @@ def recognize_text(image: np.ndarray, config: OcrConfig = DEFAULT_CONFIG) -> lis
     detections = to_text_detections(result["rec_texts"], result["rec_scores"], result["rec_polys"])
     if config.zoom_reread:
         detections = [_reread(image, d, config) for d in detections]
+    if config.candidates_below > 0:
+        from vision.candidates import add_candidates
+
+        detections = add_candidates(image, detections, config.rec_model, config.rec_model_dir,
+                                    config.candidates_below, config.max_candidates)
     return detections
 
 

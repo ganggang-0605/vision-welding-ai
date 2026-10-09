@@ -120,6 +120,28 @@ def test_trained_model_dirs_from_env(monkeypatch):
     assert config.models()["ocr_rec"].startswith("PP-OCRv6_medium_rec (")
 
 
+def test_ctc_beam_search_ranks_similar_readings():
+    """칸마다의 글자 확률(CTC)에서 2순위 읽기를 찾음: 마지막 칸 O 0.6 · 0 0.4 → P-1O 다음 P-10.
+    이어진 같은 글자는 한 글자, 빈칸을 사이에 둔 같은 글자는 두 글자"""
+    from vision.candidates import ctc_beam_search
+
+    charset = ["blank", "P", "-", "1", "O", "0"]
+
+    def row(**probs):
+        out = np.zeros(len(charset))
+        for name, p in probs.items():
+            out[charset.index({"dash": "-", "one": "1", "zero": "0"}.get(name, name))] = p
+        return out
+
+    probs = np.array([row(P=1.0), row(blank=1.0), row(dash=1.0), row(one=1.0), row(O=0.6, zero=0.4)])
+    (first, p1), (second, p2) = ctc_beam_search(probs, charset)[:2]
+    assert (first, second) == ("P-1O", "P-10")
+    assert p1 == pytest.approx(0.6 / 0.6 * 1.0) and p2 == pytest.approx(0.4 / 0.6)
+
+    ones = np.array([row(one=1.0), row(one=1.0), row(blank=1.0), row(one=1.0)])
+    assert ctc_beam_search(ones, charset)[0][0] == "11"
+
+
 def test_to_marking_fixes_confusable_characters_by_position():
     """각장 형식(F·V·S + 숫자): 첫 자리는 글자로, 나머지는 숫자로 바로잡고 앞뒤 잡글자는 버림"""
     from vision.marking import to_marking

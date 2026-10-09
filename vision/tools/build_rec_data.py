@@ -26,6 +26,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from vision.candidates import min_area_quad, rotate_crop  # PaddleOCR 이 인식기에 넘기는 것과 같은 자르기
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -58,24 +60,6 @@ def copy_steel(label_file: Path, out_part: Path, tag: str, repeat: int = 1) -> l
         shutil.copy(label_file.parent / rel, out_part / "images" / tag / name)
         lines += [f"images/{tag}/{name}\t{label}"] * repeat
     return lines
-
-
-def rotate_crop(img: np.ndarray, quad) -> np.ndarray:
-    """PaddleOCR 과 같은 방식으로 기울어진 사각형을 펴서 자름 (세로로 긴 건 90° 돌림)"""
-    pts = np.asarray(quad, np.float32)
-    w = int(max(np.linalg.norm(pts[0] - pts[1]), np.linalg.norm(pts[2] - pts[3])))
-    h = int(max(np.linalg.norm(pts[0] - pts[3]), np.linalg.norm(pts[1] - pts[2])))
-    dst = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
-    crop = cv2.warpPerspective(img, cv2.getPerspectiveTransform(pts, dst), (w, h),
-                               borderMode=cv2.BORDER_REPLICATE, flags=cv2.INTER_CUBIC)
-    return np.rot90(crop) if h and h / max(w, 1) >= 1.5 else crop
-
-
-def min_area_quad(poly) -> np.ndarray:
-    """검출 다각형 → 가장 작은 회전 사각형 4점 (왼쪽 위부터 시계 방향, PaddleOCR get_minarea_rect 와 같음)"""
-    box = sorted(cv2.boxPoints(cv2.minAreaRect(np.asarray(poly, np.float32))).tolist(), key=lambda p: p[0])
-    left, right = sorted(box[:2], key=lambda p: p[1]), sorted(box[2:], key=lambda p: p[1])
-    return np.float32([left[0], right[0], right[1], left[1]])
 
 
 def add_mpsc(mpsc: Path, out_part: Path, tag: str, max_n: int, rng: np.random.Generator) -> list[str]:

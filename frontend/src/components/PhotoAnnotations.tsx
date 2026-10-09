@@ -116,7 +116,9 @@ export function PhotoAnnotations({ src, image, analysis }: PhotoAnnotationsProps
               </span>
             )}
             {selected.candidates && selected.candidates.length > 1 && (
-              <span>후보 {selected.candidates.map((c) => c.text).join(', ')}</span>
+              <span>
+                후보 {selected.candidates.map((c) => `${c.text} (${formatPercent(c.prob * 100)})`).join(', ')}
+              </span>
             )}
           </>
         ) : (
