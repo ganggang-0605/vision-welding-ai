@@ -1,8 +1,11 @@
 import { SignOut, UserCirclePlus } from '@phosphor-icons/react'
 import { Link, useNavigate } from 'react-router'
+import { getPipelineStatus } from '../api/pipeline'
 import { PageHeader } from '../components/PageHeader'
+import { useAsync } from '../hooks/useAsync'
 import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { signOut, useAccounts } from '../lib/accounts'
+import { VLM_PROVIDER_LABEL } from '../lib/labels'
 import { paths } from '../lib/paths'
 import { TEXT_SIZE_OPTIONS, THEME_OPTIONS, useTextSize, useThemePreference } from '../lib/preferences'
 import styles from './PreferencesPage.module.css'
@@ -17,6 +20,7 @@ export function PreferencesPage() {
   const navigate = useNavigate()
   const [theme, setTheme] = useThemePreference()
   const [textSize, setTextSize] = useTextSize()
+  const pipeline = useAsync((signal) => getPipelineStatus(signal), [])
 
   const signOutHere = () => {
     if (!activeId) return
@@ -95,6 +99,45 @@ export function PreferencesPage() {
           ))}
         </div>
         <p className="field-hint">현장 태블릿처럼 멀리서 볼 때는 크게를 써 보세요.</p>
+      </section>
+
+      <section className="section" aria-labelledby="pipeline-title">
+        <h2 id="pipeline-title" className="section-title">
+          AI 모델 연결
+        </h2>
+        <p className="section-desc">서버의 .env 와 설치된 패키지 기준이에요. 바꾸면 백엔드를 다시 켜야 반영돼요.</p>
+        {pipeline.data && (
+          <dl className="group">
+            <div className="group-row">
+              <dt>1단계 문자 인식 (OCR)</dt>
+              <dd>{pipeline.data.ocr_available ? Object.values(pipeline.data.ocr_models).join(', ') : '설치 안 됨'}</dd>
+            </div>
+            <div className="group-row">
+              <dt>1단계 기호 인식 (YOLO)</dt>
+              <dd>{pipeline.data.symbol_detector_available ? '연결됨' : '연결 전'}</dd>
+            </div>
+            <div className="group-row">
+              <dt>2단계 VLM</dt>
+              <dd>
+                {pipeline.data.vlm_provider
+                  ? `${VLM_PROVIDER_LABEL[pipeline.data.vlm_provider] ?? pipeline.data.vlm_provider}, ${pipeline.data.vlm_model}, ${pipeline.data.vlm_runs}번 추론`
+                  : '꺼짐'}
+              </dd>
+            </div>
+            {pipeline.data.vlm_provider && (
+              <div className="group-row">
+                <dt>VLM API 키·SDK</dt>
+                <dd>
+                  {pipeline.data.vlm_api_key_set ? '키 있음' : '키 없음'}, {pipeline.data.vlm_sdk_installed ? 'SDK 설치됨' : 'SDK 설치 안 됨'}
+                </dd>
+              </div>
+            )}
+            <div className="group-row">
+              <dt>3단계 통과 기준</dt>
+              <dd>{pipeline.data.confidence_threshold}%</dd>
+            </div>
+          </dl>
+        )}
       </section>
     </>
   )

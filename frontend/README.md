@@ -63,6 +63,7 @@ npm run dev
 | `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 블록의 조립 경로 (블록 → 대조립 → 중조립 → 소조립 → 부재) |
 | `/w/:workspaceId/p/:projectId/jobs/new` | `NewJobPage` | 4 현장 촬영 = 새 작업 | 모바일 촬영(`<input type="file" accept="image/*" capture="environment">`) → 작업 생성 → 업로드 → 해석 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId` | `JobResultPage` | 5 해석 결과 | 인식한 표기, 신뢰도, 추천 용접 조건, 판단 근거. 해석 전이면 '해석 시작' |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId/process/:stage?` | `JobProcessPage` | 해석 과정 (1·2·3단계) | 표기 정보 해석 프로세스를 단계별로: `vision`(a 전처리·b OCR·c YOLO, 사진 위 위치), `context`(a 용접 기준·b 문자/기호 사전·c 조립 경로·d VLM, DB 불일치), `confidence`(a 시각 인식·b DB 정합성·c VLM 추론 신뢰도와 근거 값, 작업자 확인 항목). 사진이 여러 장이거나 다시 해석했으면 `?analysis=`로 고름 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId/review` | `JobReviewPage` | 6 작업자 확인 | 확인할 항목, 맥락 덧붙여 다시 해석 / 직접 입력 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId/summary` | `JobSummaryPage` | 7 요약본·JSON 내보내기 | 요약 → 승인 → 로봇 연계 JSON 미리보기·복사·내보내기 (승인 전이면 안내) |
 | `*` | `NotFoundPage` | | 없는 주소. 워크스페이스 안(`/w/demo/...`)이면 사이드바를 유지한 채 표시 |

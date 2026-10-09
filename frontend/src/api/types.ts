@@ -213,45 +213,174 @@ export interface JobImage {
 }
 
 // ── 해석 결과 (shared/schemas/analysis.schema.json) ──────────
-// 화면에서 쓰는 필드만 옮겨 둔다. 전체 형식과 의미는 shared/schemas 와 shared/README.md 가 기준이다.
+// shared/schemas 의 1·2·3단계 형식을 화면에서 쓰는 만큼 옮겨 둔다. 의미와 규칙은 shared/README.md 가 기준이다.
+// 확률(prob·score·consistency·factors)은 0~1, 신뢰도(ConfidenceReport 의 네 점수·threshold)는 0~100.
 
 /** [x1, y1, x2, y2] 원본 사진 픽셀 좌표 */
 export type BBox = [number, number, number, number]
 
-/** [1단계] 읽은 글자 (id: t1, t2, …) */
+/** [1단계] a. 전처리에서 실제로 적용한 보정 */
+export interface PreprocessStep {
+  name: string
+  /** 0~1, 클수록 원본을 많이 바꿈 */
+  strength: number
+}
+
+/** [1단계] b. OCR 로 읽은 글자 (id: t1, t2, …) */
 export interface TextDetection {
   id: string
   text: string
-  /** 0~1 */
   prob: number
   bbox: BBox
-  /** 유사 문자 후보 (확률이 낮을 때만) */
+  source: string
+  /** 글자별 확률 (text 길이와 같음) */
+  char_probs?: number[]
+  /** 유사 문자 후보 (확률이 낮을 때만, 첫 번째 = text) */
   candidates?: { text: string; prob: number }[]
 }
 
-/** [1단계] 찾은 기호 (id: s1, s2, …). label 은 사전 code, 없으면 "unknown" */
+/** [1단계] c. 기호 검출 (id: s1, s2, …). label 은 사전 code, 없으면 "unknown" */
 export interface SymbolDetection {
   id: string
   label: string
   prob: number
   bbox: BBox
+  source: string
+  candidates?: { label: string; prob: number }[]
 }
 
 export interface VisionResult {
   image_id: string
   image_size: { width: number; height: number }
+  preprocess: { correction_strength: number; steps: PreprocessStep[]; preprocessed_image_uri?: string }
   texts: TextDetection[]
   symbols: SymbolDetection[]
+  /** 쓴 모델 이름 (예: {ocr_det, ocr_rec}) */
+  models?: Record<string, string>
+  elapsed_ms?: number
+}
+
+export type MatchKind = 'exact' | 'alias' | 'candidate' | 'fuzzy' | 'vlm' | 'none'
+
+/** [2단계] b. 문자/기호 사전 대조 */
+export interface DictionaryMatch {
+  ref_ids: string[]
+  raw: string
+  code: string | null
+  meaning: string | null
+  match: MatchKind
+  score: number
+}
+
+/** [2단계] c. 조립 경로 (부재) */
+export interface PartMatch {
+  node_id: string | null
+  assembly_path: string | null
+  level: AssemblyLevel | null
+  found_in_tree: boolean
+  ref_ids: string[]
+}
+
+/** [2단계] a. 용접 기준 DB 로 판별한 조건 */
+export interface ContextWeldingCondition extends WeldingCondition {
+  thickness_mm?: number | null
+  standard_matched: boolean
+  source: 'standard_db' | 'vlm' | 'manual'
+  ref_ids?: string[]
+}
+
+export type ConflictType =
+  | 'dictionary_unmatched'
+  | 'part_not_in_tree'
+  | 'standard_conflict'
+  | 'ocr_vlm_mismatch'
+  | 'ambiguous_reading'
+
+export interface Conflict {
+  type: ConflictType
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  ref_ids: string[]
+}
+
+/** [2단계] d. VLM 맥락 해석 (VLM 을 끄면 null) */
+export interface VlmResult {
+  provider: string
+  model: string
+  interpretation: string
+  reading: {
+    texts: { text: string; ref_id: string }[]
+    symbols: { label: string; ref_id: string }[]
+  }
+  token_prob: number | null
+  consistency: number | null
+  runs: number
+}
+
+export interface ContextResult {
+  user_context?: string | null
+  related_job_ids?: string[]
+  dictionary_matches: DictionaryMatch[]
+  part: PartMatch
+  welding_condition: ContextWeldingCondition | null
+  conflicts: Conflict[]
+  vlm: VlmResult | null
+}
+
+export type ConfidenceLayer = 'visual' | 'db_consistency' | 'vlm_reasoning'
+
+/** [3단계] 신뢰도 산출 */
+export interface ConfidenceReport {
+  visual: number
+  db_consistency: number
+  vlm_reasoning: number
+  overall: number
+  threshold: number
+  passed: boolean
+  factors: {
+    visual: { recognition_prob: number | null; correction_strength: number | null; ocr_vlm_agreement: number | null }
+    db_consistency: { dictionary_match_rate: number | null; part_found: boolean | null; standard_conflicts: number }
+    vlm_reasoning: { token_prob: number | null; consistency: number | null }
+  }
+  evidence: { layer: ConfidenceLayer; message: string; ref_ids?: string[] }[]
+  needs_review: { target: string; reason: string; message: string; candidates?: string[] }[]
+}
+
+/** 작업자가 고친 항목 (target: t*·s*·v*·part·interpretation·welding_condition) */
+export interface Correction {
+  target: string
+  value: unknown
+  meaning?: string
+  previous?: unknown
 }
 
 /** 사진 한 장의 해석 결과. 작업자 확인마다 revision 이 늘어난 새 Analysis 가 쌓인다. */
 export interface Analysis {
+  schema_version: string
   analysis_id: string
+  workspace_id: string
+  project_id: string
   job_id: string
   image_id: string
   revision: number
   created_at: DateTimeString
   vision: VisionResult
+  context: ContextResult
+  confidence: ConfidenceReport | null
+  corrections?: Correction[]
+}
+
+/** GET /pipeline/status — 단계별 모델·API 연결 상태 (API 키 값은 오지 않는다) */
+export interface PipelineStatus {
+  ocr_available: boolean
+  ocr_models: Record<string, string>
+  symbol_detector_available: boolean
+  vlm_provider: string | null
+  vlm_model: string | null
+  vlm_runs: number
+  vlm_sdk_installed: boolean
+  vlm_api_key_set: boolean
+  confidence_threshold: number
 }
 
 /** POST .../analyze 본문. image_id 를 빼면 가장 최근에 올린 사진 */

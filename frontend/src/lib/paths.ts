@@ -24,6 +24,8 @@ export function rememberWorkspaceId(accountId: string, workspaceId: string): voi
   }
 }
 
+export type ProcessStage = 'vision' | 'context' | 'confidence'
+
 type W = { workspaceId: string }
 type P = W & { projectId: string }
 type J = P & { jobId: string }
@@ -54,6 +56,9 @@ export const paths = {
     generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId', { workspaceId, projectId, jobId } satisfies J),
   jobReview: (workspaceId: string, projectId: string, jobId: string) =>
     generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/review', { workspaceId, projectId, jobId } satisfies J),
+  /** 해석 과정: 1 시각 인식(vision) · 2 DB 기반 맥락 해석(context) · 3 신뢰도 산출(confidence). stage 를 빼면 1단계 */
+  jobProcess: (workspaceId: string, projectId: string, jobId: string, stage?: ProcessStage) =>
+    generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/process/:stage?', { workspaceId, projectId, jobId, stage }),
   jobSummary: (workspaceId: string, projectId: string, jobId: string) =>
     generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/summary', { workspaceId, projectId, jobId } satisfies J),
 }

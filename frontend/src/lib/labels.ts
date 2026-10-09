@@ -125,3 +125,53 @@ export function cellSummary(cell: Cell): string {
 export function legLengthLabel(leg: Pick<LegLength, 'code' | 'size_mm'>): string {
   return `${leg.code} ${leg.size_mm}mm`
 }
+
+// ── 해석 과정 (1·2·3단계) ──
+
+export const PREPROCESS_STEP_LABEL: Record<string, string> = {
+  upscale: '작은 사진 키우기',
+  clahe: '대비 보정',
+  denoise: '노이즈 제거',
+  perspective: '원근 보정',
+  retinexformer: '조도 보정',
+  uvdoc: '곡면 펴기',
+  sihr: '반사 제거',
+}
+
+export const MATCH_LABEL: Record<string, string> = {
+  exact: '그대로 일치',
+  alias: '비슷한 표기로 일치',
+  candidate: '후보 중 하나가 일치',
+  fuzzy: '유사 일치',
+  vlm: '사전에 없어 VLM 해석',
+  none: '해석 못 함',
+}
+
+export const CONFLICT_LABEL: Record<string, string> = {
+  dictionary_unmatched: '사전에 없음',
+  part_not_in_tree: '조립 트리에 없는 부재',
+  standard_conflict: '용접 기준과 충돌',
+  ocr_vlm_mismatch: 'OCR·VLM 읽기 다름',
+  ambiguous_reading: '헷갈리는 글자',
+}
+
+export const REVIEW_REASON_LABEL: Record<string, string> = {
+  ...CONFLICT_LABEL,
+  low_visual_confidence: '인식 확률 낮음',
+  vlm_inconsistent: 'VLM 추론이 매번 다름',
+  missing_required: '필수 값 없음',
+}
+
+export const WELDING_SOURCE_LABEL: Record<string, string> = {
+  standard_db: '표준 용접 기준표',
+  vlm: 'VLM 추론',
+  manual: '작업자 입력',
+}
+
+export const VLM_PROVIDER_LABEL: Record<string, string> = {
+  claude: 'Claude',
+  gpt: 'GPT',
+  gemini: 'Gemini',
+  'qwen3-vl': 'Qwen3-VL (로컬)',
+  internvl: 'InternVL (로컬)',
+}

@@ -9,6 +9,7 @@ import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { getActiveAccountId } from './lib/accounts'
 import { DEFAULT_WORKSPACE_ID, paths, readLastWorkspaceId } from './lib/paths'
 import { AssemblyTreePage } from './pages/AssemblyTreePage'
+import { JobProcessPage } from './pages/JobProcessPage'
 import { JobResultPage } from './pages/JobResultPage'
 import { JobReviewPage } from './pages/JobReviewPage'
 import { JobSummaryPage } from './pages/JobSummaryPage'
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
               { path: 'jobs/new', Component: NewJobPage },
               { path: 'jobs/:jobId', Component: JobResultPage },
               { path: 'jobs/:jobId/review', Component: JobReviewPage },
+              { path: 'jobs/:jobId/process/:stage?', Component: JobProcessPage },
               { path: 'jobs/:jobId/summary', Component: JobSummaryPage },
             ],
           },

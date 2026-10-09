@@ -1,0 +1,225 @@
+/* 해석 과정: 위쪽 단계 표시 + 단계별 a·b·c·d 묶음 */
+
+.placeholder {
+  height: 320px;
+  margin-top: 32px;
+  border-radius: var(--radius);
+  background: var(--fill);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-top: 32px;
+}
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepArrow {
+  flex: none;
+  color: var(--tertiary);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+  border-radius: var(--radius);
+  color: var(--label);
+  text-decoration: none;
+  background: var(--fill);
+}
+
+.step:hover {
+  text-decoration: none;
+  background: var(--fill-strong);
+}
+
+.step[aria-current='step'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.stepNumber {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg);
+}
+
+.step[aria-current='step'] .stepNumber {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.stepText {
+  display: grid;
+}
+
+.stepTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.stepSummary {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.picker {
+  min-width: 14rem;
+}
+
+.meta {
+  margin: 14px 0 0;
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
+.photo {
+  max-width: 760px;
+  margin-top: 28px;
+}
+
+.block {
+  margin-top: 36px;
+}
+
+.blockHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 표기 정보 해석 프로세스 그림의 a·b·c·d 동그라미 */
+.letter {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border: 1.5px solid var(--accent-text);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.blockTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.blockDesc {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--secondary);
+}
+
+.models {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--secondary);
+}
+
+.refs {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--tertiary);
+}
+
+.low {
+  font-weight: 600;
+  color: var(--attention);
+}
+
+.quote {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--fill);
+}
+
+.overall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 28px;
+}
+
+.overallScore {
+  margin: 0;
+  font-size: 3.5rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.overallTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.layer {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.layerScore {
+  margin: 0;
+  padding-top: 6px;
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.factors {
+  margin: 0;
+}
+
+@media (max-width: 767.98px) {
+  .step {
+    padding-right: 10px;
+  }
+
+  .stepSummary {
+    display: none;
+  }
+
+  .layer {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
