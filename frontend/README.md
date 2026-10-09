@@ -57,7 +57,8 @@ npm run dev
 | `/w/:workspaceId/settings` | `WorkspaceGeneralPage` | | 설정 > **워크스페이스 > 일반**: 이름·설명, 사용 방식(개인/팀) |
 | `/w/:workspaceId/settings/members` | `WorkspaceMembersPage` | | 설정 > **워크스페이스 > 멤버**: 목록·초대 (개인이면 초대 시 팀으로 전환) |
 | `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
-| `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 표준 용접 기준 표 (읽기 전용) |
+| `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 사이드바 **워크스페이스 사전 > 용접 기준 사전**: 표준 용접 기준 표 (읽기 전용) |
+| `/w/:workspaceId/assembly` | `AssemblyPathsPage` | 3b 조립 트리 | 사이드바 **워크스페이스 사전 > 조립 경로 사전**: 이 워크스페이스 모든 블록의 조립 트리를 블록별로 (블록 화면으로 이동) |
 | `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(블록) |
 | `/w/:workspaceId/p/:projectId` | `ProjectPage` | 1 작업 목록 | 확인 필요 안내 + 작업 목록 (이름·조립 경로·상태·용접 조건·신뢰도·날짜), 상태 필터(`?status=`) |
 | `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 블록의 조립 경로 (블록 → 대조립 → 중조립 → 소조립 → 부재) |
@@ -80,8 +81,8 @@ npm run dev
 - 맨 위 **워크스페이스 메뉴** (노션과 같은 구성): 지금 워크스페이스와 **팀원 초대** 버튼, 워크스페이스 설정·계정 추가하기, 로그인한 **계정마다** 워크스페이스 목록과 새 워크스페이스, 모든 계정에서 로그아웃. 다른 계정의 워크스페이스를 누르면 그 계정으로 바뀝니다.
   - 로그인한 계정 목록과 지금 계정은 `src/lib/accounts.ts`가 브라우저에 저장하고, API 요청마다 `X-User-Id` 헤더로 보냅니다 (TODO 인증: 실제 로그인 세션으로 교체).
 - 검색 ⌘K, **워크스페이스 홈**
+- **워크스페이스 사전**: 문자·기호 사전, 용접 기준 사전(공통), 조립 경로 사전(모든 블록의 조립 트리)
 - **작업**: 블록 목록. 펼치면 작업 목록·조립 트리. 보고 있는 블록은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 블록.
-- **워크스페이스 사전**: 문자·기호 사전, 용접 기준
 - 맨 아래 **내 계정** (`components/AccountMenu`, 위로 열림): 환경설정, 워크스페이스 설정, 화면 모드(시스템/라이트/다크), 로그아웃. 서버 연결이 끊기면 그 위에 안내
 
 현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. 데스크톱에서는 사이드바 위쪽의 닫기 버튼(마우스를 올리면 보임)이나 **⌘\\ / Ctrl+\\**로 사이드바를 접고 펼 수 있고, 접은 상태는 브라우저에 기억합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.

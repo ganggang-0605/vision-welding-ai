@@ -11,7 +11,7 @@ export function WeldingStandardsPage() {
   return (
     <div className="page">
       <PageHeader
-        title="용접 기준"
+        title="용접 기준 사전"
         description="모든 워크스페이스가 함께 쓰는 표준 기준표예요. 추천 조건은 이 표에서 고르고, 여기서는 고칠 수 없어요."
       />
       <AsyncView state={standards} isEmpty={(list) => list.length === 0} empty="아직 기준이 없어요.">

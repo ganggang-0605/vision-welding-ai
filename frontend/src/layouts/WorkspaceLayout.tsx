@@ -174,6 +174,28 @@ export function WorkspaceLayout() {
               </li>
             </ul>
 
+            <h2 className={styles.sectionTitle}>워크스페이스 사전</h2>
+            <ul className={styles.navList}>
+              <li>
+                <NavLink to={paths.symbols(workspaceId)} className={styles.navItem}>
+                  <BookOpen aria-hidden="true" />
+                  문자·기호 사전
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to={paths.standards(workspaceId)} className={styles.navItem}>
+                  <Ruler aria-hidden="true" />
+                  용접 기준 사전
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to={paths.assemblyPaths(workspaceId)} className={styles.navItem}>
+                  <TreeStructure aria-hidden="true" />
+                  조립 경로 사전
+                </NavLink>
+              </li>
+            </ul>
+
             <div className={styles.sectionHead}>
               <h2 className={styles.sectionTitle}>작업</h2>
               <Link className={styles.sectionAction} to={paths.newProject(workspaceId)} title="새 블록">
@@ -197,22 +219,6 @@ export function WorkspaceLayout() {
                 activeProjectId={projectId}
               />
             )}
-
-            <h2 className={styles.sectionTitle}>워크스페이스 사전</h2>
-            <ul className={styles.navList}>
-              <li>
-                <NavLink to={paths.symbols(workspaceId)} className={styles.navItem}>
-                  <BookOpen aria-hidden="true" />
-                  문자·기호 사전
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to={paths.standards(workspaceId)} className={styles.navItem}>
-                  <Ruler aria-hidden="true" />
-                  용접 기준
-                </NavLink>
-              </li>
-            </ul>
           </nav>
         )}
 
