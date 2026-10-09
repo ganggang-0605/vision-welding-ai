@@ -20,6 +20,20 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:  # 저장소 DB 테스트 (tests/test_persistence.py — TEST_DATABASE_URL 이 있을 때만 PostgreSQL 도 돌림)
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vision
+          POSTGRES_PASSWORD: vision
+          POSTGRES_DB: vision_welding
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vision -d vision_welding"
+          --health-interval 2s --health-timeout 3s --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgresql://vision:vision@localhost:5432/vision_welding
     steps:
       - uses: actions/checkout@v7
 

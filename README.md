@@ -132,8 +132,12 @@
 - 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
 - 다시 해석(`analyze`·`review`)하면 이전 승인은 무효가 됩니다 (`approved_at`·`approved_by` 비움). 단계 패키지에 실제 모델이 없으면 결과가 비어 `needs_review` 가 됩니다.
 - VLM 호출이 실패하면 해석은 VLM 없이 이어 가고, 이유가 작업의 확인 항목(`vlm_failed`)과 `/pipeline/status` 의 `vlm_last_error` 에 남습니다.
-- **저장소**([`backend/app/store.py`](backend/app/store.py))는 `.env` 의 `DATABASE_URL`(기본 `sqlite:///./vision_welding.db`, `backend/` 기준) 파일에 남아 서버를 다시 켜도 작업·사진·해석 결과가 그대로입니다.
-  처음 켤 때(파일이 없거나 비었을 때) 시드 상태(팀 워크스페이스 `demo`, 팀 워크스페이스 `yeongam`, 개인 워크스페이스 `personal`·`ldh`)로 채웁니다. 시드로 되돌리려면 `backend/vision_welding.db*` 를 지우고 다시 켭니다. `DATABASE_URL` 을 비우면 메모리만 씁니다 (테스트).
+- **저장소**([`backend/app/store.py`](backend/app/store.py))는 `.env` 의 `DATABASE_URL` DB 에 남아 서버를 다시 켜도 작업·사진·해석 결과가 그대로입니다.
+  기본은 **PostgreSQL**(`postgresql://vision:vision@localhost:5433/vision_welding`, 저장소 루트 `docker compose up -d db`)이고,
+  PostgreSQL 없이 개발할 때는 SQLite 파일(`sqlite:///./vision_welding.db`, `backend/` 기준)도 됩니다 ([`backend/app/db/connect.py`](backend/app/db/connect.py)가 주소로 고름).
+  처음 켤 때(DB 가 비었을 때) 시드 상태(팀 워크스페이스 `demo`, 팀 워크스페이스 `yeongam`, 개인 워크스페이스 `personal`·`ldh`)로 채웁니다.
+  시드로 되돌리려면 PostgreSQL 은 `docker compose down -v`, SQLite 는 `backend/vision_welding.db*` 를 지우고 다시 켭니다. `DATABASE_URL` 을 비우면 메모리만 씁니다 (테스트).
+  쓰던 DB 를 옮기려면 `backend/` 에서 `python -m app.db.migrate <보내는 주소> <받는 주소>` (예: SQLite 파일 → PostgreSQL).
 - 인증은 아직 없습니다 (TODO) — `X-User-Id` 헤더는 데모용일 뿐 누구나 아무 계정으로 요청할 수 있습니다.
   워크스페이스 목록만 멤버로 거르고, 그 밖의 경로는 권한 검사를 하지 않습니다 (id 를 알면 누구나 접근, TODO 권한).
 
@@ -158,9 +162,9 @@ backend/
   app/
     api/            # REST API (FastAPI) — users(/me, /users) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
     schemas.py      # API 스키마 (Pydantic) — 프론트엔드와 공유하는 계약
-    store.py        # 저장소 (메모리 + SQLite 파일, db/sqlite.py)
+    store.py        # 저장소 (메모리 + PostgreSQL · SQLite, db/connect.py)
     pipeline.py     # 1·2·3단계 통합 — DB 조회 → 단계 호출 → Analysis → Job 반영
-    db/             # 조립 트리 / 문자·기호 / 용접 기준 DB, SQLite 저장
+    db/             # 조립 트리 / 문자·기호 / 용접 기준 DB, 저장 (postgres.py · sqlite.py · migrate.py)
     export/         # 로봇 연계 JSON
   tests/
   tools/eval_pipeline.py  # 실제 모델로 1→2→3단계를 돌려 정답과 비교
@@ -189,12 +193,15 @@ docs/               # 기획 문서·이미지
 [uv](https://docs.astral.sh/uv/)로 3.12 가상환경을 만드는 걸 추천합니다 (uv 가 Python 3.12 도 받아 옵니다).
 
 ```bash
+docker compose up -d db          # 저장소 루트에서 — PostgreSQL (localhost:5433)
 cd backend
 uv venv -p 3.12 .venv && source .venv/bin/activate
 uv pip install -r requirements.txt
 cp ../.env.example ../.env
 uvicorn app.main:app --reload
 ```
+
+Docker 없이 하려면 `.env` 의 `DATABASE_URL` 을 `sqlite:///./vision_welding.db` 로 바꾸면 SQLite 파일에 저장합니다.
 
 uv 없이 하려면 `brew install python@3.12` 후 `python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.
 
@@ -205,13 +212,14 @@ uv 없이 하려면 `brew install python@3.12` 후 `python3.12 -m venv .venv && 
 
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
 처음 켤 때 데모 사용자 3명(팀원 김경무·이동현·이민환), 팀 워크스페이스 `demo`("울산 1도크", A1·A2 블록, 데모 작업 3건)·`yeongam`("영암 2도크", S1 블록 — 같은 FW 가 플래시버트 용접인 사전)와
-개인 워크스페이스 `personal`("개인 워크스페이스", 김경무)·`ldh`("이동현의 워크스페이스")가 시드되고 `backend/vision_welding.db` 에 저장됩니다.
+개인 워크스페이스 `personal`("개인 워크스페이스", 김경무)·`ldh`("이동현의 워크스페이스")가 시드되고 `DATABASE_URL` DB(기본 PostgreSQL)에 저장됩니다.
 켤 때 OCR 모델을 백그라운드로 미리 불러 둡니다 (`PRELOAD_MODELS=0` 이면 끔 — 첫 해석이 모델 로드로 1분 가까이 걸림).
 
 `requirements.txt`가 `shared`와 1·2·3단계 패키지도 editable(`-e ../…`)로 함께 설치합니다 (`backend` 폴더에서 실행).
 실제 인식 모델은 `pip install -e "../vision[models]"`, 상용 VLM SDK는 `pip install -e "../db_context_interpreter[vlm]"`로 따로 설치합니다.
 
-테스트: `cd backend && python -m pytest -q`
+테스트: `cd backend && python -m pytest -q` — 저장소 DB 테스트를 PostgreSQL 에서도 돌리려면
+`TEST_DATABASE_URL=postgresql://vision:vision@localhost:5433/vision_welding python -m pytest -q` (테스트마다 스키마를 따로 만들고 지움, CI 는 항상 돌림)
 
 **실제 모델로 점검** — CI 는 모델 없이 계약만 테스트해서 실제 OCR·VLM 동작이 깨져도 잡지 못합니다. 모델을 바꾸거나 단계 코드를 고쳤으면
 정답이 있는 사진(`data/annotations`, 사진은 `data/raw/` — 운영측 PAC 사진은 드라이브에서 받기)으로 전체를 돌려 비교하세요.

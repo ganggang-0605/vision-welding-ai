@@ -1,0 +1,23 @@
+# 로컬 개발용 PostgreSQL — 백엔드 저장소 DB (backend/app/db/postgres.py)
+#   켜기: docker compose up -d db      끄기: docker compose down      데이터까지 지우기(시드로 다시 시작): docker compose down -v
+# .env: DATABASE_URL=postgresql://vision:vision@localhost:5433/vision_welding
+# 다른 PostgreSQL 이 흔히 쓰는 5432 와 겹치지 않게 5433 (바꾸려면 POSTGRES_PORT=포트 docker compose up -d db)
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vision
+      POSTGRES_PASSWORD: vision  # 로컬 개발용. 배포할 때는 바꿀 것
+      POSTGRES_DB: vision_welding
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vision -d vision_welding"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
