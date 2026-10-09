@@ -56,8 +56,18 @@ def review_analysis(store: Store, job: Job, previous: dict, review: ReviewReques
 
 def job_with_analysis(job: Job, analysis: dict) -> Job:
     """Analysis 를 반영한 Job (status · assembly_path · marking · welding_condition · confidence · evidence · needs_review).
-    저장은 호출한 쪽에서 store.save_job"""
-    return Job.model_validate({**job.model_dump(), **to_job_fields(analysis)})
+    해석이 조립 경로를 찾지 못하면 작업에 이미 있던 경로를 지우지 않는다. 저장은 호출한 쪽에서 store.save_job"""
+    fields = to_job_fields(analysis)
+    if fields["assembly_path"] is None and job.assembly_path:
+        # PAC 셀 사진처럼 사진에 부재 번호가 없으면 2단계가 경로를 못 찾는다. 작업을 만들 때 적은 경로를 지우지 않고,
+        # 3단계의 '부재·조립 경로를 찾지 못함' 확인 항목도 빼 둔다.
+        # TODO(shared): 적어 둔 경로를 2단계 입력(context_input)으로 넘기면 3단계 판단까지 맞출 수 있음 — revision 1 에는
+        #   corrections 를 둘 수 없다는 규칙(vw_shared.rules) 때문에 지금은 Job 에서만 보정한다.
+        fields["assembly_path"] = job.assembly_path
+        missing_part = {n["message"] for n in (analysis["confidence"] or {}).get("needs_review", [])
+                        if n["target"] == "part" and n["reason"] == "missing_required"}
+        fields["needs_review"] = [message for message in fields["needs_review"] if message not in missing_part]
+    return Job.model_validate({**job.model_dump(), **fields})
 
 
 def build_context_input(

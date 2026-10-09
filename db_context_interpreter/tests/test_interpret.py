@@ -418,3 +418,33 @@ def test_unknown_provider(monkeypatch):
     monkeypatch.setenv("VLM_PROVIDER", "llava")
     with pytest.raises(ValueError):
         interpret(VISION, CONTEXT_INPUT)
+
+
+# ── VLM 에 보내는 사진 크기 (휴대폰 원본은 Claude 10MB 한도를 넘음) ──
+
+def test_vlm_image_small_kept_as_is():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+
+    from db_context_interpreter.vlm import load_image
+
+    image = np.full((480, 640, 3), 120, np.uint8)
+    data, media = load_image(image, {"preprocess": {}})
+    assert media == "image/png"
+    assert cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR).shape == (480, 640, 3)
+
+
+def test_vlm_image_large_shrunk_to_jpeg():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+
+    from db_context_interpreter.vlm import MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, load_image
+
+    rng = np.random.default_rng(0)
+    image = rng.integers(0, 256, (3000, 4000, 3), dtype=np.uint8)  # 노이즈라 PNG 가 매우 큼
+    data, media = load_image(image, {"preprocess": {}})
+    assert media == "image/jpeg"
+    assert len(data) <= MAX_IMAGE_BYTES * 2  # 원래 수십 MB → 몇 MB
+    shrunk = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    assert max(shrunk.shape[:2]) == MAX_IMAGE_SIDE
+    assert shrunk.shape[1] / shrunk.shape[0] == pytest.approx(4000 / 3000, rel=0.01)  # 비율 유지

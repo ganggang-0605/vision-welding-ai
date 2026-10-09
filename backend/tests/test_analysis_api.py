@@ -142,3 +142,31 @@ def test_review_manual_invalid(client, values):
     _upload(client)
     client.post(f"{JOB}/analyze")
     assert client.post(f"{JOB}/review", json={"action": "manual", "values": values}).status_code == 422
+
+
+# ── 작업 생성 때 적은 조립 경로 (PAC 셀 사진엔 부재 번호가 없음) ──
+
+def test_analyze_keeps_assembly_path_from_job(client):
+    """2단계가 경로를 못 찾아도 적어 둔 조립 경로가 남고, '부재를 못 찾음' 확인 항목은 빠진다"""
+    job = client.post(JOBS, json={"name": "셀 사진", "project_id": "block_a1", "assembly_path": "A1/L1/M2/S1/P-2"}).json()
+    path = f"{JOBS}/{job['id']}"
+    _upload(client, path)
+    analyzed = client.post(f"{path}/analyze").json()
+    assert analyzed["assembly_path"] == "A1/L1/M2/S1/P-2"
+    assert analyzed["needs_review"]  # 용접 조건은 여전히 확인 필요
+    assert not any("부재" in message for message in analyzed["needs_review"])
+
+    analysis = client.get(f"{path}/analyses").json()[-1]
+    assert analysis["context"]["part"]["assembly_path"] is None  # 2단계 결과(Analysis)는 그대로 둠
+
+    reviewed = client.post(f"{path}/review", json={"action": "reinterpret", "context": "셀 사진"}).json()
+    assert reviewed["assembly_path"] == "A1/L1/M2/S1/P-2"  # 다시 해석해도 유지
+
+
+def test_analyze_without_assembly_path(client):
+    job = client.post(JOBS, json={"name": "경로 없음", "project_id": "block_a1"}).json()
+    path = f"{JOBS}/{job['id']}"
+    _upload(client, path)
+    analyzed = client.post(f"{path}/analyze").json()
+    assert analyzed["assembly_path"] is None
+    assert any("부재" in message for message in analyzed["needs_review"])

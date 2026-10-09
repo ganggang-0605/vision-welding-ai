@@ -173,7 +173,7 @@ def reading_key(reading: dict) -> tuple:
 
 
 def load_image(image, vision_result: dict) -> tuple[bytes, str] | None:
-    """(인코딩된 이미지 bytes, media type) 또는 None"""
+    """(인코딩된 이미지 bytes, media type) 또는 None. 너무 큰 사진은 VLM 에 보낼 수 있게 줄인다 (fit_for_vlm)"""
     if image is None:
         uri = vision_result["preprocess"].get("preprocessed_image_uri")
         path = Path(uri.removeprefix("file://")) if uri else None
@@ -182,13 +182,44 @@ def load_image(image, vision_result: dict) -> tuple[bytes, str] | None:
         image = path
     if isinstance(image, str | Path):
         path = Path(image)
-        return path.read_bytes(), MEDIA_TYPES.get(path.suffix.lower(), "image/jpeg")
+        return fit_for_vlm(path.read_bytes(), MEDIA_TYPES.get(path.suffix.lower(), "image/jpeg"))
     if isinstance(image, bytes | bytearray):
         data = bytes(image)
-        return data, "image/png" if data.startswith(b"\x89PNG") else "image/jpeg"
+        return fit_for_vlm(data, "image/png" if data.startswith(b"\x89PNG") else "image/jpeg")
     import cv2  # numpy 배열 (backend가 넘기는 형식, BGR)
 
     ok, encoded = cv2.imencode(".png", image)
     if not ok:
         raise ValueError("이미지를 PNG로 인코딩하지 못함")
-    return encoded.tobytes(), "image/png"
+    return fit_for_vlm(encoded.tobytes(), "image/png", image)
+
+
+# provider 이미지 한도: Claude 10MB(요청 본문은 base64 라 더 큼) · 긴 변 1568px 넘으면 Claude 가 알아서 줄임.
+# 휴대폰 원본(4000px PNG 30MB 등)은 그대로 보내면 400 오류라, 넘으면 긴 변 1568px JPEG 로 줄여 보낸다.
+# Claude 가 서버에서 줄이는 크기와 같아서 bbox 좌표를 다루는 방식은 바뀌지 않는다.
+MAX_IMAGE_BYTES = 4 * 1024 * 1024
+MAX_IMAGE_SIDE = 1568
+
+
+def fit_for_vlm(data: bytes, media_type: str, decoded=None) -> tuple[bytes, str]:
+    """크기·용량 한도 안이면 그대로, 넘으면 긴 변 MAX_IMAGE_SIDE 의 JPEG(품질 90)로 다시 인코딩.
+    OpenCV 가 없으면(이 패키지만 설치한 CI 등) 그대로 보낸다 — backend 는 vision 패키지와 함께 OpenCV 가 깔려 있음"""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return data, media_type
+
+    image = decoded if decoded is not None else cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:  # 읽을 수 없는 형식이면 손대지 않고 provider 에 맡김
+        return data, media_type
+    height, width = image.shape[:2]
+    if len(data) <= MAX_IMAGE_BYTES and max(height, width) <= MAX_IMAGE_SIDE:
+        return data, media_type
+    scale = min(1.0, MAX_IMAGE_SIDE / max(height, width))
+    if scale < 1.0:
+        image = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise ValueError("이미지를 JPEG로 인코딩하지 못함")
+    return encoded.tobytes(), "image/jpeg"

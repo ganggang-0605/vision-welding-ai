@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import pytest
 from db_context_interpreter import vlm as vlm_module
+from db_context_interpreter.vlm import fit_for_vlm
 from vw_shared import load_example
 
 import app.pipeline as pipeline
@@ -99,7 +100,8 @@ def test_stage2_follows_project_assembly_tree(client, fresh_store):
 def test_vlm_gets_uploaded_photo_and_db(client, fake_vlm):
     _analyze(client)
     (call,) = fake_vlm
-    assert call["image"] == (_png(), "image/png")  # 올린 원본 파일 그대로
+    # 올린 원본 파일 (긴 변이 1568px 를 넘으면 VLM 한도에 맞게 줄인 JPEG — db_context_interpreter.vlm.fit_for_vlm)
+    assert call["image"] == fit_for_vlm(_png(), "image/png")
     assert "A1/L1/M2/S1/P-1" in call["prompt"] and "필렛 용접 (Fillet Weld)" in call["prompt"]
     assert _context(client)["vlm"]["interpretation"] == VLM_RESPONSE["interpretation"]
 
