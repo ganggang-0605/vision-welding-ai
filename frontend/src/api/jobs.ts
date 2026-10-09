@@ -2,11 +2,12 @@
 import { apiFetch, apiPath, jsonInit } from './client'
 import type { ApproveRequest, Job, JobCreate, JobListParams, ReviewRequest, RobotOutput } from './types'
 
-/** GET /workspaces/{workspace_id}/jobs?q=&status= (최신순) */
+/** GET /workspaces/{workspace_id}/jobs?q=&status=&project_id= (최신순) */
 export function listJobs(workspaceId: string, params: JobListParams = {}, signal?: AbortSignal): Promise<Job[]> {
   const query = new URLSearchParams()
   if (params.q) query.set('q', params.q)
   if (params.status) query.set('status', params.status)
+  if (params.project_id) query.set('project_id', params.project_id)
   const qs = query.toString()
   return apiFetch<Job[]>(apiPath`/workspaces/${workspaceId}/jobs` + (qs ? `?${qs}` : ''), { signal })
 }

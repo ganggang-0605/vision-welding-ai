@@ -1,17 +1,33 @@
+/* 맥 Spotlight 모양의 검색 창 */
+
 .dialog {
-  width: min(640px, calc(100vw - 32px));
-  max-height: min(560px, calc(100svh - 96px));
-  margin: 12vh auto auto;
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(520px, calc(100dvh - 96px));
+  margin: 14vh auto auto;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  background: var(--bg);
-  box-shadow: var(--shadow-lg);
+  border: 0;
+  border-radius: 16px;
+  color: var(--label);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: saturate(180%) blur(30px);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
 }
 
 .dialog::backdrop {
-  background: rgb(15 15 15 / 0.4);
+  background: rgb(0 0 0 / 0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dialog {
+    background: var(--bg);
+  }
+
+  .dialog::backdrop {
+    backdrop-filter: none;
+  }
 }
 
 .panel {
@@ -23,22 +39,33 @@
 .searchRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.searchIcon {
+  flex: none;
+  color: var(--secondary);
 }
 
 .input {
   flex: 1;
   min-width: 0;
-  padding: 4px 0;
+  padding: 0;
   border: 0;
-  font-size: 1.0625rem;
+  font-size: 1.375rem;
+  letter-spacing: -0.01em;
   background: transparent;
+}
+
+.input::placeholder {
+  color: var(--tertiary);
 }
 
 .input:focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 .results {
@@ -47,15 +74,15 @@
 }
 
 .groupTitle {
-  margin: 4px 8px 6px;
+  margin: 6px 12px 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--tertiary);
 }
 
 .hint {
-  margin: 8px;
-  color: var(--text-muted);
+  margin: 10px 12px 14px;
+  color: var(--secondary);
 }
 
 .list {
@@ -66,26 +93,64 @@
 
 .item {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
-  padding: 8px;
-  border-radius: var(--radius);
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
   color: inherit;
   text-decoration: none;
 }
 
+.item:hover {
+  text-decoration: none;
+}
+
+.item[data-default],
 .item:hover,
 .item:focus-visible {
-  background: var(--hover);
+  background: var(--fill-strong);
+}
+
+.itemIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--secondary);
+  background: var(--fill);
+}
+
+.itemText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
 }
 
 .itemName {
+  overflow: hidden;
+  font-size: 0.9375rem;
   font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .itemMeta {
-  flex: 1;
+  overflow: hidden;
   font-size: 0.8125rem;
-  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+
+/* type="search" 기본 지우기 버튼은 Esc 로 대신한다 */
+.input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.metaPath {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }

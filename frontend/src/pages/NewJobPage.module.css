@@ -1,0 +1,42 @@
+/* 사진 촬영·선택 영역 (안에 숨긴 <input type="file">) */
+.capture {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-group);
+  background: var(--fill);
+  cursor: pointer;
+  transition: background 0.2s var(--ease);
+}
+
+.capture:hover {
+  background: var(--fill-strong);
+}
+
+.capture:focus-within {
+  outline: 3px solid var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.prompt {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.preview {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: var(--radius-row);
+}
+
+@media (max-width: 767.98px) {
+  .capture {
+    min-height: 52dvh;
+  }
+}

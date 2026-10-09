@@ -1,0 +1,149 @@
+/* 메일 앱 같은 작업 목록: 상자 없이 줄 사이 가는 선만 */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li + li .row::before {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  left: 12px;
+  height: 1px;
+  content: '';
+  background: var(--separator);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) 6.5rem minmax(0, 1.6fr) 3.5rem 5.5rem 14px;
+  align-items: center;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--label);
+  text-decoration: none;
+}
+
+.row:hover {
+  text-decoration: none;
+  background: var(--fill);
+}
+
+/* 강조된 줄 바로 아래 줄의 구분선은 숨긴다 (선이 면에 붙어 보이지 않게) */
+.list li:hover + li .row::before,
+.row:hover::before {
+  opacity: 0;
+}
+
+.title {
+  display: grid;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.path {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+
+.status {
+  min-width: 0;
+}
+
+.condition {
+  overflow: hidden;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+
+.score {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  margin-left: 1px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--secondary);
+}
+
+.date {
+  font-size: 0.8125rem;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--secondary);
+}
+
+.chevron {
+  color: var(--tertiary);
+}
+
+/* 태블릿: 용접 조건 열을 뺀다 */
+@media (max-width: 1023.98px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) 6rem 3.5rem 5rem 14px;
+  }
+
+  .condition {
+    display: none;
+  }
+}
+
+/* 휴대폰: 이름·경로 한 덩어리 + 오른쪽에 상태와 날짜 */
+@media (max-width: 767.98px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto 14px;
+    grid-template-areas:
+      'title date chevron'
+      'title status chevron';
+    gap: 2px 12px;
+    padding-inline: 8px;
+  }
+
+  .title {
+    grid-area: title;
+  }
+
+  .status {
+    grid-area: status;
+    text-align: right;
+  }
+
+  .date {
+    grid-area: date;
+  }
+
+  .chevron {
+    grid-area: chevron;
+  }
+
+  .score {
+    display: none;
+  }
+}
+
+.project {
+  margin-right: 8px;
+  font-family: inherit;
+  color: var(--label);
+}

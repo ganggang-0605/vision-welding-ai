@@ -1,17 +1,34 @@
+import { Info, WarningCircle } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { isApiError } from '../api/client'
 import { errorMessage } from '../lib/errors'
 
 interface NoticeProps {
   tone?: 'info' | 'warning' | 'error'
-  children: ReactNode
+  /** 굵은 첫 줄. 없으면 children 만 한 줄로 보여 준다. */
+  title?: ReactNode
+  /** 오른쪽 끝 버튼 */
+  action?: ReactNode
+  children?: ReactNode
 }
 
-/** 안내·경고·오류 박스 (Notion 콜아웃 형태) */
-export function Notice({ tone = 'info', children }: NoticeProps) {
+/** 안내·경고·오류. 색 상자 대신 회색 면 하나에 아이콘 색으로만 구분한다. */
+export function Notice({ tone = 'info', title, action, children }: NoticeProps) {
+  const Icon = tone === 'info' ? Info : WarningCircle
   return (
     <div className={`notice notice--${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
-      {children}
+      <Icon size={20} weight={tone === 'info' ? 'regular' : 'fill'} aria-hidden="true" />
+      <div className="notice-body">
+        {title ? (
+          <>
+            <p className="notice-title">{title}</p>
+            {children && <p className="notice-text">{children}</p>}
+          </>
+        ) : (
+          children
+        )}
+      </div>
+      {action}
     </div>
   )
 }
@@ -26,13 +43,18 @@ interface ErrorNoticeProps {
 export function ErrorNotice({ error, onRetry }: ErrorNoticeProps) {
   const notImplemented = isApiError(error, 501)
   return (
-    <Notice tone={notImplemented ? 'warning' : 'error'}>
-      <span>{errorMessage(error)}</span>
-      {onRetry && !notImplemented && (
-        <button type="button" className="btn btn--small" onClick={onRetry}>
-          다시 시도
-        </button>
-      )}
+    <Notice
+      tone={notImplemented ? 'warning' : 'error'}
+      action={
+        onRetry &&
+        !notImplemented && (
+          <button type="button" className="btn btn--small" onClick={onRetry}>
+            다시 시도
+          </button>
+        )
+      }
+    >
+      {errorMessage(error)}
     </Notice>
   )
 }

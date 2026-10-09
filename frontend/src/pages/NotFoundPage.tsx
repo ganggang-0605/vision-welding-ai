@@ -5,9 +5,9 @@ import { PageHeader } from '../components/PageHeader'
 export function NotFoundPage() {
   return (
     <div className="page page--narrow">
-      <PageHeader title="페이지를 찾을 수 없습니다" description="주소가 잘못되었거나 이동·삭제된 페이지입니다." />
+      <PageHeader title="페이지를 찾을 수 없어요" description="주소가 잘못됐거나 옮겨진 페이지예요." />
       <Link className="btn btn--primary" to="/">
-        홈으로
+        처음으로
       </Link>
     </div>
   )

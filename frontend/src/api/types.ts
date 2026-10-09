@@ -6,13 +6,44 @@
 /** ISO 8601 날짜·시간 문자열 (예: "2026-10-09T03:00:00Z") */
 export type DateTimeString = string
 
+// ── 사용자 · 멤버 ─────────────────────────────────────────────
+
+/** 사용자. 로그인 기능이 생기기 전까지 GET /me 는 고정된 데모 사용자다 (TODO 인증). */
+export interface User {
+  id: string
+  name: string
+  email: string
+}
+
+export type MemberRole = 'owner' | 'member'
+
+export interface Member {
+  user_id: string
+  name: string
+  email: string
+  role: MemberRole
+  joined_at: DateTimeString
+}
+
+/** POST /workspaces/{id}/members. 개인 워크스페이스에 초대하면 팀 워크스페이스로 바뀐다. 이미 멤버면 409. */
+export interface MemberInvite {
+  name: string
+  /** '@' 가 없으면 422 */
+  email: string
+}
+
 // ── 워크스페이스 ──────────────────────────────────────────────
 
-/** 최상위 단위 (조선소·공정 하나). 작업·문자/기호 사전·조립 트리가 워크스페이스에 속한다. */
+/** 개인(혼자 쓰기, 기본값) / 팀(협업). 노션처럼 개인 워크스페이스에 사람을 초대하면 팀이 된다. */
+export type WorkspaceKind = 'personal' | 'team'
+
+/** 최상위 단위 (조선소·팀 하나). 프로젝트(호선)·문자/기호 사전·멤버가 워크스페이스에 속한다. */
 export interface Workspace {
   id: string
   name: string
   description: string | null
+  kind: WorkspaceKind
+  member_count: number
   created_at: DateTimeString
 }
 
@@ -23,9 +54,36 @@ export interface WorkspaceCreate {
   /** 1~100자 */
   name: string
   description?: string | null
+  /** 기본값 'personal'. 만든 사람(현재 사용자)이 소유자가 된다. */
+  kind?: WorkspaceKind
   /** 기본값 'empty'. 'copy' 면 copy_from_workspace_id 의 사전을 복제한다. */
   dictionary_source?: DictionarySource
   copy_from_workspace_id?: string | null
+}
+
+/** PATCH /workspaces/{id}. 보낸 필드만 바뀐다. 멤버가 2명 이상이면 개인으로 되돌릴 수 없다 (409). */
+export interface WorkspaceUpdate {
+  name?: string
+  description?: string | null
+  kind?: WorkspaceKind
+}
+
+// ── 프로젝트 (호선, 워크스페이스별) ────────────────────────────
+
+/** 호선(선박) 하나. 조립 트리와 작업이 프로젝트에 속한다. */
+export interface Project {
+  id: string
+  workspace_id: string
+  /** 예: "3201호선" */
+  name: string
+  description: string | null
+  created_at: DateTimeString
+}
+
+export interface ProjectCreate {
+  /** 1~100자 */
+  name: string
+  description?: string | null
 }
 
 // ── 문자/기호 사전 (워크스페이스별) ───────────────────────────
@@ -59,7 +117,7 @@ export interface SymbolEntryUpdate {
   welding_joint_type?: string | null
 }
 
-// ── 조립 트리 (워크스페이스별) ────────────────────────────────
+// ── 조립 트리 (프로젝트별) ────────────────────────────────────
 
 /** 블록 → 대조립 → 중조립 → 소조립 → 부재 */
 export type AssemblyLevel = 'BLOCK' | 'LARGE' | 'MID' | 'SUB' | 'PART'
@@ -104,6 +162,7 @@ export interface Confidence {
 export interface Job {
   id: string
   workspace_id: string
+  project_id: string
   name: string
   status: JobStatus
   assembly_path: string | null
@@ -119,6 +178,8 @@ export interface Job {
 }
 
 export interface JobCreate {
+  /** 같은 워크스페이스의 프로젝트 (아니면 422) */
+  project_id: string
   name: string
   assembly_path?: string | null
   /** 같은 워크스페이스의 과거 작업 id (없는 id 면 422). 기본값 [] */
@@ -131,6 +192,8 @@ export interface JobListParams {
   q?: string
   /** 빈 값·생략이면 전체 */
   status?: JobStatus
+  /** 빈 값·생략이면 워크스페이스 전체 */
+  project_id?: string
 }
 
 export type ReviewAction = 'reinterpret' | 'manual'
@@ -165,6 +228,7 @@ export interface WeldingStandard {
 export interface RobotOutput {
   job_id: string
   workspace_id: string
+  project_id: string
   created_at: DateTimeString
   assembly_path: string
   marking: Marking

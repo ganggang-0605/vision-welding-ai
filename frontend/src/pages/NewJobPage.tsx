@@ -1,14 +1,17 @@
+import { Camera } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { analyzeJob, createJob, uploadJobImage } from '../api/jobs'
 import type { Job } from '../api/types'
-import { getAssemblyTree } from '../api/workspaces'
+import { getAssemblyTree } from '../api/projects'
 import { ErrorNotice, Notice } from '../components/Notice'
 import { PageHeader } from '../components/PageHeader'
 import { useAsync } from '../hooks/useAsync'
 import { useObjectUrl } from '../hooks/useObjectUrl'
+import { useProject } from '../hooks/useProject'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { paths } from '../lib/paths'
+import styles from './NewJobPage.module.css'
 
 /** 작업은 만들었지만 사진 업로드·분석 단계에서 멈춘 경우 */
 interface PartialResult {
@@ -18,7 +21,7 @@ interface PartialResult {
 
 /**
  * 와이어프레임 4 — 현장 촬영(모바일) = 새 작업.
- * 작업 생성 → (사진이 있으면) 업로드 → 분석 순서로 호출한다. 업로드·분석은 파이프라인 구현 전까지 501.
+ * 작업 생성 → (사진이 있으면) 업로드 → 해석 순서로 호출한다. 업로드·분석은 파이프라인 구현 전까지 501.
  */
 export function NewJobPage() {
   const workspace = useWorkspace()
@@ -26,7 +29,8 @@ export function NewJobPage() {
   const ids = { photo: useId(), photoHint: useId(), name: useId(), path: useId(), pathList: useId() }
 
   // 조립 경로 입력 자동완성용 (부재 단계만)
-  const tree = useAsync((signal) => getAssemblyTree(workspace.id, signal), [workspace.id])
+  const project = useProject()
+  const tree = useAsync((signal) => getAssemblyTree(workspace.id, project.id, signal), [workspace.id, project.id])
   const partPaths = tree.data?.filter((node) => node.level === 'PART').map((node) => node.path) ?? []
 
   const [name, setName] = useState('')
@@ -45,7 +49,11 @@ export function NewJobPage() {
     let job: Job
     try {
       // TODO: 같은 워크스페이스의 과거 작업 연결 (related_job_ids) 선택 UI
-      job = await createJob(workspace.id, { name: name.trim(), assembly_path: assemblyPath.trim() || null })
+      job = await createJob(workspace.id, {
+        project_id: project.id,
+        name: name.trim(),
+        assembly_path: assemblyPath.trim() || null,
+      })
     } catch (err) {
       setError(err)
       setSubmitting(false)
@@ -57,7 +65,7 @@ export function NewJobPage() {
         await uploadJobImage(workspace.id, job.id, photo)
         await analyzeJob(workspace.id, job.id)
       }
-      navigate(paths.job(workspace.id, job.id))
+      navigate(paths.job(workspace.id, project.id, job.id))
     } catch (err) {
       // 작업 자체는 만들어졌으므로 결과 화면으로 갈 수 있게 안내한다.
       setPartial({ job, error: err })
@@ -68,15 +76,19 @@ export function NewJobPage() {
   if (partial) {
     return (
       <div className="page page--narrow">
-        <PageHeader title="새 작업" description="작업을 만들었지만 사진 분석까지는 진행하지 못했습니다." />
-        <Notice tone="info">작업 ‘{partial.job.name}’을(를) 만들었습니다.</Notice>
+        <PageHeader
+          breadcrumb={[{ label: project.name, to: paths.project(workspace.id, project.id) }, { label: '새 작업' }]}
+          title="새 작업"
+          description="작업은 만들었지만 사진 해석까지는 하지 못했어요."
+        />
+        <Notice title={partial.job.name}>작업을 만들었어요. 사진은 작업 화면에서 다시 올릴 수 있어요.</Notice>
         <ErrorNotice error={partial.error} />
         <p className="button-row">
-          <Link className="btn btn--primary" to={paths.job(workspace.id, partial.job.id)}>
+          <Link className="btn btn--primary" to={paths.job(workspace.id, project.id, partial.job.id)}>
             작업 보기
           </Link>
-          <Link className="btn" to={paths.workspaceHome(workspace.id)}>
-            작업 DB로
+          <Link className="btn btn--plain" to={paths.project(workspace.id, project.id)}>
+            작업 목록으로
           </Link>
         </p>
       </div>
@@ -86,20 +98,24 @@ export function NewJobPage() {
   return (
     <div className="page page--narrow">
       <PageHeader
+        breadcrumb={[{ label: project.name, to: paths.project(workspace.id, project.id) }, { label: '새 작업' }]}
         title="새 작업"
-        description="현장에서 부재 마킹을 촬영해 작업을 만듭니다. 휴대폰에서는 카메라가 바로 열립니다."
+        description="부재 표기를 찍으면 작업이 만들어지고 바로 해석해요."
       />
 
       <form className="form" onSubmit={onSubmit}>
         <div className="field">
           <span id={ids.photo} className="field-label">
-            마킹 사진
+            표기 사진
           </span>
-          <label className="capture">
+          <label className={styles.capture}>
             {previewUrl ? (
-              <img className="capture-preview" src={previewUrl} alt="선택한 마킹 사진 미리보기" />
+              <img className={styles.preview} src={previewUrl} alt="고른 표기 사진" />
             ) : (
-              <span>사진 촬영 또는 선택</span>
+              <span className={styles.prompt}>
+                <Camera size={30} aria-hidden="true" />
+                사진 찍기 또는 고르기
+              </span>
             )}
             <input
               className="visually-hidden"
@@ -115,12 +131,14 @@ export function NewJobPage() {
               }}
             />
           </label>
-          <p id={ids.photoHint} className="field-hint">{photo ? photo.name : '마킹이 화면 가운데 오도록, 반사가 적은 각도로 찍어 주세요.'}</p>
+          <p id={ids.photoHint} className="field-hint">
+            {photo ? photo.name : '표기가 가운데 오도록, 빛 반사가 적은 각도에서 찍어 주세요.'}
+          </p>
         </div>
 
         <div className="field">
           <label htmlFor={ids.name} className="field-label">
-            작업명
+            작업 이름
           </label>
           <input
             id={ids.name}
@@ -134,7 +152,7 @@ export function NewJobPage() {
 
         <div className="field">
           <label htmlFor={ids.path} className="field-label">
-            조립 경로 (선택)
+            조립 경로
           </label>
           <input
             id={ids.path}
@@ -149,16 +167,16 @@ export function NewJobPage() {
               <option key={path} value={path} />
             ))}
           </datalist>
-          <p className="field-hint">조립 트리의 부재 경로입니다. 비워 두면 분석 결과로 채웁니다.</p>
+          <p className="field-hint">비워 두면 해석 결과로 찾아 채워요.</p>
         </div>
 
         {error !== undefined && <ErrorNotice error={error} />}
 
         <p className="button-row">
           <button type="submit" className="btn btn--primary" disabled={submitting || !name.trim()}>
-            {submitting ? '처리 중…' : photo ? '작업 만들고 분석' : '작업 만들기'}
+            {submitting ? '만드는 중' : photo ? '해석 시작' : '작업 만들기'}
           </button>
-          <Link className="btn" to={paths.workspaceHome(workspace.id)}>
+          <Link className="btn btn--plain" to={paths.project(workspace.id, project.id)}>
             취소
           </Link>
         </p>

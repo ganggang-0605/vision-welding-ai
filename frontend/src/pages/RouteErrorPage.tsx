@@ -12,11 +12,11 @@ export function RouteErrorPage() {
 
   return (
     <div className="page page--narrow">
-      <PageHeader title="문제가 발생했습니다" description="화면을 그리는 중 오류가 났습니다. 새로고침하거나 홈으로 이동해 주세요." />
-      <pre className="code-block">{detail}</pre>
+      <PageHeader title="화면을 그리지 못했어요" description="새로고침하거나 처음 화면으로 돌아가 주세요." />
+      <pre className="code-block secondary">{detail}</pre>
       <p className="button-row">
         <Link className="btn btn--primary" to="/">
-          홈으로
+          처음으로
         </Link>
       </p>
     </div>

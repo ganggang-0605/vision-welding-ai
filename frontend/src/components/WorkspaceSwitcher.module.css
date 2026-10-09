@@ -5,112 +5,177 @@
 .trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   padding: 6px 8px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-row);
   text-align: left;
   background: transparent;
   cursor: pointer;
 }
 
 .trigger:hover {
-  background: var(--hover);
+  background: var(--fill-strong);
 }
 
+/* 워크스페이스 첫 글자 타일 (맥 앱 아이콘처럼 어두운 사각형) */
 .avatar {
   display: grid;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--on-accent);
-  background: var(--accent-bg);
+  color: var(--bg);
+  background: var(--label);
+}
+
+.avatarLarge {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 1rem;
 }
 
 .name {
   overflow: hidden;
   flex: 1;
+  font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-/* 아래 방향 꺾쇠 (테두리 두 변을 45° 회전) */
 .chevron {
   flex: none;
-  width: 7px;
-  height: 7px;
-  margin: 0 4px 3px;
-  border-right: 1.5px solid var(--text-muted);
-  border-bottom: 1.5px solid var(--text-muted);
-  transform: rotate(45deg);
+  color: var(--tertiary);
 }
 
-.trigger[aria-expanded='true'] .chevron {
-  margin-bottom: -3px;
-  transform: rotate(225deg);
+.menu :global(.skeleton) span {
+  height: 36px;
 }
 
+/* 사이드바(스크롤 영역) 안에서 잘리지 않게 사이드바 폭에 맞춘다. */
 .menu {
   position: absolute;
   z-index: 10;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   right: 0;
   left: 0;
   padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-group);
   background: var(--bg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.currentBlock {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 10px 8px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.currentText {
+  display: grid;
+  min-width: 0;
+}
+
+.currentName {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.currentMeta {
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
+.currentActions {
+  display: flex;
+  gap: 6px;
 }
 
 .menuTitle {
-  margin: 2px 6px 4px;
+  overflow: hidden;
+  margin: 6px 8px 4px;
   font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tertiary);
 }
 
 .list {
-  margin: 0 0 4px;
-  padding: 0 0 4px;
-  border-bottom: 1px solid var(--border);
+  margin: 0 0 6px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--separator);
   list-style: none;
 }
 
 .item {
   display: flex;
-  gap: 4px;
-  padding: 6px;
-  border-radius: 4px;
-  color: inherit;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  color: var(--label);
   text-decoration: none;
-}
-
-/* 긴 이름(최대 100자)은 말줄임 — 현재 표시 ✓ 는 항상 보이게 */
-.itemName {
-  overflow: hidden;
-  min-width: 0;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .item:hover,
 .item:focus-visible {
-  background: var(--hover);
+  text-decoration: none;
+  background: var(--fill);
 }
 
-.item[aria-current='page'] {
+.itemText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 긴 이름(최대 100자)은 말줄임, 현재 표시 체크는 항상 보이게 */
+.itemName {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.itemMeta {
+  font-size: 0.75rem;
+  color: var(--secondary);
+}
+
+.item[aria-current='page'] .itemName {
   font-weight: 600;
 }
 
-.item[aria-current='page']::after {
+.check {
   flex: none;
-  content: '✓';
-  color: var(--accent);
+  color: var(--label);
+}
+
+.plusTile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--secondary);
+  background: var(--fill-strong);
 }

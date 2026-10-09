@@ -2,7 +2,7 @@
 
 Vision Welding AI 웹 프론트엔드입니다. 작업자가 휴대폰으로 접속해 부재 마킹을 촬영·업로드하고, 분석 결과를 확인·승인한 뒤 로봇용 JSON으로 내보내는 UI입니다.
 
-지금은 **워크스페이스 기반 라우팅 + Notion 스타일 레이아웃 골격** 단계입니다.
+지금은 **워크스페이스 기반 라우팅 + 노션형 구조에 애플 시스템 앱 느낌의 화면** 단계입니다.
 모든 화면(와이어프레임 0~7)의 자리와 API 연결이 잡혀 있고, 화면마다 실제 API 데이터를 최소한으로 보여 줍니다. 디자인·세부 기능은 이 위에 채워 나가면 됩니다.
 
 ## 스택
@@ -11,7 +11,8 @@ Vision Welding AI 웹 프론트엔드입니다. 작업자가 휴대폰으로 접
 - [React Router](https://reactrouter.com/) 8 — 데이터 라우터(`createBrowserRouter` + `RouterProvider`)
 - [Vite](https://vite.dev/) 8 (`npm create vite@latest -- --template react-ts` 공식 템플릿 기반)
 - [Oxlint](https://oxc.rs/docs/guide/usage/linter): 현재 Vite 공식 템플릿의 기본 린터
-- 스타일: 순수 CSS (CSS 변수 디자인 토큰 + CSS Modules). UI 키트·상태 관리·CSS 프레임워크는 쓰지 않습니다.
+- 스타일: 순수 CSS (CSS 변수 디자인 토큰 + CSS Modules). UI 키트·상태 관리·CSS 프레임워크는 쓰지 않습니다. 디자인 원칙은 `src/index.css` 맨 위 주석 참고
+- 아이콘: [Phosphor Icons](https://phosphoricons.com/) (`@phosphor-icons/react`) 한 종류만 씁니다. 크기·굵기 기본값은 `main.tsx`의 `IconContext`
 - 패키지 매니저: **npm** (`package-lock.json` 커밋함)
 - Node.js **22.22 이상** (React Router 8 요구 사항, CI는 Node 24)
 
@@ -33,38 +34,51 @@ npm run dev
 ```
 
 브라우저에서 <http://localhost:5173>을 열면 데모 워크스페이스(`/w/demo`)로 이동합니다.
-사이드바 아래쪽에 백엔드 연결 상태가 표시되고, 백엔드가 꺼져 있으면 **연결 안 됨** → 백엔드를 켠 뒤 **다시 확인**을 누르면 됩니다.
+백엔드가 꺼져 있으면 사이드바 아래에 **서버에 연결할 수 없어요**가 뜹니다. 백엔드를 켠 뒤 **다시 확인**을 누르면 됩니다 (정상일 때는 아무것도 표시하지 않습니다).
 
 > 데모 데이터(워크스페이스 `demo`, 작업 3개)는 백엔드가 시작할 때 메모리에 올립니다. 화면에서 승인·추가·삭제한 내용은 백엔드를 재시작하면 처음 상태로 돌아갑니다.
 
 ## 라우트
 
-모든 데이터는 **워크스페이스** 안에 있습니다 (작업 · 문자/기호 사전 · 조립 트리). 표준 용접 기준만 모든 워크스페이스가 함께 쓰는 공통(읽기 전용) 데이터입니다.
+노션처럼 **워크스페이스 → 프로젝트(호선) → 작업** 순서로 들어갑니다.
+
+- **워크스페이스**: 개인(기본값) 또는 팀. 개인 워크스페이스에 팀원을 초대하면 팀 워크스페이스로 바뀝니다. 문자·기호 사전과 멤버가 워크스페이스에 속합니다.
+- **프로젝트**: 호선(선박) 하나. 조립 트리와 작업이 프로젝트에 속합니다.
+- **표준 용접 기준**: 모든 워크스페이스가 함께 쓰는 공통(읽기 전용) 데이터.
 
 | 경로 | 페이지 (`src/pages/`) | 와이어프레임 | 내용 |
 | --- | --- | --- | --- |
-| `/` | — | | `/w/demo`로 리다이렉트 (TODO: 마지막으로 연 워크스페이스로) |
-| `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 이름·설명, 문자/기호 사전 시작 방식(빈 사전 / 기존 사전 복사). **사이드바 없는 단독 화면** |
-| `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 작업 DB 표 (작업명·상태·조립 경로·신뢰도·생성일), 상태 필터(`?status=`) |
-| (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 현재 워크스페이스의 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
-| `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자/기호 사전 | 사전 표 + 항목 추가·삭제 |
-| `/w/:workspaceId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 블록 → 대조립 → 중조립 → 소조립 → 부재 (단계별 들여쓰기) |
+| `/` | | | 마지막으로 연 워크스페이스로 리다이렉트 (처음이면 `/w/demo`, `localStorage`에 기억) |
+| `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 1단계 혼자 / 팀과 함께(기본값 개인) → 2단계 이름·설명·사전 시작 방식. 팀이면 만든 뒤 멤버 초대로 이동. **사이드바 없는 단독 화면** |
+| `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(호선) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
+| (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 워크스페이스의 모든 프로젝트에서 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
+| `/w/:workspaceId/settings` | `WorkspaceSettingsPage` | | 설정과 멤버: 이름·설명, 사용 방식(개인/팀), 멤버 목록·초대 (`#members`) |
+| `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
 | `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 표준 용접 기준 표 (읽기 전용) |
-| `/w/:workspaceId/jobs/new` | `NewJobPage` | 4 현장 촬영 = 새 작업 | 모바일 촬영(`<input type="file" accept="image/*" capture="environment">`) → 작업 생성 → 업로드 → 분석 |
-| `/w/:workspaceId/jobs/:jobId` | `JobResultPage` | 5 해석 결과 | 표기 해석·용접 조건·신뢰도·판단 근거, 초안이면 '분석 실행' |
-| `/w/:workspaceId/jobs/:jobId/review` | `JobReviewPage` | 6 작업자 확인 | 확인 필요 항목, 맥락 추가 재해석 / 직접 해석 입력 |
-| `/w/:workspaceId/jobs/:jobId/summary` | `JobSummaryPage` | 7 승인 요약본·JSON 내보내기 | 요약 → 승인 → 로봇 연계 JSON 미리보기·다운로드 (승인 전이면 409 안내) |
+| `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(호선) |
+| `/w/:workspaceId/p/:projectId` | `ProjectPage` | 1 작업 목록 | 확인 필요 안내 + 작업 목록 (이름·조립 경로·상태·용접 조건·신뢰도·날짜), 상태 필터(`?status=`) |
+| `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 호선의 블록 → 대조립 → 중조립 → 소조립 → 부재 |
+| `/w/:workspaceId/p/:projectId/jobs/new` | `NewJobPage` | 4 현장 촬영 = 새 작업 | 모바일 촬영(`<input type="file" accept="image/*" capture="environment">`) → 작업 생성 → 업로드 → 해석 |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId` | `JobResultPage` | 5 해석 결과 | 인식한 표기, 신뢰도, 추천 용접 조건, 판단 근거. 해석 전이면 '해석 시작' |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId/review` | `JobReviewPage` | 6 작업자 확인 | 확인할 항목, 맥락 덧붙여 다시 해석 / 직접 입력 |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId/summary` | `JobSummaryPage` | 7 요약본·JSON 내보내기 | 요약 → 승인 → 로봇 연계 JSON 미리보기·복사·내보내기 (승인 전이면 안내) |
 | `*` | `NotFoundPage` | | 없는 주소. 워크스페이스 안(`/w/demo/...`)이면 사이드바를 유지한 채 표시 |
 
-- `/w/:workspaceId/*` 화면은 모두 `layouts/WorkspaceLayout`(사이드바 + `<Outlet />`) 안에서 그려집니다. 레이아웃이 워크스페이스를 불러온 뒤 페이지를 그리므로, 페이지에서는 `useWorkspace()`로 바로 꺼내 쓰면 됩니다. 없는 워크스페이스면 레이아웃이, 없는(또는 다른 워크스페이스의) 작업이면 `JobFrame`이 '찾을 수 없음' 화면을 보여 줍니다.
-- 작업 화면 5·6·7은 `components/JobFrame`(작업 불러오기 + 제목·상태 + 탭)을 함께 씁니다.
-- 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
-- 기능이 아직 없는 백엔드 파이프라인(이미지 업로드·분석·재해석)은 501을 돌려주며, 화면에는 **아직 구현되지 않음(501)** 안내가 나옵니다.
+- `/w/:workspaceId/*` 화면은 모두 `layouts/WorkspaceLayout`(사이드바 + `<Outlet />`) 안에서 그려집니다. 레이아웃이 워크스페이스·프로젝트 목록·현재 사용자를 불러온 뒤 페이지를 그리므로, 페이지에서는 `useWorkspace()` / `useWorkspaceContext()`로 바로 꺼내 씁니다.
+- `/w/:workspaceId/p/:projectId/*` 화면은 `layouts/ProjectLayout`이 주소의 프로젝트를 찾아 넘깁니다 (`useProject()`). 없는 프로젝트면 '찾을 수 없음' 화면을 보여 줍니다.
+- 작업 화면 5·6·7은 `components/JobFrame`(작업 불러오기 + 위치·제목·상태 + 화면 전환 세그먼트)을 함께 씁니다. 주소의 프로젝트와 작업의 프로젝트가 다르면 맞는 주소로 옮깁니다.
+- 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, projectId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
+- 기능이 아직 없는 백엔드 파이프라인(이미지 업로드·해석·재해석)은 501을 돌려주며, 화면에는 **아직 준비되지 않은 기능이에요** 안내가 나옵니다.
 
-### 사이드바 (Notion 스타일)
+### 사이드바 (노션 사이드바 구성)
 
-워크스페이스 전환 메뉴 · 검색 ⌘K · 홈 · 새 작업 · 최근 작업(5개) · 워크스페이스 DB(문자/기호 사전, 조립 트리, 용접 기준 `공통`) · 백엔드 연결 상태.
-현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴(☰) 버튼 뒤로 접힙니다.
+- 맨 위 **워크스페이스 전환 메뉴**: 지금 워크스페이스(개인/팀, 멤버 수)와 설정·초대 버튼, 내 계정의 워크스페이스 목록, 새 워크스페이스. 로그인 전이라 계정은 `GET /me`의 데모 사용자 하나입니다 (TODO 인증: 다른 계정 추가·전환).
+- 검색 ⌘K, 홈
+- **프로젝트**: 호선 목록. 펼치면 작업·조립 트리. 보고 있는 프로젝트는 자동으로 펼쳐집니다. 제목 옆 `+`로 새 프로젝트.
+- **워크스페이스**: 문자·기호 사전, 용접 기준, 설정과 멤버
+- 맨 아래 팀원 초대, 서버 연결이 끊겼을 때만 뜨는 안내
+
+현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.
 
 ## API 클라이언트
 
@@ -73,9 +87,11 @@ npm run dev
 | 파일 | 내용 |
 | --- | --- |
 | `api/client.ts` | `apiFetch<T>()`, `ApiError`(`status`, `detail`), `isApiError(err, 501)`, `jsonInit()`, 경로 인코딩 태그 `apiPath`, `getHealth()` |
-| `api/types.ts` | 계약 모델 — `Workspace`, `SymbolEntry`, `AssemblyNode`, `Job`, `JobStatus`, `RobotOutput` … (필드명 snake_case, id는 문자열) |
-| `api/workspaces.ts` | `listWorkspaces` · `createWorkspace` · `getWorkspace` · `listSymbols` · `createSymbol` · `updateSymbol` · `deleteSymbol` · `getAssemblyTree` |
-| `api/jobs.ts` | `listJobs(workspaceId, { q, status })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `analyzeJob` · `reviewJob` · `approveJob` · `exportJob` |
+| `api/types.ts` | 계약 모델 — `User`, `Member`, `Workspace`(`kind`, `member_count`), `Project`, `SymbolEntry`, `AssemblyNode`, `Job`(`project_id`), `RobotOutput` … (필드명 snake_case, id는 문자열) |
+| `api/users.ts` | `getMe` (로그인 전까지 데모 사용자) |
+| `api/workspaces.ts` | `listWorkspaces` · `createWorkspace` · `getWorkspace` · `updateWorkspace` · `listMembers` · `inviteMember` · `listSymbols` · `createSymbol` · `updateSymbol` · `deleteSymbol` |
+| `api/projects.ts` | `listProjects` · `createProject` · `getProject` · `getAssemblyTree(workspaceId, projectId)` |
+| `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `analyzeJob` · `reviewJob` · `approveJob` · `exportJob` |
 | `api/standards.ts` | `listWeldingStandards` (공통) |
 
 - 모든 함수의 마지막 인자는 선택 `signal?: AbortSignal`입니다. 경로 파라미터는 `encodeURIComponent`로 인코딩됩니다.
@@ -191,26 +207,29 @@ frontend/
     │   └── standards.ts      #   표준 용접 기준 (공통)
     ├── hooks/
     │   ├── useAsync.ts       #   로딩·오류 상태 훅
-    │   ├── useWorkspace.ts   #   현재 워크스페이스 (레이아웃 Outlet context)
+    │   ├── useWorkspace.ts   #   현재 워크스페이스·프로젝트 목록·사용자 (레이아웃 Outlet context)
+    │   ├── useProject.ts     #   현재 프로젝트(호선)
     │   ├── useRequiredParam.ts
     │   ├── useDebouncedValue.ts
     │   └── useObjectUrl.ts   #   사진 미리보기 URL
     ├── layouts/
-    │   └── WorkspaceLayout.tsx (+ .module.css)   # 사이드바 + Outlet
+    │   ├── WorkspaceLayout.tsx (+ .module.css)   # 사이드바(프로젝트 트리) + Outlet
+    │   └── ProjectLayout.tsx                     # 주소의 프로젝트를 찾아 넘김
     ├── components/
     │   ├── AsyncView.tsx     #   로딩·오류·빈 상태 공통 표시
-    │   ├── BackendStatus.tsx #   백엔드 연결 표시 (사이드바 하단)
+    │   ├── BackendStatus.tsx #   서버 연결이 끊겼을 때만 사이드바 하단에 안내
     │   ├── JobFrame.tsx      #   작업 화면 5·6·7 공통 틀
-    │   ├── JobNav.tsx        #   작업 화면 탭
+    │   ├── JobList.tsx (+ .module.css)           # 메일 앱 같은 작업 목록
+    │   ├── JobNav.tsx        #   작업 화면 전환 (세그먼트 컨트롤)
     │   ├── Notice.tsx        #   Notice, ErrorNotice
     │   ├── PageHeader.tsx    #   페이지 제목·설명 (+ 브라우저 탭 제목)
     │   ├── SearchDialog.tsx (+ .module.css)      # 검색 ⌘K 모달
-    │   ├── StatusPill.tsx    #   작업 상태 태그
+    │   ├── StatusLabel.tsx   #   작업 상태 글자 (확인 필요만 주황)
     │   └── WorkspaceSwitcher.tsx (+ .module.css) # 워크스페이스 전환 메뉴
     ├── lib/
-    │   ├── paths.ts          #   화면 URL 생성 (paths.job(...) 등)
-    │   ├── labels.ts         #   상태·단계·종류 한국어 라벨
-    │   ├── format.ts         #   날짜·퍼센트 표시
+    │   ├── paths.ts          #   화면 URL 생성 (paths.job(...) 등), 마지막 워크스페이스 기억
+    │   ├── labels.ts         #   상태·단계·종류·이음 형태·자세 한국어 라벨
+    │   ├── format.ts         #   날짜(목록용 짧은 날짜 포함)·신뢰도 표시
     │   ├── errors.ts         #   API 오류 → 화면 문장
     │   └── download.ts       #   JSON 파일 다운로드
     └── pages/                # 라우트 하나당 파일 하나 (위 '라우트' 표)
@@ -218,8 +237,9 @@ frontend/
 
 ## 다음 작업 (TODO)
 
-- 인증·멤버: 로그인 사용자를 승인자로 채우고, 내가 속한 워크스페이스만 보이기 (지금은 승인자 이름 직접 입력)
-- `/` 진입 시 마지막으로 연 워크스페이스로 이동
+- 인증: 로그인 사용자를 승인자로 채우고, 내가 속한 워크스페이스만 보이기, 노션처럼 다른 계정 추가·전환 (지금은 데모 사용자 하나, 승인자 이름 직접 입력)
+- 권한: 소유자만 설정·초대를 바꿀 수 있게 (지금은 누구나)
+- 조립 트리를 도면에서 가져오기 (새 프로젝트의 조립 트리는 비어 있음)
 - 문자/기호 사전 항목 수정(`updateSymbol`) UI
 - 새 작업에서 같은 워크스페이스의 과거 작업 연결(`related_job_ids`) 선택
 - 작업자 확인 '직접 해석'의 `values` 형식은 백엔드 재해석 구현 때 확정
