@@ -1,0 +1,124 @@
+{
+  "image": "pac/block/1.png",
+  "conditions": [],
+  "texts": [
+    {
+      "text": "?",
+      "style": "handwritten",
+      "bbox": [
+        182,
+        4,
+        225,
+        76
+      ]
+    },
+    {
+      "text": "?00",
+      "style": "handwritten",
+      "bbox": [
+        42,
+        85,
+        76,
+        104
+      ]
+    },
+    {
+      "text": "350",
+      "style": "handwritten",
+      "bbox": [
+        36,
+        115,
+        57,
+        134
+      ]
+    },
+    {
+      "text": "???",
+      "style": "handwritten",
+      "bbox": [
+        138,
+        127,
+        202,
+        190
+      ]
+    },
+    {
+      "text": "835",
+      "style": "handwritten",
+      "bbox": [
+        155,
+        193,
+        182,
+        209
+      ]
+    },
+    {
+      "text": "680",
+      "style": "handwritten",
+      "bbox": [
+        139,
+        203,
+        159,
+        220
+      ]
+    },
+    {
+      "text": "150",
+      "style": "handwritten",
+      "bbox": [
+        277,
+        236,
+        323,
+        259
+      ]
+    }
+  ],
+  "symbols": [
+    {
+      "label": "+",
+      "bbox": [
+        103,
+        10,
+        185,
+        85
+      ]
+    },
+    {
+      "label": "→",
+      "bbox": [
+        103,
+        36,
+        184,
+        67
+      ]
+    },
+    {
+      "label": "→",
+      "bbox": [
+        28,
+        103,
+        39,
+        131
+      ]
+    },
+    {
+      "label": "unknown",
+      "bbox": [
+        0,
+        44,
+        52,
+        110
+      ]
+    },
+    {
+      "label": "unknown",
+      "bbox": [
+        292,
+        52,
+        343,
+        112
+      ]
+    }
+  ],
+  "split": "eval"
+}

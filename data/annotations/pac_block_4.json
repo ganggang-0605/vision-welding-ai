@@ -1,0 +1,28 @@
+{
+  "image": "pac/block/4.png",
+  "conditions": [
+    "blur"
+  ],
+  "texts": [],
+  "symbols": [
+    {
+      "label": "unknown",
+      "bbox": [
+        40,
+        62,
+        82,
+        110
+      ]
+    },
+    {
+      "label": "unknown",
+      "bbox": [
+        174,
+        78,
+        212,
+        104
+      ]
+    }
+  ],
+  "split": "train"
+}

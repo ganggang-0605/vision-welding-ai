@@ -256,6 +256,22 @@
         "대블록"
       ],
       "welding_joint_type": null
+    },
+    {
+      "id": "sym_arrow",
+      "code": "→",
+      "kind": "symbol",
+      "meaning": "지시 화살표 (용접선에서 각장·치수 표기로 이어 그은 선, 방향 무관)",
+      "aliases": ["←", "↑", "↓"],
+      "welding_joint_type": null
+    },
+    {
+      "id": "sym_mark",
+      "code": "+",
+      "kind": "symbol",
+      "meaning": "먹매김 기준 표시 (십자·T자 기준선)",
+      "aliases": ["⊥"],
+      "welding_joint_type": null
     }
   ],
   "assembly_tree": [

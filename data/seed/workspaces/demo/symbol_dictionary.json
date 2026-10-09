@@ -29,6 +29,8 @@
     {"id": "sym_pt", "code": "PT", "kind": "text", "meaning": "침투탐상검사 (penetrant testing) — 용어사전 STD-0480", "aliases": [], "welding_joint_type": null},
     {"id": "sym_bkt", "code": "BKT", "kind": "text", "meaning": "브래킷 (bracket) — 용어사전 PRC-0176", "aliases": ["브라켓"], "welding_joint_type": null},
     {"id": "sym_ej", "code": "E/J", "kind": "text", "meaning": "에렉션조인트, 탑재 블록 사이의 최종 이음 (erection joint) — 용어사전 PRC-0169", "aliases": [], "welding_joint_type": null},
-    {"id": "sym_gb", "code": "G/B", "kind": "text", "meaning": "대조립 블록 (grand block) — 용어사전 PRC-0171", "aliases": ["대블록"], "welding_joint_type": null}
+    {"id": "sym_gb", "code": "G/B", "kind": "text", "meaning": "대조립 블록 (grand block) — 용어사전 PRC-0171", "aliases": ["대블록"], "welding_joint_type": null},
+    {"id": "sym_arrow", "code": "→", "kind": "symbol", "meaning": "지시 화살표 (용접선에서 각장·치수 표기로 이어 그은 선, 방향 무관)", "aliases": ["←", "↑", "↓"], "welding_joint_type": null},
+    {"id": "sym_mark", "code": "+", "kind": "symbol", "meaning": "먹매김 기준 표시 (십자·T자 기준선)", "aliases": ["⊥"], "welding_joint_type": null}
   ]
 }

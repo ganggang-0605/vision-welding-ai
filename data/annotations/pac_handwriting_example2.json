@@ -1,0 +1,47 @@
+{
+  "image": "pac/handwriting/example2.png",
+  "conditions": [],
+  "texts": [
+    {
+      "text": "F5.0",
+      "style": "handwritten",
+      "bbox": [
+        86,
+        46,
+        151,
+        90
+      ]
+    },
+    {
+      "text": "V5",
+      "style": "handwritten",
+      "bbox": [
+        79,
+        86,
+        127,
+        113
+      ]
+    }
+  ],
+  "symbols": [
+    {
+      "label": "→",
+      "bbox": [
+        3,
+        62,
+        76,
+        91
+      ]
+    },
+    {
+      "label": "→",
+      "bbox": [
+        116,
+        97,
+        171,
+        119
+      ]
+    }
+  ],
+  "split": "train"
+}

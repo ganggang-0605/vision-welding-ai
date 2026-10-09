@@ -1,0 +1,106 @@
+{
+  "image": "pac/block/2.png",
+  "conditions": [],
+  "texts": [
+    {
+      "text": "418",
+      "style": "handwritten",
+      "bbox": [
+        145,
+        110,
+        169,
+        131
+      ]
+    },
+    {
+      "text": "Angle",
+      "style": "handwritten",
+      "bbox": [
+        72,
+        127,
+        111,
+        150
+      ]
+    },
+    {
+      "text": "Face 350",
+      "style": "handwritten",
+      "bbox": [
+        157,
+        125,
+        202,
+        158
+      ]
+    },
+    {
+      "text": "Face",
+      "style": "handwritten",
+      "bbox": [
+        77,
+        142,
+        104,
+        161
+      ]
+    },
+    {
+      "text": "147",
+      "style": "handwritten",
+      "bbox": [
+        86,
+        156,
+        116,
+        196
+      ]
+    },
+    {
+      "text": "860",
+      "style": "handwritten",
+      "bbox": [
+        162,
+        174,
+        191,
+        198
+      ]
+    },
+    {
+      "text": "?16",
+      "style": "handwritten",
+      "bbox": [
+        33,
+        183,
+        57,
+        212
+      ]
+    }
+  ],
+  "symbols": [
+    {
+      "label": "→",
+      "bbox": [
+        132,
+        99,
+        141,
+        134
+      ]
+    },
+    {
+      "label": "+",
+      "bbox": [
+        257,
+        183,
+        298,
+        219
+      ]
+    },
+    {
+      "label": "unknown",
+      "bbox": [
+        3,
+        127,
+        64,
+        216
+      ]
+    }
+  ],
+  "split": "train"
+}

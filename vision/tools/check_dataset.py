@@ -20,6 +20,13 @@ SEED_WORKSPACES = ROOT / "data" / "seed" / "workspaces"
 EVAL_RATIO = 0.2
 STYLES = {"stamped", "stencil", "handwritten", "printed"}
 CONDITIONS = {"dark", "glare", "curved", "skewed", "stain", "scratch", "blur"}
+EXIF_ORIENTATION = 0x0112
+UNKNOWN = "unknown"  # 사전에 없거나 종류를 아직 못 정한 기호 (vision_result 스키마와 같은 값)
+
+
+def annotation_name(image_name: str) -> str:
+    """정답 파일 이름(확장자 제외): data/raw 기준 경로에서 확장자를 빼고 / 를 _ 로 (pac/block/1.png → pac_block_1)"""
+    return str(Path(image_name).with_suffix("")).replace("/", "_")
 
 
 def assign_split(image_name: str) -> str:
@@ -68,14 +75,15 @@ def main() -> int:
         if not image_name:
             errors.append(f"{path.name}: image 필드 없음")
             continue
-        if Path(image_name).stem != path.stem:
-            warnings.append(f"{path.name}: 파일 이름과 image({image_name})가 다름")
+        if annotation_name(image_name) != path.stem:
+            warnings.append(f"{path.name}: 파일 이름이 image({image_name})와 맞지 않음 ({annotation_name(image_name)}.json 이어야 함)")
 
         size = None
         image_path = RAW_DIR / image_name
         if image_path.exists():
             with Image.open(image_path) as im:
-                size = im.size
+                # 파이프라인(cv2)·브라우저처럼 EXIF 회전을 적용한 크기 (휴대폰 사진은 90° 회전 값이 붙어 있는 경우가 많음)
+                size = im.size[::-1] if im.getexif().get(EXIF_ORIENTATION) in (5, 6, 7, 8) else im.size
         else:
             errors.append(f"{path.name}: 사진 없음 ({image_path.relative_to(ROOT)})")
 
@@ -97,7 +105,7 @@ def main() -> int:
 
         for i, s in enumerate(ann.get("symbols", [])):
             where = f"{path.name} symbols[{i}]"
-            if s.get("label") not in symbol_codes:
+            if s.get("label") not in symbol_codes and s.get("label") != UNKNOWN:
                 warnings.append(f"{where}: 기호 사전에 없는 label '{s.get('label')}'")
             check_bbox(s.get("bbox"), size, where, errors)
             stats["symbol"][s.get("label")] += 1
