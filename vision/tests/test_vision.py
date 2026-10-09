@@ -52,14 +52,14 @@ def test_to_text_detections_converts_paddleocr_result():
 
 
 def test_preprocess_upscales_small_image_and_maps_back():
-    """작은 사진은 긴 변 1280px로 키우고(노이즈 제거 → 키우기), 찾은 위치는 원본 좌표로 되돌림"""
+    """작은 사진은 긴 변 1280px로 키우고, 찾은 위치는 원본 좌표로 되돌림 (노이즈 제거·대비 보정은 기본 꺼짐)"""
     from vision.preprocess import preprocess, to_original_coords
 
     small = np.full((240, 320, 3), 128, np.uint8)
     clean, prep, to_original = preprocess(small)
 
     assert clean.shape[:2] == (960, 1280)
-    assert [s["name"] for s in prep["steps"]] == ["denoise", "upscale"]
+    assert [s["name"] for s in prep["steps"]] == ["upscale"]
     assert 0 < prep["correction_strength"] <= 1
     found = [{"text": "F5.5", "bbox": [400, 400, 800, 600], "polygon": [[400, 400], [800, 400], [800, 600], [400, 600]]}]
     mapped = to_original_coords(found, to_original, 320, 240)
@@ -103,3 +103,18 @@ def test_warm_up_without_models(monkeypatch):
 
     monkeypatch.setattr(ocr, "models_available", lambda: False)
     assert ocr.warm_up() is False
+
+
+def test_to_marking_fixes_confusable_characters_by_position():
+    """각장 형식(F·V·S + 숫자): 첫 자리는 글자로, 나머지는 숫자로 바로잡고 앞뒤 잡글자는 버림"""
+    from vision.marking import to_marking
+
+    assert to_marking("F5.5") == "F5.5"
+    assert to_marking("55.5") == "S5.5"  # 첫 자리 5 → S
+    assert to_marking("U5.5") == "V5.5"  # 둥글게 쓴 V
+    assert to_marking("FO.5") == "F0.5"
+    assert to_marking("f6,0") == "F6.0"
+    assert to_marking("->F7.5<-") == "F7.5"  # 화살표를 글자로 읽은 것
+    assert to_marking("V5") == "V5"
+    assert to_marking("doc") is None
+    assert to_marking("") is None

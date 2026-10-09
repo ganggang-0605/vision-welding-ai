@@ -43,7 +43,7 @@ def confidence_threshold() -> float:
 
 
 def analyze_image(store: Store, job: Job, image: np.ndarray, image_id: str, on_stage: OnStage = _no_stage) -> dict:
-    """새 사진 해석 (revision 1) → Analysis. 1단계 전처리(작은 사진 키우기 · 노이즈 제거)를 거친 사진은 저장해 두고
+    """새 사진 해석 (revision 1) → Analysis. 1단계 전처리(작은 사진 키우기 — 노이즈 제거·대비 보정은 기본 꺼짐)를 거친 사진은 저장해 두고
     화면(GET .../images/{image_id}/preprocessed)에서 OCR 이 본 사진으로 보여 준다"""
     on_stage("vision")
     vision = recognize(image, image_id)
@@ -159,7 +159,8 @@ def current_value(analysis: dict, target: str):
 
 def stage2_image(store: Store, job: Job, image_id: str, fallback: np.ndarray | None = None) -> bytes | np.ndarray | None:
     """2단계 VLM 에 보여 줄 사진 — 올린 원본 파일 그대로 (작업자 확인 때도 같은 사진). 저장된 게 없으면 fallback.
-    1단계 보정본은 쓰지 않는다: 노이즈 제거가 작은 사진의 흐린 마커 획을 지워 VLM 이 글자를 못 읽음 (PAC 손글씨 예시 2).
+    1단계 보정본은 쓰지 않는다: 노이즈 제거가 작은 사진의 흐린 마커 획을 지워 VLM 이 글자를 못 읽었음 (PAC 손글씨 예시 2,
+    이 일로 1단계 노이즈 제거는 기본 꺼짐). 1단계 보정이 다시 생겨도 VLM 에는 원본을 보냄.
     작은 사진은 2단계가 노이즈 제거 없이 키워서 보낸다 (db_context_interpreter.vlm.fit_for_vlm)"""
     found = store.get_image(job.id, image_id)
     return found[1] if found else fallback
