@@ -231,7 +231,7 @@ backend/.venv/bin/python backend/tools/eval_pipeline.py --simulate all  # 저조
 ```
 
 **학습한 1단계 모델 쓰기** — 손글씨 각장 표기(F·V·S)를 찾고 읽도록 추가 학습한 검출기·인식기
-(`vision/notebooks/colab_train_det.ipynb` · `colab_train_rec.ipynb`). 모델 파일은 커서 저장소에 넣지 않고 GitHub Releases 에 올립니다.
+(`vision/notebooks/colab_train_det.ipynb` · `colab_train_rec.ipynb`). 모델 파일은 커서 저장소에 넣지 않고 GitHub Releases 에 올린다.
 
 1. [Releases](https://github.com/ganggang-0605/vision-welding-ai/releases) 의 최신 `models-*` 에서 `det_v3_inference.zip` · `rec_v4_inference.zip` 받기
 2. 저장소 루트에서 풀기 — 폴더마다 `inference.json` · `inference.pdiparams` · `inference.yml`
