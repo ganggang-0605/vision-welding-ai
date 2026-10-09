@@ -1,12 +1,15 @@
 """b. 문자 인식: PaddleOCR(검출 + 1차 인식), PARSeq(현장 글씨체), TrOCR(손글씨)"""
 import importlib.util
 import logging
-from dataclasses import asdict, dataclass
+import os
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
 log = logging.getLogger(__name__)
+ROOT = Path(__file__).resolve().parents[3]  # 저장소 루트 (모델 폴더의 상대 경로 기준)
 
 
 @dataclass(frozen=True)
@@ -15,6 +18,10 @@ class OcrConfig:
 
     det_model: str = "PP-OCRv6_small_det"
     rec_model: str = "PP-OCRv6_medium_rec"
+    # 추가 학습한 모델 폴더(inference.json · inference.pdiparams · inference.yml) — None이면 PaddleOCR 공식 가중치.
+    # 학습: vision/notebooks/colab_train_det.ipynb · colab_train_rec.ipynb. 모델 이름(det_model · rec_model)이 inference.yml과 같아야 함
+    det_model_dir: str | None = None
+    rec_model_dir: str | None = None
     det_limit_side_len: int = 1280  # 긴 변을 이 크기로 줄여 검출 (원본 4000px 그대로면 느리고 큰 글씨를 쪼갬)
     det_limit_type: str = "max"
     use_textline_orientation: bool = True  # 뒤집힌(180°) 글자 줄 보정 — 쌓아 둔 부재는 표기가 거꾸로 찍히는 경우가 많음
@@ -26,10 +33,29 @@ class OcrConfig:
     zoom_max_side: int = 960  # 잘라낸 영역이 이보다 크면 줄임
 
     def models(self) -> dict[str, str]:
-        return {"ocr_det": self.det_model, "ocr_rec": self.rec_model}
+        return {"ocr_det": _model_label(self.det_model, self.det_model_dir),
+                "ocr_rec": _model_label(self.rec_model, self.rec_model_dir)}
 
 
-DEFAULT_CONFIG = OcrConfig()
+def _model_label(name: str, model_dir: str | None) -> str:
+    return f"{name} ({model_dir})" if model_dir else name
+
+
+def _model_dir(value: str | None) -> str | None:
+    """상대 경로는 저장소 루트 기준 (backend 는 backend/ 에서 실행됨)"""
+    if not value:
+        return None
+    path = Path(value)
+    return str(path if path.is_absolute() else ROOT / path)
+
+
+def config_from_env(base: "OcrConfig" = OcrConfig()) -> OcrConfig:
+    """.env 의 VISION_DET_MODEL_DIR · VISION_REC_MODEL_DIR 로 추가 학습한 모델을 씀 (비우면 공식 모델)"""
+    return replace(base, det_model_dir=_model_dir(os.environ.get("VISION_DET_MODEL_DIR")),
+                   rec_model_dir=_model_dir(os.environ.get("VISION_REC_MODEL_DIR")))
+
+
+DEFAULT_CONFIG = config_from_env()
 
 
 def models_available() -> bool:
@@ -44,6 +70,8 @@ def _engine(config: OcrConfig):
     return PaddleOCR(
         text_detection_model_name=config.det_model,
         text_recognition_model_name=config.rec_model,
+        text_detection_model_dir=config.det_model_dir,
+        text_recognition_model_dir=config.rec_model_dir,
         text_det_limit_side_len=config.det_limit_side_len,
         text_det_limit_type=config.det_limit_type,
         use_textline_orientation=config.use_textline_orientation,

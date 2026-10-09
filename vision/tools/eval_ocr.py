@@ -7,6 +7,8 @@
   backend/.venv/bin/python vision/tools/eval_ocr.py --dataset mpsc --limit 200     # MPSC 테스트 (금속 양각·각인)
   --prep none|up|clahe|up+clahe|up+denoise|default : 전처리 비교 (기본 none = 전처리 없이 OCR만)
   --rec-model, --det-model, --limit-side 로 설정 비교, --out 으로 결과 JSON 저장
+  --det-model-dir, --rec-model-dir : 추가 학습한 모델 폴더 (기본은 .env 의 VISION_DET_MODEL_DIR · VISION_REC_MODEL_DIR, "official" = 공식 모델)
+  --dataset pac : 운영측 사진 정답 전부 (data/annotations/pac_*.json, split 상관없이 — OCR 학습에는 안 씀)
   --charset steel-ocr : 표기에 쓰일 수 있는 글자만 남기는 후처리 효과 측정 (헷갈리는 글자는 바꾸고 나머지는 버림)
   --zoom : 확대 재판독 켜기 (찾은 영역을 원본 해상도로 잘라 다시 읽음)
 
@@ -89,11 +91,11 @@ PREP = {
 }
 
 
-def load_annotations() -> list[tuple[Path, list[dict]]]:
+def load_annotations(pattern: str = "*.json", eval_only: bool = True) -> list[tuple[Path, list[dict]]]:
     samples = []
-    for path in sorted(ANNOTATIONS.glob("*.json")):
+    for path in sorted(ANNOTATIONS.glob(pattern)):
         ann = json.loads(path.read_text(encoding="utf-8"))
-        if ann.get("split") != "eval":
+        if eval_only and ann.get("split") != "eval":
             continue
         samples.append((RAW / ann["image"], [{"text": t["text"], "bbox": t.get("bbox")} for t in ann["texts"]]))
     return samples
@@ -228,7 +230,7 @@ def run_det(samples, config, limit, charset=None, prep=None):
 def run_rec(samples, config, limit, charset=None):
     from paddleocr import TextRecognition
 
-    model = TextRecognition(model_name=config.rec_model, enable_mkldnn=config.enable_mkldnn)
+    model = TextRecognition(model_name=config.rec_model, model_dir=config.rec_model_dir, enable_mkldnn=config.enable_mkldnn)
     rows, times, details = [], [], []
     for path, gt in samples[:limit]:
         image = cv2.imread(str(path))
@@ -247,10 +249,12 @@ def run_rec(samples, config, limit, charset=None):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dataset", choices=["steel-ocr", "mpsc", "annotations"], default="steel-ocr")
+    parser.add_argument("--dataset", choices=["steel-ocr", "mpsc", "annotations", "pac"], default="steel-ocr")
     parser.add_argument("--mode", choices=["det", "rec"], default="det", help="det: 사진 전체, rec: 잘라낸 글자 (steel-ocr만)")
     parser.add_argument("--det-model")
     parser.add_argument("--rec-model")
+    parser.add_argument("--det-model-dir", help='추가 학습한 검출 모델 폴더 ("official" = 공식 모델)')
+    parser.add_argument("--rec-model-dir", help='추가 학습한 인식 모델 폴더 ("official" = 공식 모델)')
     parser.add_argument("--limit-side", type=int, help="검출 전 긴 변 크기")
     parser.add_argument("--orientation", action="store_true", help="뒤집힌 글자 줄 보정 켜기")
     parser.add_argument("--zoom", action="store_true", help="확대 재판독 켜기")
@@ -264,6 +268,9 @@ def main() -> int:
     for field, value in (("det_model", args.det_model), ("rec_model", args.rec_model), ("det_limit_side_len", args.limit_side)):
         if value:
             config = replace(config, **{field: value})
+    for field, value in (("det_model_dir", args.det_model_dir), ("rec_model_dir", args.rec_model_dir)):
+        if value:
+            config = replace(config, **{field: None if value == "official" else str(Path(value).resolve())})
     if args.orientation:
         config = replace(config, use_textline_orientation=True)
     if args.zoom:
@@ -277,7 +284,8 @@ def main() -> int:
             parser.error("--mode rec 는 steel-ocr 만 지원")
         summary, details = run_rec(load_steel_rec(), config, args.limit, charset)
     else:
-        samples = {"steel-ocr": load_steel_det, "mpsc": load_mpsc, "annotations": load_annotations}[args.dataset]()
+        samples = {"steel-ocr": load_steel_det, "mpsc": load_mpsc, "annotations": load_annotations,
+                   "pac": lambda: load_annotations("pac_*.json", eval_only=False)}[args.dataset]()
         if not samples:
             print("평가할 정답이 없습니다 (data/annotations 의 split=eval 파일)")
             return 1

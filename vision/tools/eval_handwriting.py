@@ -73,7 +73,7 @@ class Paddle:
 
         from vision.ocr import DEFAULT_CONFIG
 
-        self.model = TextRecognition(model_name=DEFAULT_CONFIG.rec_model, enable_mkldnn=False)
+        self.model = TextRecognition(model_name=DEFAULT_CONFIG.rec_model, model_dir=DEFAULT_CONFIG.rec_model_dir, enable_mkldnn=False)
 
     def read(self, images, constrain=False):
         return [(r["rec_text"], float(r["rec_score"])) for r in self.model.predict(images, batch_size=16)]

@@ -105,6 +105,21 @@ def test_warm_up_without_models(monkeypatch):
     assert ocr.warm_up() is False
 
 
+def test_trained_model_dirs_from_env(monkeypatch):
+    """VISION_*_MODEL_DIR 이 있으면 추가 학습한 모델 폴더를 씀 (상대 경로는 저장소 루트 기준), 없으면 공식 모델"""
+    from vision import ocr
+
+    monkeypatch.delenv("VISION_DET_MODEL_DIR", raising=False)
+    monkeypatch.delenv("VISION_REC_MODEL_DIR", raising=False)
+    assert ocr.config_from_env().models() == {"ocr_det": "PP-OCRv6_small_det", "ocr_rec": "PP-OCRv6_medium_rec"}
+
+    monkeypatch.setenv("VISION_REC_MODEL_DIR", "weights/rec_v3/inference")
+    config = ocr.config_from_env()
+    assert config.det_model_dir is None
+    assert config.rec_model_dir == str(ocr.ROOT / "weights/rec_v3/inference")
+    assert config.models()["ocr_rec"].startswith("PP-OCRv6_medium_rec (")
+
+
 def test_to_marking_fixes_confusable_characters_by_position():
     """각장 형식(F·V·S + 숫자): 첫 자리는 글자로, 나머지는 숫자로 바로잡고 앞뒤 잡글자는 버림"""
     from vision.marking import to_marking
