@@ -1,0 +1,26 @@
+{
+  "visual": 62,
+  "db_consistency": 92,
+  "vlm_reasoning": 90,
+  "overall": 62,
+  "threshold": 80,
+  "passed": false,
+  "factors": {
+    "visual": { "recognition_prob": 0.62, "correction_strength": 0.35, "ocr_vlm_agreement": 1.0 },
+    "db_consistency": { "dictionary_match_rate": 0.67, "part_found": true, "standard_conflicts": 0 },
+    "vlm_reasoning": { "token_prob": null, "consistency": 1.0 }
+  },
+  "evidence": [
+    { "layer": "visual", "message": "손글씨 'FW' 인식 확률 62%로 낮음", "ref_ids": ["t2"] },
+    { "layer": "visual", "message": "OCR과 VLM 읽기 4건 모두 일치" },
+    { "layer": "db_consistency", "message": "부재 P-1이 조립 트리 A1/L1/M2/S1/P-1에 존재", "ref_ids": ["t1"] },
+    { "layer": "db_consistency", "message": "FILLET · 판 두께 10mm가 표준 용접 기준과 충돌 없음" },
+    { "layer": "vlm_reasoning", "message": "3회 추론 해석 모두 일치" }
+  ],
+  "needs_review": [
+    {
+      "target": "t2", "reason": "low_visual_confidence",
+      "message": "손글씨 표기 'FW' 확인 필요", "candidates": ["FW", "EW"]
+    }
+  ]
+}

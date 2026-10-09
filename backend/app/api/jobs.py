@@ -101,7 +101,7 @@ def approve_job(job: JobDep, body: ApproveRequest, store: StoreDep) -> Job:
 
 @router.get("/{job_id}/export", response_model=RobotOutput, responses={409: error_response("승인되지 않은 작업")})
 def export_job(job: JobDep) -> dict:
-    """승인된 작업 → 로봇 연계용 JSON (schemas/robot_output.schema.json)"""
+    """승인된 작업 → 로봇 연계용 JSON (shared/schemas/robot_output.schema.json)"""
     try:
         return to_robot_json(job)
     except ValueError as e:

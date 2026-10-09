@@ -7,6 +7,8 @@
 
 ## 1. 범위와 출력 형식
 
+> 정식 출력 형식은 [`shared/schemas/vision_result.schema.json`](../shared/schemas/vision_result.schema.json)입니다. 아래 표는 요약이며, 다르면 스키마가 기준입니다.
+
 | 구성 | 파일 | 출력 |
 | --- | --- | --- |
 | a. 전처리 | `backend/app/pipeline/preprocess/denoise.py` | `(보정된 이미지, 보정 강도 0~1)` |
@@ -63,7 +65,7 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 
 ## 3. 개발 환경
 
-- **Python 3.12 가상환경 필수.** PaddlePaddle은 Python 3.14용 설치 파일이 없음(3.12용 3.3.1은 있음, 2026-10-09 확인). 현재 `backend/.venv`(3.14)는 다시 만들어야 함.
+- **Python 3.12 가상환경 필수.** PaddlePaddle은 Python 3.14용 설치 파일이 없음(3.12용 3.3.1은 있음, 2026-10-09 확인). 1단계 패키지는 CI가 느려지지 않도록 `backend/requirements-vision.txt`로 분리.
 - Mac(Apple Silicon)에서는 PaddlePaddle이 CPU로 동작하고, PyTorch 계열(PARSeq, TrOCR, YOLOX, Retinexformer)은 MPS 가속 사용 가능.
 - YOLOX·PARSeq 학습은 Mac에서 느리므로 Colab 등 GPU 환경에서 학습하고, 가중치만 `weights/`에 받아 씀 (`.gitignore` 처리됨).
 - 현장 사진은 `data/raw/`에 둠 (`.gitignore` 처리됨, 팀 공유는 드라이브로). 정답 라벨은 `data/annotations/`에 커밋.
@@ -71,10 +73,11 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 ## 4. 단계별 계획
 
 ### Phase 0 · 환경과 평가 데이터 (가장 먼저)
-- [ ] Python 3.12로 `backend/.venv` 재생성, 1단계 패키지 설치
+- [x] Python 3.12로 `backend/.venv` 재생성, 1단계 패키지 설치 (`backend/requirements-vision.txt`)
+- [x] 정답 형식(`data/annotations/README.md`)과 점검 스크립트(`vision/tools/check_dataset.py`) 준비
 - [ ] 실제 표기 사진 수집: 각인, 스텐실, 마커 손글씨, 기호가 섞인 사진 **최소 50~100장**
 - [ ] 사진별 정답 작성 (`data/annotations/`): 글자 내용 + 위치, 기호 라벨 + 위치
-- [ ] 정답 중 20%는 평가 전용으로 떼어 두고 학습에 쓰지 않기
+- [ ] 정답 중 20%는 평가 전용으로 떼어 두고 학습에 쓰지 않기 (점검 스크립트가 `split`을 자동 배정)
 - **완료 기준:** 패키지 설치 완료, 정답이 달린 사진 30장 이상
 
 > 프로젝트의 가장 큰 위험 요소는 데이터입니다. 현재 저장소에 샘플 사진이 없으므로 Phase 0은 줄이지 않습니다.
@@ -97,7 +100,7 @@ README의 적용 모델과 사용 가능 오픈소스 목록을 대조해 정했
 - **완료 기준:** 전처리를 켰을 때와 껐을 때 정확도 비교표. 나빠지는 보정은 끔
 
 ### Phase 3 · 기호 인식
-- [ ] 라벨 체계 확정: `data/seed/symbol_dictionary.example.json`의 `type: symbol` 항목부터 시작
+- [ ] 라벨 체계 확정: 워크스페이스 문자/기호 사전(`data/seed/workspaces/demo/symbol_dictionary.json`)의 `kind: symbol` 항목부터 시작
 - [ ] GroundingDINO로 라벨 초안 생성 → 사람이 수정
 - [ ] albumentations로 얼룩·스크래치·반사 증강
 - [ ] YOLOX 학습 후 `symbols.py`에 연결

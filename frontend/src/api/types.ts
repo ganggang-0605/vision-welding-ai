@@ -222,7 +222,7 @@ export interface WeldingStandard {
   speed_cm_min: string
 }
 
-// ── 로봇 연계 JSON (schemas/robot_output.schema.json) ─────────
+// ── 로봇 연계 JSON (shared/schemas/robot_output.schema.json) ─────────
 
 /** 승인된 작업만 내보낸다. 스키마 파일과 같이 모든 필드 필수 (중첩 객체 포함). */
 export interface RobotOutput {

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/confidence_report.schema.json",
+  "title": "ConfidenceReport",
+  "description": "[3단계] 신뢰도 산출과 판단 근거. 입력: VisionResult + ContextResult. 생산: 3단계(이후 개발) / 소비: 백엔드(Job 필드 채우기), GUI. 1·2단계는 factors에 필요한 값을 미리 출력해 둘 것. Analysis.corrections로 작업자가 고치거나 확인한 항목은 확인된 것으로 보고 recognition_prob 계산과 needs_review에서 뺌",
+  "type": "object",
+  "required": [
+    "visual",
+    "db_consistency",
+    "vlm_reasoning",
+    "overall",
+    "threshold",
+    "passed",
+    "factors",
+    "evidence",
+    "needs_review"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "visual": {
+      "$ref": "common.schema.json#/$defs/Percent",
+      "description": "시각 인식 신뢰도"
+    },
+    "db_consistency": {
+      "$ref": "common.schema.json#/$defs/Percent",
+      "description": "DB 정합성 신뢰도"
+    },
+    "vlm_reasoning": {
+      "$ref": "common.schema.json#/$defs/Percent",
+      "description": "VLM 추론 신뢰도"
+    },
+    "overall": {
+      "$ref": "common.schema.json#/$defs/Percent",
+      "description": "세 신뢰도 중 최솟값 → Job.confidence.overall"
+    },
+    "threshold": {
+      "$ref": "common.schema.json#/$defs/Percent",
+      "description": ".env의 CONFIDENCE_THRESHOLD"
+    },
+    "passed": {
+      "type": "boolean",
+      "description": "overall ≥ threshold이고, 로봇 JSON에 필요한 assembly_path(2단계 part 또는 작업자 수정)와 welding_condition이 모두 있어야 true. 하나라도 null이면 false로 두고 needs_review에 part / welding_condition 항목을 넣음. true면 Job.status = awaiting_approval, false면 needs_review"
+    },
+    "factors": {
+      "$ref": "#/$defs/Factors"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "판단 근거 → Job.evidence에는 message만 문자열 목록으로 들어감",
+      "items": {
+        "type": "object",
+        "required": [
+          "layer",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "type": "string",
+            "enum": [
+              "visual",
+              "db_consistency",
+              "vlm_reasoning"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ref_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/RefId"
+            }
+          }
+        }
+      }
+    },
+    "needs_review": {
+      "type": "array",
+      "description": "작업자 확인 항목 → Job.needs_review에는 message만 문자열 목록으로 들어감",
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "reason",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "$ref": "common.schema.json#/$defs/ReviewTarget"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "low_visual_confidence",
+              "ambiguous_reading",
+              "dictionary_unmatched",
+              "part_not_in_tree",
+              "standard_conflict",
+              "ocr_vlm_mismatch",
+              "vlm_inconsistent",
+              "missing_required"
+            ],
+            "description": "low_visual_confidence 인식 확률 낮음 / vlm_inconsistent 다중 추론 불일치 / missing_required 로봇 JSON 필수 값(assembly_path, welding_condition) 없음 / 나머지(ambiguous_reading, dictionary_unmatched, part_not_in_tree, standard_conflict, ocr_vlm_mismatch)는 2단계 Conflict.type과 같은 이름"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "작업자에게 보여 줄 선택지 (유사 문자 후보 등)"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "NullableProbability": {
+      "anyOf": [
+        {
+          "$ref": "common.schema.json#/$defs/Probability"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Factors": {
+      "description": "README 신뢰도 표의 근거 값 (0~1). 값을 구할 수 없으면 null",
+      "type": "object",
+      "required": [
+        "visual",
+        "db_consistency",
+        "vlm_reasoning"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "visual": {
+          "type": "object",
+          "required": [
+            "recognition_prob",
+            "correction_strength",
+            "ocr_vlm_agreement"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "recognition_prob": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "OCR/기호 인식 확률 (1단계 prob)"
+            },
+            "correction_strength": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "전처리 보정 강도 (1단계 preprocess)"
+            },
+            "ocr_vlm_agreement": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "OCR↔VLM 교차 검증 일치도 (1단계 texts ↔ 2단계 vlm.reading)"
+            }
+          }
+        },
+        "db_consistency": {
+          "type": "object",
+          "required": [
+            "dictionary_match_rate",
+            "part_found",
+            "standard_conflicts"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "dictionary_match_rate": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "사전 규칙에 맞는 표기 비율 (2단계 dictionary_matches)"
+            },
+            "part_found": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "조립 트리 내 부재 존재 (2단계 part)"
+            },
+            "standard_conflicts": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "표준 용접 기준과의 충돌 수 (2단계 conflicts)"
+            }
+          }
+        },
+        "vlm_reasoning": {
+          "type": "object",
+          "required": [
+            "token_prob",
+            "consistency"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "token_prob": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "2단계 vlm.token_prob"
+            },
+            "consistency": {
+              "$ref": "#/$defs/NullableProbability",
+              "description": "2단계 vlm.consistency"
+            }
+          }
+        }
+      }
+    }
+  }
+}

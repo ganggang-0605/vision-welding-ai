@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vision-welding-ai.local/shared/schemas/common.schema.json",
+  "title": "Common",
+  "description": "모든 스키마가 같이 쓰는 기본 타입",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601, 시간대 포함. 백엔드 API와 같이 UTC(Z)로 씀 (예: 2026-10-09T04:00:00Z)"
+    },
+    "Probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "모델 출력 확률 0~1. 1·2단계는 모두 이 범위를 씀"
+    },
+    "Percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "신뢰도 0~100(%). 3단계 출력과 로봇 JSON에서만 씀"
+    },
+    "ImageSize": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "BBox": {
+      "type": "array",
+      "description": "[x1, y1, x2, y2] 원본 이미지 픽셀 좌표. 전처리로 원근을 폈더라도 원본 좌표로 되돌려서 씀",
+      "items": { "type": "number", "minimum": 0 },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "Polygon": {
+      "type": "array",
+      "description": "기울어진 글자 영역의 꼭짓점 [[x, y], ...] (원본 이미지 좌표, 시계 방향)",
+      "items": {
+        "type": "array",
+        "items": { "type": "number", "minimum": 0 },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "minItems": 4
+    },
+    "TextId": {
+      "type": "string",
+      "pattern": "^t[0-9]+$",
+      "description": "1단계가 붙이는 문자 인식 결과 ID (t1, t2, ...). 이미지 한 장 안에서 유일"
+    },
+    "SymbolId": {
+      "type": "string",
+      "pattern": "^s[0-9]+$",
+      "description": "1단계가 붙이는 기호 인식 결과 ID (s1, s2, ...). 이미지 한 장 안에서 유일"
+    },
+    "VlmId": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "1단계가 놓쳤지만 VLM이 읽은 표기에 2단계가 붙이는 ID (v1, v2, ...). 2단계를 다시 돌려도 같은 표기는 이전 revision의 ID를 그대로 씀"
+    },
+    "RefId": {
+      "description": "인식 결과를 가리키는 ID. 1단계 결과(t*, s*) 또는 VLM만 읽은 표기(v*). 2·3단계와 GUI가 어떤 글자·기호를 말하는지 지정할 때 씀",
+      "anyOf": [{ "$ref": "#/$defs/TextId" }, { "$ref": "#/$defs/SymbolId" }, { "$ref": "#/$defs/VlmId" }]
+    },
+    "ReviewTarget": {
+      "type": "string",
+      "pattern": "^(t[0-9]+|s[0-9]+|v[0-9]+|part|welding_condition|interpretation)$",
+      "description": "작업자 확인 대상: 인식 결과 ID(t*, s*, v*) 또는 part(부재·조립 경로), welding_condition(용접 조건), interpretation(해석 문장 = Job.marking.interpretation)"
+    },
+    "TextStyle": {
+      "type": "string",
+      "enum": ["stamped", "stencil", "handwritten", "printed"],
+      "description": "각인 / 스텐실 / 마커 손글씨 / 인쇄·라벨"
+    },
+    "AssemblyLevel": {
+      "type": "string",
+      "enum": ["BLOCK", "LARGE", "MID", "SUB", "PART"],
+      "description": "블록 → 대조립 → 중조립 → 소조립 → 부재"
+    },
+    "AssemblyPath": {
+      "type": "string",
+      "pattern": "^[^/]+(/[^/]+)*$",
+      "examples": ["A1/L1/M2/S1/P-1"]
+    },
+    "RangeValue": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?(-[0-9]+(\\.[0-9]+)?)?$",
+      "description": "단일 값 또는 범위 (예: 220-260)",
+      "examples": ["220-260", "28"]
+    },
+    "VlmProvider": {
+      "type": "string",
+      "enum": ["claude", "gpt", "gemini", "qwen3-vl", "internvl"],
+      "description": ".env의 VLM_PROVIDER 값과 같음"
+    }
+  }
+}
