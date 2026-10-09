@@ -1,8 +1,9 @@
-"""저장소 (워크스페이스 단위) — 메모리에 두고, DATABASE_URL 이 있으면 SQLite 파일에도 남긴다 (app/db/sqlite.py)
+"""저장소 (워크스페이스 단위) — 메모리에 두고, DATABASE_URL 의 DB 에도 남긴다
+(postgresql://… → PostgreSQL app/db/postgres.py · sqlite:///… → SQLite 파일 app/db/sqlite.py, app/db/connect.py 가 고름)
 
-파일이 비어 있으면 data/seed 의 초기 상태(팀 워크스페이스 "demo", 개인 워크스페이스 "personal")로 시작해 그대로 저장하고,
-그다음부터는 파일에서 읽는다 — 서버를 다시 켜도 작업 · 사진 · 해석 결과가 남는다. 시드 상태로 되돌리려면 파일을 지운다.
-테스트(reset_store)는 파일 없이 메모리만 쓴다.
+DB 가 비어 있으면 data/seed 의 초기 상태(팀 워크스페이스 "demo", 개인 워크스페이스 "personal")로 시작해 그대로 저장하고,
+그다음부터는 DB 에서 읽는다 — 서버를 다시 켜도 작업 · 사진 · 해석 결과가 남는다. 시드 상태로 되돌리려면 DB 를 비운다.
+테스트(reset_store)는 DB 없이 메모리만 쓴다.
 TODO(인증): 로그인 없음 — 요청 헤더 X-User-Id 가 데모 사용자를 고르고(없으면 시드의 current_user_id),
   워크스페이스 목록만 그 사용자가 멤버인 것으로 거른다. 그 밖의 권한 검사는 없어 누구나 모든 워크스페이스에 접근할 수 있다.
 
@@ -24,7 +25,8 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from app.db.assembly_tree import load_tree
-from app.db.sqlite import Database, database_path
+from app.db.connect import DocumentDB, open_database
+from app.db.sqlite import Database
 from app.db.symbol_dictionary import load_symbols
 from app.db.welding_standards import load_standards
 from app.schemas import (
@@ -102,7 +104,7 @@ def utcnow() -> datetime:
 
 
 class Store:
-    def __init__(self, db: Database | None = None) -> None:
+    def __init__(self, db: DocumentDB | None = None) -> None:
         self._db = db
         self.users: dict[str, User] = {}
         self.current_user_id: str | None = None
@@ -122,7 +124,7 @@ class Store:
         self.welding_standards: list[WeldingStandard] = []
         self._lock = threading.RLock()
 
-    # ── 파일에 남기기 (app/db/sqlite.py) ──
+    # ── DB 에 남기기 (app/db/connect.py) ──
     def _put(self, collection: str, key: str, value) -> None:
         if self._db is not None:
             self._db.put(collection, key, value.model_dump(mode="json") if isinstance(value, BaseModel) else value)
@@ -131,7 +133,7 @@ class Store:
         if self._db is not None:
             self._db.delete(collection, key)
 
-    def attach(self, db: Database) -> None:
+    def attach(self, db: DocumentDB) -> None:
         """지금 상태를 통째로 db 에 쓰고, 이후 바뀌는 것을 계속 남긴다 (시드로 처음 시작할 때)"""
         with self._lock:
             self._db = db
@@ -517,8 +519,8 @@ def load_seed(store: Store, seed_dir: Path = SEED_DIR) -> Store:
     return store
 
 
-def load_db(store: Store, db: Database, seed_dir: Path = SEED_DIR) -> Store:
-    """파일에 남은 상태를 읽음 (표준 용접 기준만 CSV 에서). 다 읽은 뒤 db 를 붙여 이후 바뀌는 것을 남긴다"""
+def load_db(store: Store, db: DocumentDB, seed_dir: Path = SEED_DIR) -> Store:
+    """DB 에 남은 상태를 읽음 (표준 용접 기준만 CSV 에서). 다 읽은 뒤 db 를 붙여 이후 바뀌는 것을 남긴다"""
     store.welding_standards = [
         WeldingStandard.model_validate(row) for row in load_standards(seed_dir / "welding_standards.csv")
     ]
@@ -554,11 +556,12 @@ def load_db(store: Store, db: Database, seed_dir: Path = SEED_DIR) -> Store:
     return store
 
 
-def open_store(path: Path | None, seed_dir: Path = SEED_DIR) -> Store:
-    """path 가 없으면 메모리만 (시드). 파일이 비어 있으면 시드로 채워 저장, 아니면 파일에서 읽음"""
-    if path is None:
+def open_store(target: DocumentDB | Path | None, seed_dir: Path = SEED_DIR) -> Store:
+    """target: DB(open_database) 또는 SQLite 파일 경로. 없으면 메모리만 (시드).
+    DB 가 비어 있으면 시드로 채워 저장, 아니면 DB 에서 읽음"""
+    if target is None:
         return load_seed(Store(), seed_dir)
-    db = Database(path)
+    db = Database(target) if isinstance(target, Path) else target
     if db.is_empty():
         store = load_seed(Store(), seed_dir)
         store.attach(db)
@@ -570,10 +573,10 @@ _store: Store | None = None
 
 
 def get_store() -> Store:
-    """FastAPI 의존성. 처음 호출될 때 DATABASE_URL 의 파일(없으면 시드)로 채운다."""
+    """FastAPI 의존성. 처음 호출될 때 DATABASE_URL 의 DB(없으면 시드)로 채운다."""
     global _store
     if _store is None:
-        _store = open_store(database_path(os.environ.get("DATABASE_URL")))
+        _store = open_store(open_database(os.environ.get("DATABASE_URL")))
     return _store
 
 

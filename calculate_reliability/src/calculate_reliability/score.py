@@ -1,7 +1,7 @@
 """[3단계] 진입점: 근거 값(factors) → 세 신뢰도 → 통과 여부 · 판단 근거 · 작업자 확인 항목"""
 from calculate_reliability.db_consistency import db_consistency_factors, db_consistency_score
 from calculate_reliability.review import evidence, missing_required, review_items
-from calculate_reliability.visual import visual_factors, visual_score
+from calculate_reliability.visual import visual_factors, visual_score, vlm_only_reading
 from calculate_reliability.vlm_reasoning import vlm_reasoning_factors, vlm_reasoning_score
 
 
@@ -13,7 +13,7 @@ def score(vision: dict, context: dict, corrections: list[dict], threshold: float
         "db_consistency": db_consistency_factors(context, corrections),
         "vlm_reasoning": vlm_reasoning_factors(context),
     }
-    visual = visual_score(factors["visual"])
+    visual = visual_score(factors["visual"], factors["vlm_reasoning"], vlm_only_reading(vision, context))
     db_consistency = db_consistency_score(factors["db_consistency"])
     vlm_reasoning = vlm_reasoning_score(factors["vlm_reasoning"], context["vlm"] is not None, bool(context.get("vlm_error")))
     overall = min(visual, db_consistency, vlm_reasoning)

@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic>=2
-sqlalchemy
+psycopg[binary]>=3.2   # PostgreSQL (app/db/postgres.py). SQLite 는 표준 라이브러리
 python-multipart
 python-dotenv            # 저장소 루트 .env (API 키 · VLM 설정) 읽기
 opencv-python-headless

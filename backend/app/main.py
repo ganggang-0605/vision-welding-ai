@@ -11,6 +11,7 @@ from fastapi import FastAPI
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 from app.api import jobs, projects, standards, status, users, workspaces
+from app.db.connect import describe
 from app.store import get_store
 
 
@@ -30,8 +31,9 @@ def _warm_up_models() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시 저장소 로드 — DATABASE_URL 파일(없거나 비어 있으면 시드: 데모 사용자, 워크스페이스 "demo"·"personal")
+    # 시작 시 저장소 로드 — DATABASE_URL 의 DB(PostgreSQL · SQLite, 비어 있으면 시드: 데모 사용자, 워크스페이스 "demo"·"personal")
     get_store()
+    log.info("저장소: %s", describe(os.environ.get("DATABASE_URL")))
     if os.environ.get("PRELOAD_MODELS", "1") != "0":
         threading.Thread(target=_warm_up_models, name="warm-up-models", daemon=True).start()
     yield

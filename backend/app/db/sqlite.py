@@ -1,5 +1,6 @@
 """저장소(app/store.py)를 SQLite 파일에 남기기 — 서버를 다시 켜도 워크스페이스 · 작업 · 사진 · 해석 결과가 그대로 있게
 
+기본 DB 는 PostgreSQL(app/db/postgres.py). SQLite 는 PostgreSQL 없이 개발할 때 쓴다 (app/db/connect.py 가 주소로 고름).
 .env 의 DATABASE_URL (sqlite:///경로). 상대 경로는 backend/ 기준. 비우거나 sqlite:///:memory: 면 남기지 않음 (테스트).
 표 두 개만 쓴다 — 바뀐 항목 하나씩 JSON 으로 덮어쓰고(docs), 사진 파일은 따로(blobs).
   docs(collection, key, value)  collection: users · meta · workspaces · members · symbols · projects · trees · jobs · images · analyses
@@ -71,6 +72,16 @@ class Database:
     def blobs(self, kind: str) -> dict[str, bytes]:
         with self._lock:
             return dict(self._conn.execute("SELECT key, data FROM blobs WHERE kind = ?", (kind,)).fetchall())
+
+    def rows(self) -> list[tuple[str, str, object]]:
+        """[(collection, key, 값)] 전체, 넣은 순서 (옮기기용 — app/db/migrate.py)"""
+        with self._lock:
+            rows = self._conn.execute("SELECT collection, key, value FROM docs ORDER BY rowid").fetchall()
+            return [(collection, key, json.loads(value)) for collection, key, value in rows]
+
+    def blob_rows(self) -> list[tuple[str, str, bytes]]:
+        with self._lock:
+            return self._conn.execute("SELECT kind, key, data FROM blobs").fetchall()
 
     def close(self) -> None:
         with self._lock:
