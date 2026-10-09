@@ -89,6 +89,15 @@
   --shadow-float: 0 24px 64px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 
+/* 글씨 크기 (환경설정). 대부분 rem 이라 기준 크기만 바꾸면 화면 전체가 따라간다. */
+:root[data-text-size='small'] {
+  font-size: 15px;
+}
+
+:root[data-text-size='large'] {
+  font-size: 17.5px;
+}
+
 /* 고정한 모드에 맞춰 스크롤바·폼 컨트롤 같은 브라우저 기본 요소 색도 바꾼다. */
 :root[data-theme='light'] {
   color-scheme: light;

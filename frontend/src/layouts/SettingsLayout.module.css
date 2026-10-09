@@ -1,0 +1,89 @@
+/* 왼쪽 설정 목록 + 오른쪽 내용 (노션 설정 창) */
+.settings {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+.nav {
+  position: sticky;
+  top: 28px;
+}
+
+.groupTitle {
+  overflow: hidden;
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tertiary);
+}
+
+.list {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: var(--radius-row);
+  font-size: 0.875rem;
+  color: var(--label);
+  text-decoration: none;
+}
+
+.item:hover {
+  text-decoration: none;
+  background: var(--fill);
+}
+
+.item svg {
+  flex: none;
+  color: var(--secondary);
+}
+
+.item[aria-current='page'] {
+  font-weight: 600;
+  background: var(--fill-strong);
+}
+
+.item[aria-current='page'] svg {
+  color: var(--accent);
+}
+
+.content {
+  max-width: 640px;
+  min-width: 0;
+}
+
+/* 휴대폰: 목록을 위쪽 가로 줄로 */
+@media (max-width: 767.98px) {
+  .settings {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .nav {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+
+  .groupTitle {
+    display: none;
+  }
+
+  .list {
+    display: contents;
+  }
+}

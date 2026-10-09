@@ -48,7 +48,7 @@ export function NewWorkspacePage() {
         dictionary_source: source,
         copy_from_workspace_id: source === 'copy' ? copyFromId : null,
       })
-      navigate(kind === 'team' ? `${paths.settings(workspace.id)}#members` : paths.workspaceHome(workspace.id))
+      navigate(kind === 'team' ? paths.members(workspace.id) : paths.workspaceHome(workspace.id))
     } catch (err) {
       setError(err)
       setSubmitting(false)

@@ -32,7 +32,13 @@ export const paths = {
   login: (mode?: 'add') => (mode ? `/login?mode=${mode}` : '/login'),
   newWorkspace: () => '/workspaces/new',
   workspaceHome: (workspaceId: string) => generatePath('/w/:workspaceId', { workspaceId } satisfies W),
+  /** 설정 > 워크스페이스 > 일반 (이름·설명·개인/팀) */
   settings: (workspaceId: string) => generatePath('/w/:workspaceId/settings', { workspaceId } satisfies W),
+  /** 설정 > 워크스페이스 > 멤버 (목록·초대) */
+  members: (workspaceId: string) => generatePath('/w/:workspaceId/settings/members', { workspaceId } satisfies W),
+  /** 설정 > 내 설정 > 환경설정 (화면 모드·글씨 크기, 모든 워크스페이스 공통) */
+  preferences: (workspaceId: string) =>
+    generatePath('/w/:workspaceId/settings/preferences', { workspaceId } satisfies W),
   symbols: (workspaceId: string) => generatePath('/w/:workspaceId/symbols', { workspaceId } satisfies W),
   standards: (workspaceId: string) => generatePath('/w/:workspaceId/standards', { workspaceId } satisfies W),
   newProject: (workspaceId: string) => generatePath('/w/:workspaceId/projects/new', { workspaceId } satisfies W),

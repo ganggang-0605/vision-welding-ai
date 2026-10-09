@@ -216,7 +216,7 @@ export function WorkspaceLayout() {
               <li>
                 <NavLink to={paths.settings(workspaceId)} className={styles.navItem}>
                   <Gear aria-hidden="true" />
-                  설정과 멤버
+                  설정
                 </NavLink>
               </li>
             </ul>
@@ -225,7 +225,7 @@ export function WorkspaceLayout() {
 
         <footer className={styles.sidebarFooter}>
           {!notFound && (
-            <Link className={styles.navItem} to={`${paths.settings(workspaceId)}#members`}>
+            <Link className={styles.navItem} to={paths.members(workspaceId)}>
               <UserPlus aria-hidden="true" />
               팀원 초대
             </Link>

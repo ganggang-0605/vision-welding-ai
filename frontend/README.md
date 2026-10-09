@@ -53,7 +53,9 @@ npm run dev
 | `/workspaces/new` | `NewWorkspacePage` | 0 워크스페이스 만들기 | 1단계 혼자 / 팀과 함께(기본값 개인) → 2단계 이름·설명·사전 시작 방식. 팀이면 만든 뒤 멤버 초대로 이동. **사이드바 없는 단독 화면** |
 | `/w/:workspaceId` | `WorkspaceHomePage` | 1 워크스페이스 홈 | 프로젝트(블록) 타일, 확인이 필요한 작업, 최근 작업. 개인이면 팀원 초대 안내 |
 | (모달, ⌘K / Ctrl+K) | `components/SearchDialog` | 2 검색 | 워크스페이스의 모든 프로젝트에서 작업 검색, Enter로 첫 결과 열기, Esc로 닫기 |
-| `/w/:workspaceId/settings` | `WorkspaceSettingsPage` | | 설정과 멤버: 이름·설명, 사용 방식(개인/팀), 화면 모드(시스템/라이트/다크, 이 브라우저에만 저장), 멤버 목록·초대 (`#members`) |
+| `/w/:workspaceId/settings/preferences` | `PreferencesPage` | | 설정 > **내 설정 > 환경설정**: 계정(추가·로그아웃), 화면 모드(시스템/라이트/다크), 글씨 크기. 모든 워크스페이스 공통, 이 브라우저에만 저장 |
+| `/w/:workspaceId/settings` | `WorkspaceGeneralPage` | | 설정 > **워크스페이스 > 일반**: 이름·설명, 사용 방식(개인/팀) |
+| `/w/:workspaceId/settings/members` | `WorkspaceMembersPage` | | 설정 > **워크스페이스 > 멤버**: 목록·초대 (개인이면 초대 시 팀으로 전환) |
 | `/w/:workspaceId/symbols` | `SymbolsPage` | 3a 문자·기호 사전 | 사전 표 + 항목 추가·삭제 (워크스페이스 공통) |
 | `/w/:workspaceId/standards` | `WeldingStandardsPage` | 3c 용접 기준 (공통) | 표준 용접 기준 표 (읽기 전용) |
 | `/w/:workspaceId/projects/new` | `NewProjectPage` | | 새 프로젝트(블록) |
@@ -77,7 +79,7 @@ npm run dev
   - 로그인한 계정 목록과 지금 계정은 `src/lib/accounts.ts`가 브라우저에 저장하고, API 요청마다 `X-User-Id` 헤더로 보냅니다 (TODO 인증: 실제 로그인 세션으로 교체).
 - 검색 ⌘K, 홈
 - **작업**: 블록 목록. 펼치면 작업 목록·조립 트리. 보고 있는 블록은 자동으로 펼쳐집니다. 제목 옆 `+`로 새 블록.
-- **워크스페이스**: 문자·기호 사전, 용접 기준, 설정과 멤버
+- **워크스페이스**: 문자·기호 사전, 용접 기준, 설정 (`layouts/SettingsLayout`: 왼쪽에 내 설정 / 워크스페이스 묶음)
 - 맨 아래 팀원 초대, 서버 연결이 끊겼을 때만 뜨는 안내
 
 현재 화면 링크는 `NavLink`가 `aria-current="page"`를 붙여 강조합니다. 데스크톱에서는 사이드바 위쪽의 닫기 버튼(마우스를 올리면 보임)이나 **⌘\\ / Ctrl+\\**로 사이드바를 접고 펼 수 있고, 접은 상태는 브라우저에 기억합니다. **768px 미만**에서는 사이드바가 상단 바의 메뉴 버튼 뒤로 접힙니다.
@@ -216,7 +218,8 @@ frontend/
     │   └── useObjectUrl.ts   #   사진 미리보기 URL
     ├── layouts/
     │   ├── WorkspaceLayout.tsx (+ .module.css)   # 사이드바(프로젝트 트리) + Outlet
-    │   └── ProjectLayout.tsx                     # 주소의 프로젝트를 찾아 넘김
+    │   ├── ProjectLayout.tsx                     # 주소의 프로젝트를 찾아 넘김
+    │   └── SettingsLayout.tsx (+ .module.css)    # 설정: 내 설정 / 워크스페이스 왼쪽 목록
     ├── components/
     │   ├── AsyncView.tsx     #   로딩·오류·빈 상태 공통 표시
     │   ├── BackendStatus.tsx #   서버 연결이 끊겼을 때만 사이드바 하단에 안내
@@ -231,7 +234,7 @@ frontend/
     ├── lib/
     │   ├── paths.ts          #   화면 URL 생성 (paths.job(...) 등), 마지막 워크스페이스 기억
     │   ├── accounts.ts       #   로그인한 데모 계정·지금 계정 (X-User-Id 헤더)
-    │   ├── theme.ts          #   화면 모드 (시스템/라이트/다크), index.html 인라인 스크립트와 같은 키
+    │   ├── preferences.ts    #   환경설정 (화면 모드, 글씨 크기), index.html 인라인 스크립트와 같은 키
     │   ├── labels.ts         #   상태·단계·종류·이음 형태·자세 한국어 라벨
     │   ├── format.ts         #   날짜(목록용 짧은 날짜 포함)·신뢰도 표시
     │   ├── errors.ts         #   API 오류 → 화면 문장

@@ -38,7 +38,7 @@ export function WorkspaceHomePage() {
         <Notice
           title="혼자 쓰는 워크스페이스예요"
           action={
-            <Link className="btn" to={`${paths.settings(workspace.id)}#members`}>
+            <Link className="btn" to={paths.members(workspace.id)}>
               <UserPlus size={15} aria-hidden="true" />
               팀원 초대
             </Link>
