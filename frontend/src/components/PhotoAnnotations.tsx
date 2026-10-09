@@ -3,6 +3,9 @@ import type { Analysis, BBox, JobImage } from '../api/types'
 import { formatPercent } from '../lib/format'
 import styles from './PhotoAnnotations.module.css'
 
+/** 이보다 확률이 낮은 표기는 주황 박스 + 확률 배지 (3단계 통과 기준 80과 같게) */
+const LOW_PROB = 0.8
+
 interface Mark {
   id: string
   /** 해석에 쓴 글자 또는 기호 code (2단계가 VLM 읽기를 썼으면 그 값) */
@@ -29,7 +32,7 @@ interface PhotoAnnotationsProps {
 /**
  * 사진 위에 1단계가 찾은 글자·기호와 VLM 만 읽은 표기(v*, 위치를 알려 준 것)를 박스로 표시한다
  * (좌표는 원본 픽셀, 화면 크기에 맞춰 % 로 바꿈 — 1단계 보정본을 보여 줘도 비율이 같아 그대로 맞음).
- * 박스를 누르면 사진 아래에 읽은 값·확률·후보를 보여 준다. 라벨을 사진 위에 얹지 않아 사진을 가리지 않는다.
+ * 박스를 누르면 사진 아래에 읽은 값·확률·후보를 보여 준다. 사진을 덜 가리도록 사진 위에는 확률이 낮은 박스의 확률 배지만 얹는다.
  */
 export function PhotoAnnotations({ src, image, analysis }: PhotoAnnotationsProps) {
   const [selectedId, setSelectedId] = useState<string>()
@@ -75,6 +78,7 @@ export function PhotoAnnotations({ src, image, analysis }: PhotoAnnotationsProps
         <img className={styles.photo} src={src} alt={`올린 사진 ${image.filename}`} />
         {marks.map((mark) => {
           const [x1, y1, x2, y2] = mark.bbox
+          const low = mark.prob !== undefined && mark.prob < LOW_PROB
           return (
             <button
               key={mark.id}
@@ -82,7 +86,9 @@ export function PhotoAnnotations({ src, image, analysis }: PhotoAnnotationsProps
               className={styles.box}
               data-kind={mark.kind}
               data-source={mark.source}
-              data-low={(mark.prob !== undefined && mark.prob < 0.8) || undefined}
+              data-low={low || undefined}
+              // 배지가 사진 위쪽 끝에서 잘리지 않게, 박스가 위쪽에 붙어 있으면 박스 아래에 단다
+              data-badge-below={(low && y1 / height < 0.08) || undefined}
               aria-pressed={mark.id === selectedId}
               aria-label={`${mark.kind === 'text' ? '글자' : '기호'} ${mark.value}, ${
                 mark.prob === undefined ? 'VLM 만 읽음' : `확률 ${formatPercent(mark.prob * 100)}`
@@ -94,7 +100,13 @@ export function PhotoAnnotations({ src, image, analysis }: PhotoAnnotationsProps
                 height: `${((y2 - y1) / height) * 100}%`,
               }}
               onClick={() => setSelectedId(mark.id === selectedId ? undefined : mark.id)}
-            />
+            >
+              {low && (
+                <span className={styles.badge} aria-hidden="true">
+                  {formatPercent((mark.prob ?? 0) * 100)}
+                </span>
+              )}
+            </button>
           )
         })}
       </div>

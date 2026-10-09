@@ -82,6 +82,11 @@ def review_items(vision: dict, context: dict, corrections: list[dict], factors: 
     return items
 
 
+def same_text(value: str) -> str:
+    """공백·대소문자만 다른 표기는 보정으로 치지 않음"""
+    return "".join(value.split()).upper()
+
+
 def conflict_target(conflict: dict) -> str:
     if conflict["type"] in CONFLICT_TARGET:
         return CONFLICT_TARGET[conflict["type"]]
@@ -120,6 +125,10 @@ def evidence(vision: dict, context: dict, corrections: list[dict], factors: dict
         add("visual", f"OCR과 VLM 읽기 일치도 {visual['ocr_vlm_agreement']:.0%} (VLM이 읽은 표기 {len(reading['texts']) + len(reading['symbols'])}개)")
     if (visual["correction_strength"] or 0) > 0.5:
         add("visual", f"전처리 보정이 강함 ({visual['correction_strength']:.0%}) — 원본과 달라졌을 수 있음")
+    used = used_readings(context)
+    for c in context["conflicts"]:  # 1단계 대신 사진을 본 VLM 읽기를 쓴 표기
+        if c["type"] == "ocr_vlm_mismatch" and c["severity"] == "info" and c["ref_ids"] and c["ref_ids"][0] in used:
+            add("visual", c["message"], c["ref_ids"])
 
     # b. DB 정합성
     part = context["part"]
@@ -131,6 +140,15 @@ def evidence(vision: dict, context: dict, corrections: list[dict], factors: dict
         add("db_consistency", f"사진에 부재 표기가 없어 작업에 적은 조립 경로 {part['assembly_path']}를 씀")
     elif part["node_id"]:
         add("db_consistency", f"부재 표기 {part['node_id']}이 조립 트리에 없음", part["ref_ids"] or None)
+    for c in context["conflicts"]:  # 헷갈린 글자를 고쳐 조립 트리와 맞춘 부재 표기 (P-1O → P-10)
+        if c["type"] == "ambiguous_reading" and c["severity"] == "info":
+            add("db_consistency", c["message"], c["ref_ids"])
+    found_text = {d["id"]: d.get("text") or d.get("label") for d in vision["texts"] + vision["symbols"]}
+    for m in context["dictionary_matches"]:  # 사전과 대조해 고친 표기 (F55 → F5.5, F5,5 → F5.5)
+        # 한 줄을 나눠 대조하기도 해서(F5.5 V6.0) 고친 값이 읽은 줄 안에 그대로 있으면 보정이 아님
+        read = (used.get(m["ref_ids"][0]) or found_text.get(m["ref_ids"][0])) if m["ref_ids"] else None
+        if m["match"] == "fuzzy" and m["code"] and read and same_text(m["raw"]) not in same_text(read):
+            add("db_consistency", f"'{read}' 표기를 사전의 {m['code']}와 대조해 '{m['raw']}'로 보정", m["ref_ids"])
     rate = factors["db_consistency"]["dictionary_match_rate"]
     if rate is not None:
         add("db_consistency", f"사전·표기 규칙에 맞는 표기 {rate:.0%} ({len(context['dictionary_matches'])}개 중)")

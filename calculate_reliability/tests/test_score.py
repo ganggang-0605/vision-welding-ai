@@ -143,3 +143,24 @@ def test_arrow_attached_to_text_still_agrees():
     vision = {**REV1["vision"], "texts": [{**t, "text": "→" + t["text"]} for t in REV1["vision"]["texts"]]}
     assert score(vision, REV1["context"], [], 80)["factors"]["visual"]["ocr_vlm_agreement"] == \
         run(REV1)["factors"]["visual"]["ocr_vlm_agreement"]
+
+
+def test_evidence_shows_corrections():
+    """2단계가 DB와 대조해 고친 표기는 결과 화면의 판단 근거에도 보여 줌 (해석 과정 화면에만 있던 것)"""
+    vision = {**REV1["vision"], "texts": [{**t, "text": "P-1O"} if t["id"] == "t1" else {**t, "text": "FW F55"} if t["id"] == "t2" else t
+                                          for t in REV1["vision"]["texts"]]}
+    context = {
+        **REV1["context"],
+        "dictionary_matches": REV1["context"]["dictionary_matches"] + [
+            {"ref_ids": ["t2"], "raw": "F5.5", "code": "F", "meaning": "3F 용접장 각장 5.5mm", "match": "fuzzy", "score": 0.56},
+        ],
+        "conflicts": REV1["context"]["conflicts"] + [{
+            "type": "ambiguous_reading", "severity": "info",
+            "message": "'P-1O' 표기를 'P-10'로 보정해 조립 트리의 P-10로 봄", "ref_ids": ["t1"],
+        }],
+    }
+    messages = [e["message"] for e in score(vision, context, [], 80)["evidence"]]
+    assert "'P-1O' 표기를 'P-10'로 보정해 조립 트리의 P-10로 봄" in messages
+    assert "'FW F55' 표기를 사전의 F와 대조해 'F5.5'로 보정" in messages
+    # 한 줄을 나눠 대조한 FW 는 읽은 그대로라 보정이 아님
+    assert not any("'FW'로 보정" in m for m in messages)

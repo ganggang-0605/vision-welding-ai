@@ -3,7 +3,7 @@
  * 특정 컴포넌트 전용 스타일은 *.module.css 에 둔다.
  *
  * 디자인 원칙 (Figma 'Vision Welding AI' 기준, 노션형 구조 + 애플 시스템 앱 느낌)
- * - 강조색은 연한 하늘색 하나(배경의 회색과 톤을 맞춤). 상태는 색 태그 대신 글자로 쓰고, 확인이 필요한 것만 주황 글자로 표시한다.
+ * - 강조색은 연한 하늘색 하나(배경의 회색과 톤을 맞춤). 상태는 색 태그 대신 글자로 쓰고, 확인이 필요한 것만 주황, 승인된 것만 초록 글자로 표시한다.
  * - 선과 상자를 줄이고 여백과 글자 크기로 구분한다. 묶음이 필요하면 회색 그룹 면(.group) 하나만 쓴다.
  * - 모서리 규칙: 버튼은 캡슐(999px), 나머지(면·목록 줄·입력칸·메뉴·창·타일)는 모두 10px(--radius).
  *   30px보다 작은 아이콘 타일·아이콘 버튼만 6px(--radius-small), 세그먼트 안쪽 버튼은 바깥보다 2px 작은 8px.
@@ -23,6 +23,7 @@
   --accent-text: #1a73a8;
   --accent-soft: rgb(154 214 246 / 0.32);
   --attention: #c93400;
+  --success: #248a3d;
   --danger: #d70015;
   --code-string: #c41a16;
   --code-number: #1c00cf;
@@ -69,6 +70,7 @@
     --accent-text: #8fd3fa;
     --accent-soft: rgb(124 196 236 / 0.2);
     --attention: #ff9f0a;
+    --success: #30d158;
     --danger: #ff6961;
     --code-string: #ff8170;
     --code-number: #d9c97c;
@@ -90,6 +92,7 @@
   --accent-text: #8fd3fa;
   --accent-soft: rgb(124 196 236 / 0.2);
   --attention: #ff9f0a;
+  --success: #30d158;
   --danger: #ff6961;
   --code-string: #ff8170;
   --code-number: #d9c97c;
@@ -551,6 +554,29 @@ p {
 .status--attention {
   font-weight: 600;
   color: var(--attention);
+}
+
+.status--done {
+  font-weight: 600;
+  color: var(--success);
+}
+
+/* 보고 있는 동안 승인으로 바뀌는 순간을 눈에 띄게 (StatusLabel 이 이때만 붙임) */
+.status--done-enter {
+  animation: status-done 0.6s var(--ease);
+}
+
+@keyframes status-done {
+  from {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status--done-enter {
+    animation: none;
+  }
 }
 
 /* ── 그룹 면 (애플 설정 앱의 묶음 목록) ──────────────────── */

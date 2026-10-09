@@ -43,6 +43,27 @@
   background: color-mix(in srgb, var(--accent-text) 18%, transparent);
 }
 
+/* 확률이 낮은 박스 위에 붙는 확률 배지 */
+.badge {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: -2px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--bg);
+  background: var(--attention);
+  pointer-events: none;
+}
+
+.box[data-badge-below] .badge {
+  top: calc(100% + 3px);
+  bottom: auto;
+}
+
 .box[data-low]:hover,
 .box[data-low][aria-pressed='true'] {
   background: color-mix(in srgb, var(--attention) 18%, transparent);
