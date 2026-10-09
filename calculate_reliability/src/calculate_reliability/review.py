@@ -1,6 +1,8 @@
 """작업자 확인 항목 (ConfidenceReport.needs_review)과 판단 근거 (ConfidenceReport.evidence)"""
 from vw_shared import is_ref
 
+from calculate_reliability.visual import vlm_only_reading
+
 REQUIRED = (  # 로봇 JSON 필수 값 → 없으면 통과(passed)시킬 수 없음
     ("part", "부재·조립 경로를 찾지 못해 확인이 필요합니다"),
     ("welding_condition", "용접 조건을 판별하지 못해 확인이 필요합니다"),
@@ -107,7 +109,12 @@ def evidence(vision: dict, context: dict, corrections: list[dict], factors: dict
         lowest = min(found, key=lambda d: d["prob"])
         add("visual", f"인식 확률이 가장 낮은 표기 '{lowest.get('text') or lowest.get('label')}' {lowest['prob']:.0%}", [lowest["id"]])
     elif not vision["texts"] and not vision["symbols"]:
-        add("visual", "1단계 인식이 표기를 찾지 못함")
+        if vlm_only_reading(vision, context):
+            vlm = context["vlm"]
+            basis = f"{vlm['runs']}번 추론 일관성 {vlm['consistency']:.0%}" if vlm["consistency"] is not None else "추론 1번이라 일관성을 잴 수 없음"
+            add("visual", f"1단계 인식은 표기를 찾지 못하고 사진을 본 VLM만 읽음 — {basis}")
+        else:
+            add("visual", "1단계 인식이 표기를 찾지 못함")
     if visual["ocr_vlm_agreement"] is not None and context["vlm"]:
         reading = context["vlm"]["reading"]
         add("visual", f"OCR과 VLM 읽기 일치도 {visual['ocr_vlm_agreement']:.0%} (VLM이 읽은 표기 {len(reading['texts']) + len(reading['symbols'])}개)")

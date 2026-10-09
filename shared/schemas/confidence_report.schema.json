@@ -161,7 +161,7 @@
             },
             "ocr_vlm_agreement": {
               "$ref": "#/$defs/NullableProbability",
-              "description": "OCR↔VLM 교차 검증 일치도 (1단계 texts ↔ 2단계 vlm.reading). 작업자가 확인한 표기는 일치로 셈"
+              "description": "OCR↔VLM 교차 검증 일치도: 1단계가 읽은 표기 중 VLM(2단계 vlm.reading)도 같게 읽은 비율. VLM이 놓친 표기는 불일치, 작업자가 확인한 표기는 일치, VLM만 읽은 v*는 빼고 셈. VLM이 없거나 1단계가 아무것도 못 읽었으면 null"
             }
           }
         },
