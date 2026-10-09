@@ -43,6 +43,8 @@ export const paths = {
     generatePath('/w/:workspaceId/settings/preferences', { workspaceId } satisfies W),
   symbols: (workspaceId: string) => generatePath('/w/:workspaceId/symbols', { workspaceId } satisfies W),
   standards: (workspaceId: string) => generatePath('/w/:workspaceId/standards', { workspaceId } satisfies W),
+  /** 워크스페이스 사전 > 조립 경로 사전 (모든 블록의 조립 트리) */
+  assemblyPaths: (workspaceId: string) => generatePath('/w/:workspaceId/assembly', { workspaceId } satisfies W),
   newProject: (workspaceId: string) => generatePath('/w/:workspaceId/projects/new', { workspaceId } satisfies W),
 
   project: (workspaceId: string, projectId: string) =>

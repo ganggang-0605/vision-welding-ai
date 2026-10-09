@@ -8,6 +8,7 @@ import { SettingsLayout } from './layouts/SettingsLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { getActiveAccountId } from './lib/accounts'
 import { DEFAULT_WORKSPACE_ID, paths, readLastWorkspaceId } from './lib/paths'
+import { AssemblyPathsPage } from './pages/AssemblyPathsPage'
 import { AssemblyTreePage } from './pages/AssemblyTreePage'
 import { JobProcessPage } from './pages/JobProcessPage'
 import { JobResultPage } from './pages/JobResultPage'
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
           },
           { path: 'symbols', Component: SymbolsPage },
           { path: 'standards', Component: WeldingStandardsPage },
+          { path: 'assembly', Component: AssemblyPathsPage },
           { path: 'projects/new', Component: NewProjectPage },
           {
             path: 'p/:projectId',
