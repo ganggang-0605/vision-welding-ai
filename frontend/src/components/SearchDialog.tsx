@@ -1,27 +1,31 @@
+import { FileText, MagnifyingGlass } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { listJobs } from '../api/jobs'
+import type { Project } from '../api/types'
 import { useAsync } from '../hooks/useAsync'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { paths } from '../lib/paths'
 import { ErrorNotice } from './Notice'
 import styles from './SearchDialog.module.css'
-import { StatusPill } from './StatusPill'
+import { StatusLabel } from './StatusLabel'
 
 /** 검색 결과로 보여 줄 최대 개수 */
 const MAX_RESULTS = 20
 
 interface SearchDialogProps {
   workspaceId: string
+  /** 결과에 호선 이름을 붙이는 데 쓴다. */
+  projects: Project[]
   open: boolean
   onClose: () => void
 }
 
 /**
- * 검색 ⌘K 모달 (와이어프레임 2). 현재 워크스페이스의 작업을 검색한다.
+ * 검색 ⌘K 모달 (와이어프레임 2, 맥 Spotlight 모양). 현재 워크스페이스의 모든 프로젝트에서 작업을 검색한다.
  * 네이티브 <dialog> 의 showModal() 을 써서 포커스 가두기·Esc 닫기를 브라우저에 맡긴다.
  */
-export function SearchDialog({ workspaceId, open, onClose }: SearchDialogProps) {
+export function SearchDialog({ workspaceId, projects, open, onClose }: SearchDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -43,17 +47,18 @@ export function SearchDialog({ workspaceId, open, onClose }: SearchDialogProps) 
       }}
     >
       {/* 열 때마다 검색어를 비우도록 열려 있을 때만 마운트 */}
-      {open && <SearchPanel workspaceId={workspaceId} onNavigate={onClose} />}
+      {open && <SearchPanel workspaceId={workspaceId} projects={projects} onNavigate={onClose} />}
     </dialog>
   )
 }
 
 interface SearchPanelProps {
   workspaceId: string
+  projects: Project[]
   onNavigate: () => void
 }
 
-function SearchPanel({ workspaceId, onNavigate }: SearchPanelProps) {
+function SearchPanel({ workspaceId, projects, onNavigate }: SearchPanelProps) {
   const navigate = useNavigate()
   const inputId = useId()
   const resultsId = useId()
@@ -67,7 +72,7 @@ function SearchPanel({ workspaceId, onNavigate }: SearchPanelProps) {
     event.preventDefault()
     const first = jobs?.[0]
     if (!first) return
-    navigate(paths.job(workspaceId, first.id))
+    navigate(paths.job(workspaceId, first.project_id, first.id))
     onNavigate()
   }
 
@@ -77,35 +82,50 @@ function SearchPanel({ workspaceId, onNavigate }: SearchPanelProps) {
         <label htmlFor={inputId} className="visually-hidden">
           작업 검색
         </label>
+        <MagnifyingGlass className={styles.searchIcon} size={22} aria-hidden="true" />
         <input
           id={inputId}
           className={styles.input}
           type="search"
-          placeholder="작업명, 조립 경로, 마킹 내용으로 검색"
+          placeholder="작업 이름, 조립 경로, 표기 내용"
           autoComplete="off"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           aria-controls={resultsId}
         />
-        <kbd className="kbd">Esc</kbd>
+        <kbd className="kbd">esc</kbd>
       </form>
 
       <section id={resultsId} className={styles.results} aria-live="polite" aria-busy={results.loading}>
-        <h2 className={styles.groupTitle}>{q ? '검색 결과' : '최근 작업'}</h2>
+        <h2 className={styles.groupTitle}>{q ? '작업' : '최근 작업'}</h2>
         {results.error !== undefined ? (
           <ErrorNotice error={results.error} onRetry={results.reload} />
         ) : jobs === undefined ? (
-          <p className={styles.hint}>불러오는 중…</p>
+          <p className={styles.hint}>찾는 중</p>
         ) : jobs.length === 0 ? (
-          <p className={styles.hint}>{q ? `'${q}'에 해당하는 작업이 없습니다.` : '아직 작업이 없습니다.'}</p>
+          <p className={styles.hint}>{q ? `'${q}'와 맞는 작업이 없어요.` : '아직 작업이 없어요.'}</p>
         ) : (
           <ul className={styles.list}>
-            {jobs.map((job) => (
+            {jobs.map((job, index) => (
               <li key={job.id}>
-                <Link className={styles.item} to={paths.job(workspaceId, job.id)} onClick={onNavigate}>
-                  <span className={styles.itemName}>{job.name}</span>
-                  <span className={styles.itemMeta}>{job.assembly_path ?? '조립 경로 없음'}</span>
-                  <StatusPill status={job.status} />
+                <Link
+                  className={styles.item}
+                  to={paths.job(workspaceId, job.project_id, job.id)}
+                  onClick={onNavigate}
+                  // Enter 로 열리는 첫 결과를 미리 강조한다 (Spotlight 와 같은 동작).
+                  data-default={index === 0 || undefined}
+                >
+                  <span className={styles.itemIcon} aria-hidden="true">
+                    <FileText size={17} />
+                  </span>
+                  <span className={styles.itemText}>
+                    <span className={styles.itemName}>{job.name}</span>
+                    <span className={styles.itemMeta}>
+                      {projects.find((project) => project.id === job.project_id)?.name}
+                      {job.assembly_path && <span className={styles.metaPath}>{job.assembly_path}</span>}
+                    </span>
+                  </span>
+                  <StatusLabel status={job.status} />
                 </Link>
               </li>
             ))}

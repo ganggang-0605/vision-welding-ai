@@ -18,14 +18,17 @@ export function AsyncView<T>({
   state,
   children,
   isEmpty,
-  empty = '항목이 없습니다.',
+  empty = '항목이 없어요.',
   keepPreviousData = false,
 }: AsyncViewProps<T>) {
   if (state.loading && !(keepPreviousData && state.data !== undefined)) {
+    // 목록 모양의 회색 줄로 자리를 잡아 두어, 데이터가 들어올 때 화면이 덜컥거리지 않게 한다.
     return (
-      <p className="state" role="status">
-        불러오는 중…
-      </p>
+      <div className="skeleton" role="status" aria-label="불러오는 중">
+        <span />
+        <span />
+        <span />
+      </div>
     )
   }
   if (state.error !== undefined) return <ErrorNotice error={state.error} onRetry={state.reload} />

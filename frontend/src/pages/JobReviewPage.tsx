@@ -1,13 +1,15 @@
+import { WarningCircle } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
 import { reviewJob } from '../api/jobs'
 import type { Job, ReviewAction, ReviewRequest, WeldingCondition } from '../api/types'
 import { JobFrame } from '../components/JobFrame'
 import { ErrorNotice, Notice } from '../components/Notice'
 import { useWorkspace } from '../hooks/useWorkspace'
+import styles from './JobReviewPage.module.css'
 
 const CONDITION_FIELDS: { key: keyof WeldingCondition; label: string }[] = [
   { key: 'joint_type', label: '이음 형태' },
-  { key: 'process', label: '용접 공정' },
+  { key: 'process', label: '공법' },
   { key: 'position', label: '자세' },
   { key: 'current_a', label: '전류 (A)' },
   { key: 'voltage_v', label: '전압 (V)' },
@@ -23,16 +25,9 @@ const EMPTY_CONDITION: WeldingCondition = {
   speed_cm_min: '',
 }
 
-/** 와이어프레임 6 — 작업자 확인: 신뢰도 미달 항목을 보고 재해석하거나 직접 해석한다. */
+/** 와이어프레임 6 — 작업자 확인: 기준에 못 미친 항목을 보고, 맥락을 덧붙여 다시 해석하거나 직접 입력한다. */
 export function JobReviewPage() {
-  return (
-    <JobFrame
-      section="작업자 확인"
-      description="신뢰도가 기준치에 못 미친 항목입니다. 맥락을 덧붙여 다시 해석하거나, 해석 결과를 직접 입력합니다."
-    >
-      {(job, reload) => <ReviewForm job={job} onReviewed={reload} />}
-    </JobFrame>
-  )
+  return <JobFrame section="작업자 확인">{(job, reload) => <ReviewForm job={job} onReviewed={reload} />}</JobFrame>
 }
 
 function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
@@ -70,63 +65,57 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
 
   return (
     <>
-      <section className="section">
-        <h2 className="section-title">확인이 필요한 항목</h2>
+      <section className="section" aria-labelledby="review-items-title">
+        <h2 id="review-items-title" className="section-title">
+          {job.needs_review.length > 0 ? '이 부분을 확인해 주세요' : '확인할 항목이 없어요'}
+        </h2>
         {job.needs_review.length > 0 ? (
-          <ul className="plain-list">
+          <ul className="check-list check-list--attention">
             {job.needs_review.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item}>
+                <WarningCircle size={18} weight="fill" aria-hidden="true" />
+                <span>{item}</span>
+              </li>
             ))}
           </ul>
         ) : (
-          <p className="state">확인이 필요한 항목이 없습니다.</p>
+          <p className="section-desc">모든 항목이 해석 기준을 넘었어요. 그래도 고칠 내용이 있으면 아래에서 바꿀 수 있어요.</p>
         )}
         {job.marking && (
-          <p className="field-hint">
-            인식 원문: <span className="mono">{job.marking.raw_text}</span>
+          <p className={styles.raw}>
+            <span className="secondary">인식한 표기</span>
+            <span className="mono">{job.marking.raw_text}</span>
           </p>
         )}
       </section>
 
-      <section className="section">
-        <h2 className="section-title">확인 방법</h2>
+      <section className="section" aria-labelledby="review-action-title">
+        <h2 id="review-action-title" className="section-title">
+          어떻게 할까요?
+        </h2>
         <form className="form" onSubmit={onSubmit}>
-          <fieldset className="field">
-            <legend className="field-label">처리 방식</legend>
-            <label className="choice">
-              <input
-                type="radio"
-                name="action"
-                value="reinterpret"
-                checked={action === 'reinterpret'}
-                onChange={() => setAction('reinterpret')}
-              />
-              맥락을 추가해 다시 해석
-            </label>
-            <label className="choice">
-              <input
-                type="radio"
-                name="action"
-                value="manual"
-                checked={action === 'manual'}
-                onChange={() => setAction('manual')}
-              />
-              직접 해석 입력
-            </label>
-          </fieldset>
+          <div className="segmented segmented--fill" role="group" aria-label="처리 방식">
+            <button type="button" aria-pressed={action === 'reinterpret'} onClick={() => setAction('reinterpret')}>
+              현장 정보 덧붙여 다시 해석
+            </button>
+            <button type="button" aria-pressed={action === 'manual'} onClick={() => setAction('manual')}>
+              직접 입력
+            </button>
+          </div>
 
           {action === 'reinterpret' ? (
             <div className="field">
               <label htmlFor={contextId} className="field-label">
-                추가 맥락
+                덧붙일 내용
               </label>
               <textarea
                 id={contextId}
                 className="input"
-                placeholder="예: 이 부재는 S1 소조립의 필렛 용접부입니다. 두 번째 글자는 B가 아니라 8입니다."
+                placeholder="예: 이 부재는 S1 소조립 보강재이고, 두 번째 글자는 B가 아니라 8이에요."
                 value={context}
                 onChange={(event) => setContext(event.target.value)}
               />
+              <p className="field-hint">덧붙인 내용은 이 워크스페이스의 다음 해석에도 참고해요.</p>
             </div>
           ) : (
             <>
@@ -160,11 +149,11 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
           )}
 
           {error !== undefined && <ErrorNotice error={error} />}
-          {done && <Notice tone="info">확인 내용을 반영했습니다.</Notice>}
+          {done && <Notice>확인한 내용을 반영했어요.</Notice>}
 
           <p className="button-row">
             <button type="submit" className="btn btn--primary" disabled={submitting}>
-              {submitting ? '처리 중…' : action === 'reinterpret' ? '다시 해석' : '해석 저장'}
+              {submitting ? '보내는 중' : action === 'reinterpret' ? '다시 해석' : '해석 저장'}
             </button>
           </p>
         </form>

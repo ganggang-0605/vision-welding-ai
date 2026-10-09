@@ -1,0 +1,36 @@
+.tree {
+  max-width: 560px;
+  margin: 0;
+  padding: 8px;
+  border-radius: var(--radius-group);
+  list-style: none;
+  background: var(--fill);
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 10px 4px calc(10px + var(--depth, 0) * 22px);
+  border-radius: var(--radius-row);
+  font-size: 0.9375rem;
+}
+
+.node:hover {
+  background: var(--fill-strong);
+}
+
+.icon {
+  flex: none;
+  color: var(--tertiary);
+}
+
+.id {
+  font-weight: 600;
+}
+
+.level {
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}

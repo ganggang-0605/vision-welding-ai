@@ -1,0 +1,98 @@
+/* 위: 인식한 표기(넓게) + 신뢰도 / 아래: 용접 조건 + 판단 근거 */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 48px;
+  margin-top: 36px;
+}
+
+/* 철판에 마커로 쓴 표기를 옮겨 적은 면 */
+.plate {
+  margin: 0;
+  padding: 28px 28px 30px;
+  border-radius: var(--radius-group);
+  font-family: var(--font-mono);
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+  background: var(--fill);
+}
+
+.interpretation {
+  max-width: 60ch;
+  margin: 14px 0 0;
+  font-size: 1rem;
+}
+
+.overall {
+  display: flex;
+  align-items: baseline;
+  margin: 0;
+  font-size: 4rem;
+}
+
+.overall :global(.stat-unit) {
+  font-size: 0.4em;
+}
+
+.overallValue {
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.overallLabel {
+  margin-left: 12px;
+  font-size: 0.9375rem;
+  color: var(--secondary);
+}
+
+.parts {
+  display: grid;
+  gap: 0;
+  margin: 20px 0 0;
+}
+
+.parts > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+  font-size: 0.9375rem;
+}
+
+.parts > div + div {
+  border-top: 1px solid var(--separator);
+}
+
+.parts dt {
+  color: var(--secondary);
+}
+
+.parts dd {
+  margin: 0;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+}
+
+@media (max-width: 1023.98px) {
+  .hero,
+  .columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .hero > section + section {
+    margin-top: 40px;
+  }
+}
