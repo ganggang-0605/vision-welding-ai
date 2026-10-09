@@ -56,6 +56,14 @@
 데모 작업 3건(`block_a1`)의 셀 형태는 과제 안내의 셀 예시 1·2·3(좌 Slit·우 Slot / 좌 뒤 Collar·우 Slit / 좌 Slit·우 앞 Collar + Scallop)이고, 각장 값은 지어낸 값입니다.
 데모 사전에 `F`·`V`·`S`가 들어 있습니다. 로봇 연계 JSON에도 `cell`·`leg_lengths`가 들어갑니다.
 
+해석 파이프라인에서는 2단계가 둘 다 만듭니다 (`ContextResult.leg_lengths` · `cell` → `to_job_fields()` → Job).
+
+- **각장**: 사전의 각장 코드 + 숫자. 각장으로 볼 수 없는 크기는 믿지 않습니다 — `F55`는 소수점이 빠진 5.5mm로 고쳐 작업자 확인, 고쳐도 2~25mm 밖이면 해석하지 않음.
+- **셀 형태**: 셀 형태 기호(1단계 기호 인식 또는 VLM이 읽은 기호)를 사진 가운데 기준 왼쪽·오른쪽 끝으로 나눕니다. 위치를 모르면 작업자 확인.
+- **용접 조건**: 판 두께 표기가 없으면 첫 번째 각장으로 기준 행을 고릅니다 (`F` → 3F, `V` → 2F). 기준표는 각장별 값이라 사이 크기(5.5mm)는 가장 가까운 각장 행 + 작업자 확인. 근거는 [`data/seed/SOURCES.md`](data/seed/SOURCES.md).
+- **부재·조립 경로**: PAC 셀 사진에는 부재 번호가 없어서, 사진에서 못 찾으면 작업을 만들 때 적은 조립 경로를 씁니다.
+- 작업자 확인(`review` manual)에서 `cell`·`leg_lengths`를 고치면 다른 값처럼 작업자 수정(`corrections`)으로 남고 2단계부터 다시 해석합니다.
+
 ## 신뢰도
 
 | 구분 | 측정 대상 | 근거 |
@@ -63,6 +71,13 @@
 | 시각 인식 | 글자/기호의 시각적 모호성 | OCR/YOLO 출력 확률, 전처리 보정 강도, OCR↔VLM 교차 검증 일치도 (0~100%) |
 | DB 정합성 | 맥락 일치도 | 문자/기호 사전 규칙, 조립 트리 내 부재 존재 여부, 표준 용접 기준과의 충돌 여부 |
 | VLM 추론 | VLM 해석 정확도 | 출력 토큰 확률, 다중 추론 일관성 |
+
+3단계(`calculate_reliability`)의 계산 — 전체 신뢰도는 셋 중 최솟값이고, 기준(`CONFIDENCE_THRESHOLD`, 기본 80) 이상이면서 조립 경로·용접 조건이 있어야 `awaiting_approval`입니다.
+
+- 시각 인식 = 작업자가 확인하지 않은 표기 중 가장 낮은 인식 확률과 OCR↔VLM 일치도 중 낮은 것 (보정 강도 50% 초과분 감점, 읽은 표기가 없으면 0)
+- DB 정합성 = 100 − 사전·표기 규칙에 안 맞는 비율 × 25 − 부재가 트리에 없으면 40 − 표준 기준 충돌 1건당 20
+- VLM 추론 = 토큰 확률·일관성 평균 (Claude처럼 토큰 확률이 없으면 일관성 × 90, 1회 추론이면 60). VLM을 끄면 100(판단에서 뺌), 호출이 실패하면 0
+- 작업자 확인 항목 = 필수 값 없음 → 2단계 경고·오류 → 확률 낮은 표기(후보 포함) → VLM 추론 불일치·실패 순서, 대상마다 하나
 
 ## 적용 모델
 
@@ -96,15 +111,16 @@
 | GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
 | POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 필수 — 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}` | 작업 조회 |
-| POST · GET | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 사진 올리기 (multipart `file`, 201 `{image_id, filename, content_type, width, height, created_at}`, 20MB 넘으면 413, 이미지가 아니면 422) · 올린 순서 목록 |
+| POST · GET | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 사진 올리기 (multipart `file`, 201 `{image_id, filename, content_type, width, height, created_at, preprocessed}`, 20MB 넘으면 413, 이미지가 아니면 422) · 올린 순서 목록 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/file` | 올린 사진 파일 그대로 |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진. 사진이 없으면 409 |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 → 가장 최근 Analysis 에서 2단계부터 다시 해석(revision + 1). `reinterpret` + `context` \| `manual` + `values`(키: `t*`·`s*`·`v*`·`part`·`interpretation`·`welding_condition`, 그리고 Job 에 바로 반영하는 `cell`·`leg_lengths`). 해석 전이면 409, 잘못된 값이면 422 |
+| GET | `/workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/preprocessed` | 1단계가 보정한 사진(PNG, OCR 이 본 사진 — 작은 사진 키우기·노이즈 제거). 보정하지 않았거나 해석 전이면 404 (`preprocessed: false`) |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진. **202 로 바로 끝나고 백그라운드에서 해석** — 그동안 상태 `analyzing`, 실패하면 해석 전 상태 + `analysis_error`. 사진이 없거나 이미 해석 중이면 409 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 → 가장 최근 Analysis 에서 2단계부터 다시 해석(revision + 1, `analyze` 처럼 202 + 백그라운드). `reinterpret` + `context` \| `manual` + `values`(키: `t*`·`s*`·`v*`·`part`·`interpretation`·`welding_condition`·`cell`·`leg_lengths`). 해석 전·해석 중이면 409, 잘못된 값·없는 표기면 바로 422 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/analyses` | 해석 결과([`analysis.schema.json`](shared/schemas/analysis.schema.json)) 전체, 만든 순서 — 사진 위 bbox·후보 표시용 |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "..."}` → `approved`. `awaiting_approval`·`needs_review` 가 아니면 409 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "...", "acknowledge_review": false}` → `approved`. `awaiting_approval` 은 바로, `needs_review` 는 작업자가 확인 항목을 봤다는 `acknowledge_review: true` 가 있어야 승인. 그 밖의 상태, 확인 표시 없음, 조립 경로·표기·용접 조건이 비어 있으면 409 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`shared/schemas/robot_output.schema.json`](shared/schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
-| GET | `/pipeline/status` | 해석 파이프라인 연결 상태 — 1단계 OCR 모델 설치 여부·모델 이름, 기호 검출기 연결, 2단계 VLM provider·모델·추론 횟수·SDK 설치·API 키 설정 여부(키 값은 돌려주지 않음), 3단계 통과 기준 |
+| GET | `/pipeline/status` | 해석 파이프라인 연결 상태 — 1단계 OCR 모델 설치 여부·모델 이름, 기호 검출기 연결, 2단계 VLM provider·모델·추론 횟수·SDK 설치·API 키 설정 여부(키 값은 돌려주지 않음)·최근 호출 실패 이유(`vlm_last_error`), 3단계 통과 기준 |
 
 - 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
 - **데모 다중 계정** (Notion 식 계정 전환): 요청 헤더 `X-User-Id: <user_id>` 가 로그인 세션을 대신해 현재 사용자를 고릅니다.
@@ -115,7 +131,9 @@
   예전 `GET /workspaces/{workspace_id}/assembly-tree` 는 없어지고 프로젝트 하위로 옮겼습니다.
 - 없는 워크스페이스의 하위 경로는 모두 404, 다른 워크스페이스의 프로젝트·작업 id 로 요청해도 404 입니다. 오류 본문은 `{"detail": "..."}` (422 는 FastAPI 기본 형식).
 - 다시 해석(`analyze`·`review`)하면 이전 승인은 무효가 됩니다 (`approved_at`·`approved_by` 비움). 단계 패키지에 실제 모델이 없으면 결과가 비어 `needs_review` 가 됩니다.
-- **저장소는 임시 인메모리**([`backend/app/store.py`](backend/app/store.py))라 서버를 재시작하면 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 돌아갑니다. 올린 사진·해석 결과도 메모리에만 있습니다. 실제 DB(SQLAlchemy)로 교체 예정입니다.
+- VLM 호출이 실패하면 해석은 VLM 없이 이어 가고, 이유가 작업의 확인 항목(`vlm_failed`)과 `/pipeline/status` 의 `vlm_last_error` 에 남습니다.
+- **저장소**([`backend/app/store.py`](backend/app/store.py))는 `.env` 의 `DATABASE_URL`(기본 `sqlite:///./vision_welding.db`, `backend/` 기준) 파일에 남아 서버를 다시 켜도 작업·사진·해석 결과가 그대로입니다.
+  처음 켤 때(파일이 없거나 비었을 때) 시드 상태(팀 워크스페이스 `demo`, 개인 워크스페이스 `personal`·`park`)로 채웁니다. 시드로 되돌리려면 `backend/vision_welding.db*` 를 지우고 다시 켭니다. `DATABASE_URL` 을 비우면 메모리만 씁니다 (테스트).
 - 인증은 아직 없습니다 (TODO) — `X-User-Id` 헤더는 데모용일 뿐 누구나 아무 계정으로 요청할 수 있습니다.
   워크스페이스 목록만 멤버로 거르고, 그 밖의 경로는 권한 검사를 하지 않습니다 (id 를 알면 누구나 접근, TODO 권한).
 
@@ -133,18 +151,19 @@ vision/                   # [1단계] 시각 인식 — recognize(image, image_i
   src/vision/             #   preprocess(전처리) · ocr(문자) · symbols(기호) · recognition(진입점, ID 붙이기)
   tools/ ROADMAP.md       #   데이터 점검 도구 · 개발 계획
 db_context_interpreter/   # [2단계] DB 기반 맥락 해석 — interpret(vision_result, context_input) → ContextResult
-  src/db_context_interpreter/  # welding(용접 기준) · dictionary(사전) · assembly(조립 경로) · vlm/
+  src/db_context_interpreter/  # welding(용접 기준) · dictionary(사전) · assembly(조립 경로) · legs(각장·셀 형태) · vlm/
 calculate_reliability/    # [3단계] 신뢰도 산출 — score(vision, context, corrections, threshold) → ConfidenceReport
   src/calculate_reliability/   # visual · db_consistency · vlm_reasoning · review(작업자 확인 항목)
 backend/
   app/
     api/            # REST API (FastAPI) — users(/me, /users) · workspaces(멤버·사전) · projects(조립 트리) · jobs · standards
     schemas.py      # API 스키마 (Pydantic) — 프론트엔드와 공유하는 계약
-    store.py        # 임시 인메모리 저장소 (실제 DB 로 교체 예정)
+    store.py        # 저장소 (메모리 + SQLite 파일, db/sqlite.py)
     pipeline.py     # 1·2·3단계 통합 — DB 조회 → 단계 호출 → Analysis → Job 반영
-    db/             # 조립 트리 / 문자·기호 / 용접 기준 DB
+    db/             # 조립 트리 / 문자·기호 / 용접 기준 DB, SQLite 저장
     export/         # 로봇 연계 JSON
   tests/
+  tools/eval_pipeline.py  # 실제 모델로 1→2→3단계를 돌려 정답과 비교
 data/seed/
   welding_standards.csv   # 표준 용접 기준 (공통)
   users.json              # 데모 사용자 + current_user_id (X-User-Id 헤더가 없을 때의 사용자)
@@ -164,22 +183,41 @@ docs/               # 기획 문서·이미지
 
 ### 백엔드
 
+**Python 3.12 이상**이 필요합니다. macOS 기본 `python3`(Xcode 명령줄 도구)는 3.9라서 `python3 -m venv` 로 만들면 설치가 실패합니다.
+[uv](https://docs.astral.sh/uv/)로 3.12 가상환경을 만드는 걸 추천합니다 (uv 가 Python 3.12 도 받아 옵니다).
+
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv venv -p 3.12 .venv && source .venv/bin/activate
+uv pip install -r requirements.txt
 cp ../.env.example ../.env
 uvicorn app.main:app --reload
 ```
 
+uv 없이 하려면 `brew install python@3.12` 후 `python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.
+
+> **저장소를 iCloud Drive 폴더(데스크탑·문서 동기화 포함)에 두면 가상환경이 깨질 수 있습니다.** iCloud 가 패키지 경로 파일(`.pth`)에
+> 숨김 속성을 붙이면 Python 이 그 파일을 건너뛰어 `shared`·단계 패키지를 못 찾습니다 (`ModuleNotFoundError: vw_shared` 등).
+> 가상환경을 iCloud 밖에 만들고(예: `uv venv -p 3.12 ~/.venvs/vision-welding-ai`, 활성화 후 `uv pip install -r requirements.txt`) 그걸 쓰거나,
+> 이미 깨졌으면 `chflags -R nohidden .venv` 로 숨김 속성을 지우세요.
+
 http://localhost:8000/docs 에서 Swagger UI로 API를 바로 호출해 볼 수 있습니다.
-시작 시 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", 3201·A2 블록, 데모 작업 3건)와
-개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드됩니다.
+처음 켤 때 데모 사용자 3명, 팀 워크스페이스 `demo`("데모 조선소 · 1도크", A1·A2 블록, 데모 작업 3건)와
+개인 워크스페이스 `personal`("개인 워크스페이스", 데모 사용자)·`park`("박지훈의 워크스페이스")가 시드되고 `backend/vision_welding.db` 에 저장됩니다.
+켤 때 OCR 모델을 백그라운드로 미리 불러 둡니다 (`PRELOAD_MODELS=0` 이면 끔 — 첫 해석이 모델 로드로 1분 가까이 걸림).
 
 `requirements.txt`가 `shared`와 1·2·3단계 패키지도 editable(`-e ../…`)로 함께 설치합니다 (`backend` 폴더에서 실행).
 실제 인식 모델은 `pip install -e "../vision[models]"`, 상용 VLM SDK는 `pip install -e "../db_context_interpreter[vlm]"`로 따로 설치합니다.
 
 테스트: `cd backend && python -m pytest -q`
+
+**실제 모델로 점검** — CI 는 모델 없이 계약만 테스트해서 실제 OCR·VLM 동작이 깨져도 잡지 못합니다. 모델을 바꾸거나 단계 코드를 고쳤으면
+정답이 있는 사진(`data/annotations`, 사진은 `data/raw/` — 운영측 PAC 사진은 드라이브에서 받기)으로 전체를 돌려 비교하세요.
+`.env` 의 VLM 설정을 그대로 써서, VLM 을 켜면 사진마다 `VLM_RUNS` 번 API 를 부릅니다.
+
+```bash
+backend/.venv/bin/python backend/tools/eval_pipeline.py        # 저장소 루트에서, 결과는 data/eval/pipeline.json
+```
 
 ### 해석 파이프라인 (1·2·3단계)
 
