@@ -209,6 +209,25 @@
   margin: 0;
 }
 
+/* DB 불일치 중 참고(info) — 접어 둠 */
+.notes {
+  margin-top: 12px;
+}
+
+.notes summary {
+  font-size: 0.875rem;
+  color: var(--secondary);
+  cursor: pointer;
+}
+
+.notes summary:hover {
+  color: var(--label);
+}
+
+.notes :global(.check-list) {
+  margin-top: 8px;
+}
+
 @media (max-width: 767.98px) {
   .step {
     padding-right: 10px;

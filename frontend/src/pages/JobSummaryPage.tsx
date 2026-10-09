@@ -146,6 +146,9 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
   const inputId = useId()
   // TODO(인증): 로그인 기능이 생기면 현재 사용자로 채운다.
   const [approvedBy, setApprovedBy] = useState('')
+  // 확인 필요 작업은 작업자가 확인 항목을 직접 봤다고 표시해야 승인된다 (백엔드 acknowledge_review)
+  const needsReview = job.status === 'needs_review'
+  const [acknowledged, setAcknowledged] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<unknown>()
 
@@ -154,7 +157,7 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
     setSubmitting(true)
     setError(undefined)
     try {
-      await approveJob(workspace.id, job.id, { approved_by: approvedBy.trim() })
+      await approveJob(workspace.id, job.id, { approved_by: approvedBy.trim(), acknowledge_review: needsReview && acknowledged })
       onApproved()
     } catch (err) {
       setError(err)
@@ -169,6 +172,25 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
         승인
       </h2>
       <p className="section-desc">승인하면 이 해석이 로봇 연계 데이터로 나가요.</p>
+      {needsReview && (
+        <div className={styles.acknowledge}>
+          <p className="section-desc">신뢰도가 기준에 못 미친 작업이에요. 아래 항목을 직접 확인한 뒤에 승인해 주세요.</p>
+          {job.needs_review.length > 0 && (
+            <ul className="check-list check-list--attention">
+              {job.needs_review.map((item) => (
+                <li key={item}>
+                  <WarningCircle size={18} weight="fill" aria-hidden="true" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className={styles.checkbox}>
+            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
+            확인 항목을 직접 확인했고, 이대로 로봇에 보내도 돼요
+          </label>
+        </div>
+      )}
       <form className={styles.approve} onSubmit={onSubmit}>
         <div className="field">
           <label htmlFor={inputId} className="field-label">
@@ -183,7 +205,11 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
             onChange={(event) => setApprovedBy(event.target.value)}
           />
         </div>
-        <button type="submit" className="btn btn--primary" disabled={submitting || !approvedBy.trim()}>
+        <button
+          type="submit"
+          className="btn btn--primary"
+          disabled={submitting || !approvedBy.trim() || (needsReview && !acknowledged)}
+        >
           {submitting ? '승인하는 중' : '승인'}
         </button>
       </form>

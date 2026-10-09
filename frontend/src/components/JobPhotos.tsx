@@ -1,6 +1,6 @@
 import { ArrowClockwise, ImageSquare, Plus } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
-import { analyzeJob, jobImageUrl, listAnalyses, listJobImages, uploadJobImage } from '../api/jobs'
+import { analyzeJob, jobImageUrl, jobPreprocessedUrl, listAnalyses, listJobImages, uploadJobImage } from '../api/jobs'
 import type { Analysis, Job } from '../api/types'
 import { useAsync } from '../hooks/useAsync'
 import { ErrorNotice } from './Notice'
@@ -10,7 +10,7 @@ import { PhotoAnnotations } from './PhotoAnnotations'
 interface JobPhotosProps {
   workspaceId: string
   job: Job
-  /** 사진을 해석해 작업이 바뀌었을 때 (JobFrame 이 작업을 다시 불러온다) */
+  /** 해석을 시작했을 때 (JobFrame 이 작업을 다시 불러와 해석이 끝날 때까지 기다린다) */
   onAnalyzed: () => void
 }
 
@@ -25,7 +25,9 @@ export function JobPhotos({ workspaceId, job, onAnalyzed }: JobPhotosProps) {
   const images = useAsync((signal) => listJobImages(workspaceId, job.id, signal), [workspaceId, job.id, version])
   const analyses = useAsync((signal) => listAnalyses(workspaceId, job.id, signal), [workspaceId, job.id, version])
   const [selectedId, setSelectedId] = useState<string>()
+  const [showPreprocessed, setShowPreprocessed] = useState(false)
   const [busy, setBusy] = useState<'upload' | 'analyze'>()
+  const analyzing = job.status === 'analyzing'
   const [error, setError] = useState<unknown>()
 
   const list = images.data ?? []
@@ -89,9 +91,9 @@ export function JobPhotos({ workspaceId, job, onAnalyzed }: JobPhotosProps) {
             }}
           />
           {current && (
-            <button type="button" className="btn btn--primary" onClick={analyze} disabled={busy !== undefined}>
-              {analyzed && <ArrowClockwise size={14} weight="bold" aria-hidden="true" />}
-              {busy === 'analyze' ? '해석하는 중' : analyzed ? '다시 해석' : '해석 시작'}
+            <button type="button" className="btn btn--primary" onClick={analyze} disabled={busy !== undefined || analyzing}>
+              {analyzed && !analyzing && <ArrowClockwise size={14} weight="bold" aria-hidden="true" />}
+              {busy === 'analyze' || analyzing ? '해석하는 중' : analyzed ? '다시 해석' : '해석 시작'}
             </button>
           )}
         </div>
@@ -105,9 +107,23 @@ export function JobPhotos({ workspaceId, job, onAnalyzed }: JobPhotosProps) {
         <div className={styles.placeholder} aria-label="불러오는 중" />
       ) : current ? (
         <>
+          {current.preprocessed && (
+            <div className={`segmented ${styles.view}`} role="group" aria-label="사진 보기">
+              <button type="button" aria-pressed={!showPreprocessed} onClick={() => setShowPreprocessed(false)}>
+                원본
+              </button>
+              <button type="button" aria-pressed={showPreprocessed} onClick={() => setShowPreprocessed(true)}>
+                1단계 보정본
+              </button>
+            </div>
+          )}
           <PhotoAnnotations
             key={current.image_id}
-            src={jobImageUrl(workspaceId, job.id, current.image_id)}
+            src={
+              current.preprocessed && showPreprocessed
+                ? jobPreprocessedUrl(workspaceId, job.id, current.image_id)
+                : jobImageUrl(workspaceId, job.id, current.image_id)
+            }
             image={current}
             analysis={analysisOf(current.image_id)}
           />

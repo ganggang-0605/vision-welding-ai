@@ -198,6 +198,8 @@ export interface Job {
   confidence: Confidence | null
   evidence: string[]
   needs_review: string[]
+  /** 마지막 해석(analyze · review)이 실패한 이유. 상태는 해석 전으로 돌아감. 다음 해석이 성공하면 null */
+  analysis_error: string | null
 }
 
 /** 작업에 올린 사진 한 장. 파일은 jobImageUrl() */
@@ -210,6 +212,8 @@ export interface JobImage {
   width: number
   height: number
   created_at: DateTimeString
+  /** 1단계가 보정한 사진(OCR 이 본 사진)이 있는지 — jobPreprocessedUrl() */
+  preprocessed: boolean
 }
 
 // ── 해석 결과 (shared/schemas/analysis.schema.json) ──────────
@@ -284,6 +288,8 @@ export interface PartMatch {
 /** [2단계] a. 용접 기준 DB 로 판별한 조건 */
 export interface ContextWeldingCondition extends WeldingCondition {
   thickness_mm?: number | null
+  /** 판 두께 없이 각장으로 기준 행을 고른 경우의 각장 */
+  leg_length_mm?: number | null
   standard_matched: boolean
   source: 'standard_db' | 'vlm' | 'manual'
   ref_ids?: string[]
@@ -308,13 +314,26 @@ export interface VlmResult {
   provider: string
   model: string
   interpretation: string
+  /** 사진을 보고 해석했는지 (없으면 모름) */
+  image_attached?: boolean
   reading: {
-    texts: { text: string; ref_id: string }[]
-    symbols: { label: string; ref_id: string }[]
+    /** used: 1단계와 다르게 읽었고 2단계가 이 VLM 읽기를 해석에 씀 */
+    texts: { text: string; ref_id: string; bbox?: BBox; used?: boolean }[]
+    symbols: { label: string; ref_id: string; bbox?: BBox; used?: boolean }[]
   }
   token_prob: number | null
   consistency: number | null
   runs: number
+}
+
+/** [2단계] 수기 각장 (PAC 과제) */
+export interface ContextLegLength extends LegLength {
+  ref_ids: string[]
+}
+
+/** [2단계] 셀 좌·우 끝 형태 (PAC 과제) */
+export interface ContextCell extends Cell {
+  ref_ids: string[]
 }
 
 export interface ContextResult {
@@ -323,8 +342,12 @@ export interface ContextResult {
   dictionary_matches: DictionaryMatch[]
   part: PartMatch
   welding_condition: ContextWeldingCondition | null
+  leg_lengths: ContextLegLength[]
+  cell: ContextCell | null
   conflicts: Conflict[]
   vlm: VlmResult | null
+  /** VLM 을 켰는데 추론이 모두 실패한 이유 (이때 vlm 은 null) */
+  vlm_error?: string | null
 }
 
 export type ConfidenceLayer = 'visual' | 'db_consistency' | 'vlm_reasoning'
@@ -380,6 +403,9 @@ export interface PipelineStatus {
   vlm_runs: number
   vlm_sdk_installed: boolean
   vlm_api_key_set: boolean
+  /** 서버를 켠 뒤 가장 최근 VLM 호출 실패 이유 (그다음 성공하면 null) */
+  vlm_last_error: string | null
+  vlm_last_error_at: DateTimeString | null
   confidence_threshold: number
 }
 
@@ -418,14 +444,19 @@ export interface ReviewRequest {
 
 export interface ApproveRequest {
   approved_by: string
+  /** 확인 필요(needs_review) 작업을 승인할 때 true — 작업자가 확인 항목을 직접 봤다는 표시 (없으면 409) */
+  acknowledge_review?: boolean
 }
 
 // ── 표준 용접 기준 (전체 공통, 읽기 전용) ─────────────────────
 
+/** 판 두께 또는 각장으로 고르는 기준 행. 각장별 값만 있는 행(3F)은 판 두께가 null, 맞대기는 각장이 null */
 export interface WeldingStandard {
   joint_type: string
-  thickness_min_mm: number
-  thickness_max_mm: number
+  thickness_min_mm: number | null
+  thickness_max_mm: number | null
+  leg_min_mm: number | null
+  leg_max_mm: number | null
   process: string
   position: string
   current_a: string

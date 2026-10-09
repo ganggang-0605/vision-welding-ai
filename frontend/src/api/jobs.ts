@@ -56,7 +56,16 @@ export function jobImageUrl(workspaceId: string, jobId: string, imageId: string)
   return API_BASE_URL + apiPath`/workspaces/${workspaceId}/jobs/${jobId}/images/${imageId}/file`
 }
 
-/** POST /workspaces/{workspace_id}/jobs/{job_id}/analyze — 1·2·3단계 해석 후 반영된 작업. 사진이 없으면 409 */
+/** 1단계가 보정한 사진(OCR 이 본 사진) 주소 — JobImage.preprocessed 가 true 일 때만 있다 */
+export function jobPreprocessedUrl(workspaceId: string, jobId: string, imageId: string): string {
+  return API_BASE_URL + apiPath`/workspaces/${workspaceId}/jobs/${jobId}/images/${imageId}/preprocessed`
+}
+
+/**
+ * POST /workspaces/{workspace_id}/jobs/{job_id}/analyze → 202, status "analyzing" 인 작업.
+ * 해석은 백그라운드에서 돌므로 끝난 결과는 작업을 다시 읽어 확인한다 (JobFrame 이 analyzing 동안 다시 읽음).
+ * 사진이 없거나 이미 해석 중이면 409
+ */
 export function analyzeJob(workspaceId: string, jobId: string, body: AnalyzeRequest = {}, signal?: AbortSignal): Promise<Job> {
   return apiFetch<Job>(apiPath`/workspaces/${workspaceId}/jobs/${jobId}/analyze`, jsonInit('POST', body, signal))
 }
@@ -66,7 +75,10 @@ export function listAnalyses(workspaceId: string, jobId: string, signal?: AbortS
   return apiFetch<Analysis[]>(apiPath`/workspaces/${workspaceId}/jobs/${jobId}/analyses`, { signal })
 }
 
-/** POST /workspaces/{workspace_id}/jobs/{job_id}/review — 2단계부터 다시 해석. 해석 전이면 409, 잘못된 값이면 422 */
+/**
+ * POST /workspaces/{workspace_id}/jobs/{job_id}/review → 202, 2단계부터 백그라운드로 다시 해석 (analyzeJob 과 같음).
+ * 해석 전·해석 중이면 409, 잘못된 값·없는 표기면 바로 422
+ */
 export function reviewJob(
   workspaceId: string,
   jobId: string,
@@ -76,7 +88,10 @@ export function reviewJob(
   return apiFetch<Job>(apiPath`/workspaces/${workspaceId}/jobs/${jobId}/review`, jsonInit('POST', body, signal))
 }
 
-/** POST /workspaces/{workspace_id}/jobs/{job_id}/approve (needs_review·awaiting_approval 이 아니면 409) */
+/**
+ * POST /workspaces/{workspace_id}/jobs/{job_id}/approve. awaiting_approval 은 바로, needs_review 는 acknowledge_review 가
+ * true 여야 승인. 그 밖의 상태 · 확인 표시 없음 · 조립 경로·표기·용접 조건이 비어 있으면 409
+ */
 export function approveJob(
   workspaceId: string,
   jobId: string,

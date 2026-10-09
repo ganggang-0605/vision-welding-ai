@@ -1,10 +1,12 @@
-import { CaretRight, Check, WarningCircle } from '@phosphor-icons/react'
+import { CaretRight, Check, Info, WarningCircle } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { jobImageUrl, listAnalyses, listJobImages } from '../api/jobs'
 import { getPipelineStatus } from '../api/pipeline'
-import type { Analysis, ConfidenceLayer, Job, PipelineStatus } from '../api/types'
+import type { Analysis, ConfidenceLayer, Conflict, Job, PipelineStatus } from '../api/types'
+import { CellView } from '../components/CellView'
 import { JobFrame } from '../components/JobFrame'
+import { LegLengthList } from '../components/LegLengthList'
 import { ErrorNotice, Notice } from '../components/Notice'
 import { PhotoAnnotations } from '../components/PhotoAnnotations'
 import { useAsync } from '../hooks/useAsync'
@@ -147,7 +149,8 @@ function stageSummary(stage: ProcessStage, analysis: Analysis): string {
   if (stage === 'vision') return `글자 ${vision.texts.length}개, 기호 ${vision.symbols.length}개`
   if (stage === 'context') {
     const matched = context.dictionary_matches.filter((m) => m.code).length
-    return `사전 ${matched}/${context.dictionary_matches.length}, 부재 ${context.part.found_in_tree ? '찾음' : '못 찾음'}`
+    const legs = context.leg_lengths?.length ? `, 각장 ${context.leg_lengths.length}개` : ''
+    return `사전 ${matched}/${context.dictionary_matches.length}, 부재 ${context.part.found_in_tree ? '찾음' : '못 찾음'}${legs}`
   }
   return confidence ? `종합 ${formatScore(confidence.overall)}%, ${confidence.passed ? '통과' : '확인 필요'}` : '아직 없음'
 }
@@ -322,6 +325,7 @@ function ContextStage({ analysis, status }: { analysis: Analysis; status: Pipeli
               {wc.process}, {positionLabel(wc.position)}
             </Row>
             <Row label="판 두께">{wc.thickness_mm != null ? `${wc.thickness_mm}mm` : '-'}</Row>
+            {wc.leg_length_mm != null && <Row label="각장 (기준 행을 고른 값)">{wc.leg_length_mm}mm</Row>}
             <Row label="전류, 전압, 속도">
               {withUnit(wc.current_a, 'A')}, {withUnit(wc.voltage_v, 'V')}, {withUnit(wc.speed_cm_min, 'cm/min')}
             </Row>
@@ -380,6 +384,9 @@ function ContextStage({ analysis, status }: { analysis: Analysis; status: Pipeli
           <Row label="조립 트리에 있음">
             {context.part.found_in_tree ? '예' : '아니요'} <Refs ids={context.part.ref_ids} />
           </Row>
+          {context.part.assembly_path && context.part.ref_ids.length === 0 && (
+            <Row label="정한 곳">사진에 부재 표기가 없어 작업에 적은 경로</Row>
+          )}
         </dl>
       </Block>
 
@@ -391,38 +398,82 @@ function ContextStage({ analysis, status }: { analysis: Analysis; status: Pipeli
               <Row label="모델">
                 {VLM_PROVIDER_LABEL[context.vlm.provider] ?? context.vlm.provider}, {context.vlm.model}
               </Row>
-              <Row label="추론 횟수">{context.vlm.runs}번</Row>
+              <Row label="사진">{context.vlm.image_attached === false ? '사진 없이 1단계 결과만 봄' : '사진을 보고 해석'}</Row>
+              <Row label="추론 횟수">{context.vlm.runs}번 (동시에)</Row>
               <Row label="여러 번 추론한 일치도">{pct(context.vlm.consistency)}</Row>
               <Row label="출력 토큰 확률">{pct(context.vlm.token_prob)}</Row>
               <Row label="VLM 이 읽은 표기">
-                {[...context.vlm.reading.texts.map((t) => `${t.ref_id} ${t.text}`), ...context.vlm.reading.symbols.map((s) => `${s.ref_id} ${s.label}`)].join(', ') || '-'}
+                {[
+                  ...context.vlm.reading.texts.map((t) => `${t.ref_id} ${t.text}${t.used ? ' (해석에 씀)' : ''}`),
+                  ...context.vlm.reading.symbols.map((s) => `${s.ref_id} ${s.label}${s.used ? ' (해석에 씀)' : ''}`),
+                ].join(', ') || '-'}
               </Row>
             </dl>
           </>
+        ) : context.vlm_error ? (
+          <Notice tone="error" title="VLM 호출이 실패해 VLM 없이 해석했어요">
+            {context.vlm_error}
+          </Notice>
         ) : (
           <Notice tone={status?.vlm_provider ? 'warning' : 'info'}>{vlmOffReason(status)}</Notice>
         )}
+      </Block>
+
+      <Block letter="e" title="셀 형태와 각장" description="PAC 과제 결과 — 셀 좌·우 끝 형태와 수기 각장(F·V·S)을 사전 대조 결과에서 뽑아요.">
+        <dl className="group">
+          <Row label="셀 형태">
+            {context.cell ? (
+              <>
+                <CellView cell={context.cell} /> <Refs ids={context.cell.ref_ids} />
+              </>
+            ) : (
+              '셀 형태 기호를 찾지 못했어요'
+            )}
+          </Row>
+          <Row label="각장">
+            {context.leg_lengths?.length ? <LegLengthList legs={context.leg_lengths} /> : '읽은 각장이 없어요'}
+          </Row>
+        </dl>
       </Block>
 
       <section className={styles.block} aria-labelledby="conflicts-title">
         <h2 id="conflicts-title" className={styles.blockTitle}>
           DB 불일치
         </h2>
-        {context.conflicts.length === 0 ? (
-          <p className="state">불일치한 항목이 없어요.</p>
-        ) : (
-          <ul className="check-list check-list--attention">
-            {context.conflicts.map((c, i) => (
-              <li key={i}>
-                <WarningCircle size={18} weight="fill" aria-hidden="true" />
-                <span>
-                  <strong>{CONFLICT_LABEL[c.type] ?? c.type}</strong> {c.message} <Refs ids={c.ref_ids} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ConflictList conflicts={context.conflicts} />
       </section>
+    </>
+  )
+}
+
+/** 경고·오류는 위에 펼쳐 두고, 참고(info)는 접어 둔다 — 해석은 됐고 확인 항목도 아닌 것 */
+function ConflictList({ conflicts }: { conflicts: Conflict[] }) {
+  const warnings = conflicts.filter((c) => c.severity !== 'info')
+  const notes = conflicts.filter((c) => c.severity === 'info')
+  if (conflicts.length === 0) return <p className="state">불일치한 항목이 없어요.</p>
+  const item = (c: Conflict, i: number, icon: ReactNode) => (
+    <li key={i}>
+      {icon}
+      <span>
+        <strong>{CONFLICT_LABEL[c.type] ?? c.type}</strong> {c.message} <Refs ids={c.ref_ids} />
+      </span>
+    </li>
+  )
+  return (
+    <>
+      {warnings.length === 0 ? (
+        <p className="state">확인이 필요한 불일치는 없어요.</p>
+      ) : (
+        <ul className="check-list check-list--attention">
+          {warnings.map((c, i) => item(c, i, <WarningCircle size={18} weight="fill" aria-hidden="true" />))}
+        </ul>
+      )}
+      {notes.length > 0 && (
+        <details className={styles.notes}>
+          <summary>참고 {notes.length}건 (해석은 됐고 확인 항목은 아니에요)</summary>
+          <ul className="check-list">{notes.map((c, i) => item(c, i, <Info size={18} aria-hidden="true" />))}</ul>
+        </details>
+      )}
     </>
   )
 }
@@ -432,7 +483,7 @@ function vlmOffReason(status: PipelineStatus | undefined): string {
   if (!status.vlm_provider) return 'VLM 을 꺼 두어(.env 의 VLM_PROVIDER) 사전·조립 트리·용접 기준 대조만 했어요.'
   if (!status.vlm_sdk_installed) return `${status.vlm_provider} SDK 가 설치되지 않아 VLM 해석을 건너뛰었어요.`
   if (!status.vlm_api_key_set) return `${status.vlm_provider} API 키가 .env 에 없어 VLM 해석을 건너뛰었어요.`
-  return 'VLM 호출이 실패해 VLM 없이 해석했어요. 백엔드 로그를 확인해 주세요.'
+  return 'VLM 해석 결과가 없어요.'
 }
 
 // ── 3단계 신뢰도 산출 ──

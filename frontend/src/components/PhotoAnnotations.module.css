@@ -5,8 +5,9 @@
 .frame {
   position: relative;
   overflow: hidden;
-  width: 100%;
-  max-height: 520px;
+  /* 세로로 긴 사진도 높이 520px 를 넘지 않게 폭을 줄인다 (--ratio = 가로 / 세로) */
+  width: min(100%, calc(520px * var(--ratio, 1.5)));
+  margin-inline: auto;
   border-radius: var(--radius);
   background: var(--fill);
 }
@@ -30,6 +31,11 @@
 
 .box[data-low] {
   border-color: var(--attention);
+}
+
+/* 1단계가 놓치고 VLM 만 읽은 표기 (위치는 VLM 이 알려 준 대략값) */
+.box[data-source='vlm'] {
+  border-style: dashed;
 }
 
 .box:hover,

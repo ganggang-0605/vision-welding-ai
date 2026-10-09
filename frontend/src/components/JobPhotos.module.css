@@ -58,3 +58,8 @@
 .thumb[aria-pressed='true'] {
   border-color: var(--accent-text);
 }
+
+/* 원본 · 1단계 보정본 */
+.view {
+  margin-bottom: 12px;
+}

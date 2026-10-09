@@ -9,3 +9,7 @@
 .meta :global(.status) {
   font-size: inherit;
 }
+
+.notice {
+  margin-top: 24px;
+}

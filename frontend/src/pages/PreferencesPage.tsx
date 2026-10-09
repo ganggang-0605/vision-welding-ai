@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useAsync } from '../hooks/useAsync'
 import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { signOut, useAccounts } from '../lib/accounts'
+import { formatDateTime } from '../lib/format'
 import { VLM_PROVIDER_LABEL } from '../lib/labels'
 import { paths } from '../lib/paths'
 import { TEXT_SIZE_OPTIONS, THEME_OPTIONS, useTextSize, useThemePreference } from '../lib/preferences'
@@ -129,6 +130,17 @@ export function PreferencesPage() {
                 <dt>VLM API 키·SDK</dt>
                 <dd>
                   {pipeline.data.vlm_api_key_set ? '키 있음' : '키 없음'}, {pipeline.data.vlm_sdk_installed ? 'SDK 설치됨' : 'SDK 설치 안 됨'}
+                </dd>
+              </div>
+            )}
+            {pipeline.data.vlm_last_error && (
+              <div className="group-row">
+                <dt>최근 VLM 호출 실패</dt>
+                <dd className={styles.error}>
+                  {pipeline.data.vlm_last_error}
+                  {pipeline.data.vlm_last_error_at && (
+                    <span className="secondary"> ({formatDateTime(pipeline.data.vlm_last_error_at)})</span>
+                  )}
                 </dd>
               </div>
             )}

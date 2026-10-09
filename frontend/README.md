@@ -36,7 +36,7 @@ npm run dev
 브라우저에서 <http://localhost:5173>을 열면 데모 워크스페이스(`/w/demo`)로 이동합니다.
 백엔드가 꺼져 있으면 사이드바 아래에 **서버에 연결할 수 없어요**가 뜹니다. 백엔드를 켠 뒤 **다시 확인**을 누르면 됩니다 (정상일 때는 아무것도 표시하지 않습니다).
 
-> 데모 데이터(워크스페이스 `demo`, 작업 3개)는 백엔드가 시작할 때 메모리에 올립니다. 화면에서 승인·추가·삭제한 내용은 백엔드를 재시작하면 처음 상태로 돌아갑니다.
+> 데모 데이터(워크스페이스 `demo`, 작업 3개)는 백엔드를 처음 켤 때 `backend/vision_welding.db`(SQLite)에 저장됩니다. 화면에서 승인·추가·삭제한 내용은 백엔드를 다시 켜도 남고, 처음 상태로 되돌리려면 그 파일을 지우고 백엔드를 다시 켭니다.
 
 ## 라우트
 
@@ -63,16 +63,17 @@ npm run dev
 | `/w/:workspaceId/p/:projectId/assembly-tree` | `AssemblyTreePage` | 3b 조립 트리 | 이 블록의 조립 경로 (블록 → 대조립 → 중조립 → 소조립 → 부재) |
 | `/w/:workspaceId/p/:projectId/jobs/new` | `NewJobPage` | 4 현장 촬영 = 새 작업 | 모바일 촬영(`<input type="file" accept="image/*" capture="environment">`) → 작업 생성 → 업로드 → 해석 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId` | `JobResultPage` | 5 해석 결과 | 인식한 표기, 신뢰도, 추천 용접 조건, 판단 근거. 해석 전이면 '해석 시작' |
-| `/w/:workspaceId/p/:projectId/jobs/:jobId/process/:stage?` | `JobProcessPage` | 해석 과정 (1·2·3단계) | 표기 정보 해석 프로세스를 단계별로: `vision`(a 전처리·b OCR·c YOLO, 사진 위 위치), `context`(a 용접 기준·b 문자/기호 사전·c 조립 경로·d VLM, DB 불일치), `confidence`(a 시각 인식·b DB 정합성·c VLM 추론 신뢰도와 근거 값, 작업자 확인 항목). 사진이 여러 장이거나 다시 해석했으면 `?analysis=`로 고름 |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId/process/:stage?` | `JobProcessPage` | 해석 과정 (1·2·3단계) | 표기 정보 해석 프로세스를 단계별로: `vision`(a 전처리·b OCR·c YOLO, 사진 위 위치), `context`(a 용접 기준·b 문자/기호 사전·c 조립 경로·d VLM·e 셀 형태와 각장, DB 불일치 — 참고(info)는 접어 둠, VLM 실패 이유), `confidence`(a 시각 인식·b DB 정합성·c VLM 추론 신뢰도와 근거 값, 작업자 확인 항목). 사진이 여러 장이거나 다시 해석했으면 `?analysis=`로 고름 |
 | `/w/:workspaceId/p/:projectId/jobs/:jobId/review` | `JobReviewPage` | 6 작업자 확인 | 확인할 항목, 맥락 덧붙여 다시 해석 / 직접 입력 |
-| `/w/:workspaceId/p/:projectId/jobs/:jobId/summary` | `JobSummaryPage` | 7 요약본·JSON 내보내기 | 요약 → 승인 → 로봇 연계 JSON 미리보기·복사·내보내기 (승인 전이면 안내) |
+| `/w/:workspaceId/p/:projectId/jobs/:jobId/summary` | `JobSummaryPage` | 7 요약본·JSON 내보내기 | 요약 → 승인 → 로봇 연계 JSON 미리보기·복사·내보내기 (승인 전이면 안내). 확인 필요 작업은 확인 항목을 보여 주고 "직접 확인했어요"에 체크해야 승인 (`acknowledge_review`) |
 | `*` | `NotFoundPage` | | 없는 주소. 워크스페이스 안(`/w/demo/...`)이면 사이드바를 유지한 채 표시 |
 
 - `/w/:workspaceId/*` 화면은 모두 `layouts/WorkspaceLayout`(사이드바 + `<Outlet />`) 안에서 그려집니다. 레이아웃이 워크스페이스·프로젝트 목록·현재 사용자를 불러온 뒤 페이지를 그리므로, 페이지에서는 `useWorkspace()` / `useWorkspaceContext()`로 바로 꺼내 씁니다.
 - `/w/:workspaceId/p/:projectId/*` 화면은 `layouts/ProjectLayout`이 주소의 프로젝트를 찾아 넘깁니다 (`useProject()`). 없는 프로젝트면 '찾을 수 없음' 화면을 보여 줍니다.
 - 작업 화면 5·6·7은 `components/JobFrame`(작업 불러오기 + 위치·제목·상태 + 화면 전환 세그먼트)을 함께 씁니다. 주소의 프로젝트와 작업의 프로젝트가 다르면 맞는 주소로 옮깁니다.
 - 라우트 정의는 `src/router.ts`, 화면 URL 생성은 `src/lib/paths.ts`(`paths.job(workspaceId, projectId, jobId)` 등)를 씁니다. 링크 문자열을 직접 조합하지 마세요.
-- 사진 올리기·해석·작업자 확인은 백엔드 `app/pipeline.py`(1·2·3단계 패키지 통합)와 연결돼 있습니다. 해석 결과 화면의 **사진**(`components/JobPhotos`)에서 사진 추가·해석 시작·다시 해석을 하고, `components/PhotoAnnotations`가 1단계가 찾은 글자·기호 위치(`Analysis.vision`의 bbox)를 사진 위 박스로 보여 줍니다 (확률 80% 미만은 주황). 단계 패키지에 실제 모델이 아직 없으면 찾은 것이 없어 '확인 필요'가 됩니다.
+- 사진 올리기·해석·작업자 확인은 백엔드 `app/pipeline.py`(1·2·3단계 패키지 통합)와 연결돼 있습니다. 해석 결과 화면의 **사진**(`components/JobPhotos`)에서 사진 추가·해석 시작·다시 해석을 하고, `components/PhotoAnnotations`가 1단계가 찾은 글자·기호 위치(`Analysis.vision`의 bbox)와 1단계가 놓치고 VLM 만 읽은 표기(점선)를 사진 위 박스로 보여 줍니다 (확률 80% 미만은 주황). 1단계가 보정한 사진이 있으면 원본·1단계 보정본을 바꿔 볼 수 있습니다.
+- 해석(`analyze`·`review`)은 백엔드가 202 로 바로 돌려주고 백그라운드에서 돌립니다. 작업 상태가 `analyzing` 인 동안 `components/JobFrame`이 2초마다 작업을 다시 읽어 "해석하고 있어요"를 보여 주고, 끝나면 결과로 바뀝니다. 실패하면 `analysis_error`를 작업 화면 위에 보여 줍니다.
 
 ### 사이드바 (노션 사이드바 구성, 맨 아래는 클로드처럼 내 계정)
 
@@ -96,7 +97,7 @@ npm run dev
 | `api/users.ts` | `getMe` · `listUsers` (로그인 전까지 데모 계정). 다른 계정으로 보낼 때는 `client.ts`의 `asUser(userId)` |
 | `api/workspaces.ts` | `listWorkspaces` · `createWorkspace` · `getWorkspace` · `updateWorkspace` · `listMembers` · `inviteMember` · `listSymbols` · `createSymbol` · `updateSymbol` · `deleteSymbol` |
 | `api/projects.ts` | `listProjects` · `createProject` · `getProject` · `getAssemblyTree(workspaceId, projectId)` |
-| `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `listJobImages` · `jobImageUrl` · `analyzeJob` · `listAnalyses` · `reviewJob` · `approveJob` · `exportJob` |
+| `api/jobs.ts` | `listJobs(workspaceId, { q, status, project_id })` · `createJob` · `getJob` · `uploadJobImage`(FormData) · `listJobImages` · `jobImageUrl` · `jobPreprocessedUrl` · `analyzeJob` · `listAnalyses` · `reviewJob` · `approveJob` · `exportJob` |
 | `api/standards.ts` | `listWeldingStandards` (공통) |
 
 - 모든 함수의 마지막 인자는 선택 `signal?: AbortSignal`입니다. 경로 파라미터는 `encodeURIComponent`로 인코딩됩니다.
@@ -253,4 +254,3 @@ frontend/
 - 문자/기호 사전 항목 수정(`updateSymbol`) UI
 - 새 작업에서 같은 워크스페이스의 과거 작업 연결(`related_job_ids`) 선택
 - 작업자 확인 '직접 해석'의 `values` 형식은 백엔드 재해석 구현 때 확정
-- 해석이 오래 걸리게 되면(실제 모델) 진행 상태(`analyzing`) 표시와 백그라운드 처리

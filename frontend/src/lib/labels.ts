@@ -159,6 +159,7 @@ export const REVIEW_REASON_LABEL: Record<string, string> = {
   ...CONFLICT_LABEL,
   low_visual_confidence: '인식 확률 낮음',
   vlm_inconsistent: 'VLM 추론이 매번 다름',
+  vlm_failed: 'VLM 호출 실패',
   missing_required: '필수 값 없음',
 }
 

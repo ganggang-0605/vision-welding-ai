@@ -62,6 +62,31 @@
   padding-inline: 22px;
 }
 
+/* 확인 필요 작업: 확인 항목 + 확인했다는 표시 */
+.acknowledge {
+  margin-bottom: 16px;
+}
+
+.acknowledge :global(.check-list) {
+  margin-block: 10px 14px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent-text);
+}
+
 .code {
   overflow: hidden;
   border-radius: var(--radius-group);

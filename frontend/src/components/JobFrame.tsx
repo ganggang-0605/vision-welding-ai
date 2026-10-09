@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { isApiError } from '../api/client'
 import { getJob } from '../api/jobs'
@@ -11,9 +11,13 @@ import { formatDateTime } from '../lib/format'
 import { paths } from '../lib/paths'
 import { AsyncView } from './AsyncView'
 import { JobNav } from './JobNav'
+import { Notice } from './Notice'
 import { PageHeader } from './PageHeader'
 import styles from './JobFrame.module.css'
 import { StatusLabel } from './StatusLabel'
+
+/** 해석(analyze · review)은 백그라운드에서 돌아서, analyzing 동안 이 간격으로 작업을 다시 읽는다 */
+const ANALYSIS_POLL_MS = 2000
 
 interface JobFrameProps {
   /** 화면 이름 (예: '해석 결과') — 브라우저 탭 제목에 쓴다. */
@@ -36,6 +40,15 @@ function JobFrameContent({ section, children }: JobFrameProps) {
   const jobId = useRequiredParam('jobId')
   const job = useAsync((signal) => getJob(workspace.id, jobId, signal), [workspace.id, jobId])
   const projectHome = paths.project(workspace.id, project.id)
+  const analyzing = job.data?.status === 'analyzing'
+  const { reload } = job
+
+  // 해석이 끝날 때까지 작업을 다시 읽는다 (다시 읽을 때마다 job.data 가 바뀌어 다음 타이머가 걸림).
+  useEffect(() => {
+    if (!analyzing) return
+    const timer = setTimeout(reload, ANALYSIS_POLL_MS)
+    return () => clearTimeout(timer)
+  }, [analyzing, job.data, reload])
 
   // 없는 작업이거나 다른 워크스페이스의 작업 (백엔드 404): 다시 시도해도 같으므로 프로젝트로 안내한다.
   if (!job.loading && isApiError(job.error, 404)) {
@@ -66,6 +79,19 @@ function JobFrameContent({ section, children }: JobFrameProps) {
               }
             />
             <JobNav workspaceId={workspace.id} projectId={project.id} jobId={data.id} />
+            {data.status === 'analyzing' ? (
+              <div className={styles.notice}>
+                <Notice title="해석하고 있어요">사진 한 장에 10~30초쯤 걸려요. 끝나면 이 화면이 바뀌어요.</Notice>
+              </div>
+            ) : (
+              data.analysis_error && (
+                <div className={styles.notice}>
+                  <Notice tone="error" title="마지막 해석이 실패해서 이전 결과를 보여 주고 있어요">
+                    {data.analysis_error}
+                  </Notice>
+                </div>
+              )
+            )}
             {children(data, job.reload)}
           </>
         )}

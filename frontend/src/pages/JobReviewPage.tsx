@@ -78,7 +78,7 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
     // manual 은 바꾼 값만 보낸다 (키 = 고칠 대상, shared/schemas/analysis.schema.json 의 Correction).
-    // cell·leg_lengths 는 아직 파이프라인 결과가 아니어서 백엔드가 Job 에 바로 반영한다.
+    // 해석은 백그라운드에서 돌고, JobFrame 이 analyzing 동안 작업을 다시 읽어 결과를 보여 준다.
     const values = action === 'manual' ? changedValues() : {}
     if (action === 'manual' && Object.keys(values).length === 0) {
       setError(new Error('바꾼 값이 없어요.'))
@@ -249,10 +249,10 @@ function ReviewForm({ job, onReviewed }: { job: Job; onReviewed: () => void }) {
           )}
 
           {error !== undefined && <ErrorNotice error={error} />}
-          {done && <Notice>확인한 내용을 반영했어요.</Notice>}
+          {done && <Notice>확인한 내용으로 다시 해석하고 있어요. 끝나면 위 항목이 바뀌어요.</Notice>}
 
           <p className="button-row">
-            <button type="submit" className="btn btn--primary" disabled={submitting}>
+            <button type="submit" className="btn btn--primary" disabled={submitting || job.status === 'analyzing'}>
               {submitting ? '보내는 중' : action === 'reinterpret' ? '다시 해석' : '해석 저장'}
             </button>
           </p>

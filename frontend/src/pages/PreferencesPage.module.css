@@ -31,3 +31,9 @@
   text-overflow: ellipsis;
   color: var(--secondary);
 }
+
+/* 최근 VLM 호출 실패 이유 */
+.error {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}

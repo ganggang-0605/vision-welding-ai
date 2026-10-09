@@ -24,6 +24,9 @@ export function WeldingStandardsPage() {
                   <th scope="col" className="num">
                     두께 (mm)
                   </th>
+                  <th scope="col" className="num">
+                    각장 (mm)
+                  </th>
                   <th scope="col">공법</th>
                   <th scope="col">자세</th>
                   <th scope="col" className="num">
@@ -40,14 +43,13 @@ export function WeldingStandardsPage() {
               <tbody>
                 {list.map((standard) => (
                   <tr
-                    key={`${standard.joint_type}-${standard.thickness_min_mm}-${standard.thickness_max_mm}-${standard.process}-${standard.position}`}
+                    key={`${standard.joint_type}-${standard.thickness_min_mm}-${standard.leg_min_mm}-${standard.process}-${standard.position}`}
                   >
                     <td className="cell-title">
                       {jointTypeLabel(standard.joint_type)} <span className="secondary mono">{standard.joint_type}</span>
                     </td>
-                    <td className="num nowrap">
-                      {standard.thickness_min_mm}-{standard.thickness_max_mm}
-                    </td>
+                    <td className="num nowrap">{span(standard.thickness_min_mm, standard.thickness_max_mm)}</td>
+                    <td className="num nowrap">{span(standard.leg_min_mm, standard.leg_max_mm)}</td>
                     <td>{standard.process}</td>
                     <td>{positionLabel(standard.position)}</td>
                     <td className="num">{standard.current_a}</td>
@@ -62,4 +64,10 @@ export function WeldingStandardsPage() {
       </AsyncView>
     </div>
   )
+}
+
+/** 범위 표시 — 같으면 한 값, 없으면 '-' (3F 행은 판 두께, 맞대기는 각장이 없음) */
+function span(low: number | null, high: number | null): string {
+  if (low === null || high === null) return '-'
+  return low === high ? String(low) : `${low}-${high}`
 }
