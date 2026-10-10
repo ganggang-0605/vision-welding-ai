@@ -11,6 +11,9 @@
         --texts-only : 글자 정답이 없는 사진은 건너뜀
         --dictionary-from-db : 앱 DB(.env 의 DATABASE_URL)의 demo 문자·기호 사전으로 바꿔서 돌림 — 화면에서 사전을 고친 뒤
                                다시 재 볼 때 (조립 트리·작업 등 나머지는 시드 그대로, 앱 DB 에는 쓰지 않음)
+        --steel-ocr N : steel-ocr 검증·테스트 사진(학습에 안 씀, 110장) 중 N장(0 = 전부)도 돌림. 부재 번호 53종 전체를
+                        조립 트리로 넣은 평가용 프로젝트를 메모리에 만들어, 2단계가 맞는 부재(조립 경로)를 찾는지도 셈
+        --skip-annotations : data/annotations 정답(운영측 사진)은 빼고 --steel-ocr 만
 
 재는 것: 글자 정답 중 1단계(OCR) · 최종 표기(작업에 남는 값)와 같은 것(참고: 2단계가 본 OCR·VLM 읽기 중 하나라도 맞은 것),
 각장(F·V·S) 정답 중 맞힌 것
@@ -22,6 +25,7 @@
 import argparse
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -39,13 +43,16 @@ from vision.image import load_image  # noqa: E402
 from vw_shared import schema_errors, semantic_errors  # noqa: E402
 
 from app.pipeline import analyze_image, job_with_analysis  # noqa: E402
-from app.schemas import JobCreate  # noqa: E402
+from app.schemas import AssemblyNode, JobCreate, Project  # noqa: E402
 from app.db.connect import open_database  # noqa: E402
-from app.store import open_store, reset_store  # noqa: E402
+from app.store import open_store, reset_store, utcnow  # noqa: E402
 
 from conditions import LABELS, simulate  # noqa: E402 — 같은 폴더 (backend/tools)
 
 LEG = re.compile(r"^[FVS][0-9]+(?:\.[0-9]+)?$")
+STEEL_OCR = ROOT / "data" / "raw" / "external" / "steel-ocr"
+STEEL_LABELS = {"train": "train_data/det/train.txt", "val": "train_data/det/val.txt", "test": "test_data/det/test.txt"}
+STEEL_PROJECT = "steel_ocr"  # 평가용 프로젝트 (메모리에만)
 NOT_MARKING = re.compile(r"[^A-Z0-9.]")  # 화살표·기호 (→F7.5 의 →) — 글자는 남김 (PF5.0 은 각장이 아님)
 
 
@@ -72,26 +79,63 @@ def final_hits(truth_texts: list[str], raw_text: str | None) -> int:
     return sum(t in joined for t in truth_texts)
 
 
+def steel_labels(split: str):
+    label = STEEL_OCR / STEEL_LABELS[split]
+    for line in label.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rel, labels = line.split("\t", 1)
+            yield label.parent / rel, [x["transcription"] for x in json.loads(labels) if x["transcription"] != "###"]
+
+
+def steel_samples(n: int, seed: int = 0) -> list[tuple[str, Path, dict]]:
+    """steel-ocr 검증·테스트 사진 (검출기 v3 · 인식기 v4 학습에 안 씀 — 인식 학습 글자는 모두 학습용 사진에서 자른 것)
+    → [(이름, 사진, 정답)]. n장 고정 표본 (0이면 전부)"""
+    samples = [(f"steel_{photo.stem}", photo, {"texts": [{"text": t} for t in texts], "symbols": [], "dataset": "steel-ocr"})
+               for split in ("val", "test") for photo, texts in steel_labels(split) if texts]
+    if 0 < n < len(samples):
+        samples = [samples[i] for i in sorted(random.Random(seed).sample(range(len(samples)), n))]
+    return samples
+
+
+def steel_tree() -> list[AssemblyNode]:
+    """steel-ocr 부재 번호 전체(학습·검증·테스트, 53종) → 조립 트리 (블록 SO → 부재 묶음 B1Sb30N → 부재 B1Sb30N-16).
+    사진마다 그 정답만 넣는 게 아니라 이 현장의 부재 전체 목록 — 조선소 프로젝트의 조립 트리와 같은 역할"""
+    codes = sorted({t for split in STEEL_LABELS for _, texts in steel_labels(split) for t in texts})
+    groups = sorted({c.rsplit("-", 1)[0] for c in codes})
+    return ([AssemblyNode(node_id="SO", level="BLOCK", path="SO")]
+            + [AssemblyNode(node_id=g, parent_id="SO", level="LARGE", path=f"SO/{g}") for g in groups]
+            + [AssemblyNode(node_id=c, parent_id=c.rsplit("-", 1)[0], level="PART", path=f"SO/{c.rsplit('-', 1)[0]}/{c}")
+               for c in codes])
+
+
 def percent(part: int, whole: int) -> float | None:
     return round(100 * part / whole, 1) if whole else None
 
 
 def group_totals(rows: list[dict]) -> dict:
-    """묶음 합계 — 글자(문자 인식)와 각장(의미 해석) 각각 1단계 단독 vs 전체(최종 표기·확정 각장),
-    복합 = (맞힌 글자 + 맞힌 각장) ÷ (글자 + 각장 정답). used_exact(2단계가 본 읽기 중 하나라도 맞음)는 참고용 —
+    """묶음 합계 — 문자 인식(글자)과 의미 해석(각장 값 + 부재·조립 경로) 각각 1단계 단독 vs 전체(최종 표기·확정 값),
+    복합 = (맞힌 글자 + 맞힌 의미) ÷ (글자 + 의미 정답). used_exact(2단계가 본 읽기 중 하나라도 맞음)는 참고용 —
     VLM이 맞게 읽었어도 최종 값으로 1단계 읽기를 고르면 틀린 것이라 발표 숫자에는 final_exact 를 씀"""
-    t = {key: sum(r[key] for r in rows) for key in ("texts", "ocr_exact", "used_exact", "final_exact", "legs", "legs_ocr", "legs_found")}
+    keys = ("texts", "ocr_exact", "used_exact", "final_exact", "legs", "legs_ocr", "legs_found", "parts", "parts_ocr", "parts_found")
+    t = {key: sum(r.get(key, 0) for r in rows) for key in keys}
+    meaning, meaning_alone, meaning_full = t["legs"] + t["parts"], t["legs_ocr"] + t["parts_ocr"], t["legs_found"] + t["parts_found"]
     return {"photos": len(rows), **t,
             "text_alone_pct": percent(t["ocr_exact"], t["texts"]), "text_full_pct": percent(t["final_exact"], t["texts"]),
             "text_any_reading_pct": percent(t["used_exact"], t["texts"]),
             "leg_alone_pct": percent(t["legs_ocr"], t["legs"]), "leg_full_pct": percent(t["legs_found"], t["legs"]),
-            "combined_alone_pct": percent(t["ocr_exact"] + t["legs_ocr"], t["texts"] + t["legs"]),
-            "combined_full_pct": percent(t["final_exact"] + t["legs_found"], t["texts"] + t["legs"])}
+            "part_alone_pct": percent(t["parts_ocr"], t["parts"]), "part_full_pct": percent(t["parts_found"], t["parts"]),
+            "meaning_alone_pct": percent(meaning_alone, meaning), "meaning_full_pct": percent(meaning_full, meaning),
+            "combined_alone_pct": percent(t["ocr_exact"] + meaning_alone, t["texts"] + meaning),
+            "combined_full_pct": percent(t["final_exact"] + meaning_full, t["texts"] + meaning)}
 
 
 def groups_of(rows: list[dict]) -> dict[str, dict]:
     originals = [r for r in rows if not r["simulated"]]
     groups = {"원본 전체": group_totals(originals)}
+    datasets = list(dict.fromkeys(r.get("dataset", "운영측") for r in originals))
+    if len(datasets) > 1:
+        for name in datasets:
+            groups[name] = group_totals([r for r in originals if r.get("dataset", "운영측") == name])
     for tag in sorted({c for r in originals for c in r["conditions"]}):
         groups[f"실제 {tag}"] = group_totals([r for r in originals if tag in r["conditions"]])
     for tag in dict.fromkeys(r["simulated"] for r in rows if r["simulated"]):
@@ -99,11 +143,12 @@ def groups_of(rows: list[dict]) -> dict[str, dict]:
     return groups
 
 
-def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None, data: bytes, rows: list[dict]) -> int:
+def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None, data: bytes, rows: list[dict],
+              project_id: str = "block_a1") -> int:
     """사진 한 장(원본 또는 조건을 입힌 것)을 1→2→3단계로 해석해 정답과 비교한 행을 rows 에 붙임 → 단계 사이 오류 수"""
     image = load_image(data)
     name = path.stem + (f"+{condition}" if condition else "")
-    job = store.create_job("demo", JobCreate(name=name, project_id="block_a1"))
+    job = store.create_job("demo", JobCreate(name=name, project_id=project_id))
     stored = store.add_image(job, photo.name, "image/png", data, image.shape[1], image.shape[0])
     start = time.perf_counter()
     analysis = analyze_image(store, job, image, stored.image_id)
@@ -119,6 +164,10 @@ def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None
     truth_legs = [leg for t in truth["texts"] if (leg := leg_value(t["text"]))]
     found_legs = {(leg["code"], leg["size_mm"]) for leg in context["leg_lengths"]}
     alone_legs = ocr_legs(vision["texts"])
+    # 부재·조립 경로: 정답 글자 중 조립 트리에 있는 부재 → 2단계가 찾은 부재 경로가 그중 하나인지 (1단계 단독 = 그 글자를 그대로 읽음)
+    part_paths = {norm(n.node_id): n.path for n in store.get_assembly_tree("demo", project_id) if n.level == "PART"}
+    truth_parts = [t for t in truth_texts if t in part_paths]
+    found_part = (context.get("part") or {}).get("assembly_path")
     errors = schema_errors(analysis, "analysis.schema.json") + semantic_errors(analysis)
     row = {
         "photo": path.stem,
@@ -134,6 +183,11 @@ def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None
         "legs_ocr": sum(leg in alone_legs for leg in truth_legs),
         "legs_found": sum(leg in found_legs for leg in truth_legs),
         "truth_legs": [f"{c}{v:g}" for c, v in truth_legs],
+        "parts": int(bool(truth_parts)),
+        "parts_ocr": int(any(t in ocr for t in truth_parts)),
+        "parts_found": int(found_part in {part_paths[t] for t in truth_parts}),
+        "found_part": found_part,
+        "dataset": truth.get("dataset", "운영측"),
         "ocr_texts": [t["text"] for t in vision["texts"]],
         "leg_lengths": [leg["raw_text"] for leg in context["leg_lengths"]],
         "cell": context["cell"],
@@ -149,7 +203,8 @@ def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None
         "interpretation": filled.marking.interpretation if filled.marking else None,
     }
     rows.append(row)
-    legs = f"각장 단독 {row['legs_ocr']} · 전체 {row['legs_found']}/{row['legs']}" if row["legs"] else "각장 -"
+    legs = (f"각장 단독 {row['legs_ocr']} · 전체 {row['legs_found']}/{row['legs']}" if row["legs"] else
+            f"부재 단독 {row['parts_ocr']} · 전체 {row['parts_found']}/1" if row["parts"] else "각장 -")
     print(f"{name:36} {seconds:5.1f}초  글자 OCR {row['ocr_exact']}/{row['texts']} · 최종 {row['final_exact']}/{row['texts']} "
           f"(VLM 읽기 포함 {row['used_exact']})  "
           f"{legs}  신뢰도 {confidence['overall']:g}  {filled.status}  {'오류 ' + str(len(errors)) if errors else ''}", flush=True)
@@ -164,16 +219,29 @@ def main() -> int:
     parser.add_argument("--simulate", default="", help="dark,glare,stain,skewed 중 쉼표로 (all = 넷 다)")
     parser.add_argument("--texts-only", action="store_true", help="글자 정답이 없는 사진(셀 기호만 있는 것)은 건너뜀 — VLM 호출 아낌")
     parser.add_argument("--dictionary-from-db", action="store_true", help="앱 DB 의 demo 문자·기호 사전을 씀 (화면에서 고친 사전)")
+    parser.add_argument("--steel-ocr", type=int, default=None, help="steel-ocr 검증·테스트 사진 N장도 (0 = 전부 110장)")
+    parser.add_argument("--seed", type=int, default=0, help="--steel-ocr 표본 고르기")
+    parser.add_argument("--skip-annotations", action="store_true", help="data/annotations 정답은 빼고 --steel-ocr 만")
     args = parser.parse_args()
     simulated = list(LABELS) if args.simulate == "all" else [c for c in args.simulate.split(",") if c]
     if unknown := [c for c in simulated if c not in LABELS]:
         parser.error(f"--simulate 에 없는 조건: {unknown} (가능: {', '.join(LABELS)})")
 
-    truths = sorted((ROOT / "data" / "annotations").glob(f"{args.prefix}*.json"))
-    if not truths:
+    samples = []  # (이름, 사진, 정답, 프로젝트)
+    if not args.skip_annotations:
+        for path in sorted((ROOT / "data" / "annotations").glob(f"{args.prefix}*.json")):
+            truth = json.loads(path.read_text(encoding="utf-8"))
+            samples.append((path.stem, args.raw / truth["image"], truth, "block_a1"))
+    if args.steel_ocr is not None:
+        samples += [(name, photo, truth, STEEL_PROJECT) for name, photo, truth in steel_samples(args.steel_ocr, args.seed)]
+    if not samples:
         print(f"정답이 없음: data/annotations/{args.prefix}*.json")
         return 1
     store = reset_store()  # 메모리만 (DATABASE_URL 파일을 건드리지 않음)
+    if args.steel_ocr is not None:
+        tree = steel_tree()
+        store.add_project(Project(id=STEEL_PROJECT, workspace_id="demo", name="steel-ocr 평가", created_at=utcnow()), tree)
+        print(f"평가용 프로젝트 {STEEL_PROJECT}: 부재 {sum(n.level == 'PART' for n in tree)}종을 조립 트리로 (메모리에만)")
     if args.dictionary_from_db:  # 사전만 앱 DB 에서 읽어 메모리 저장소에 덮어씀
         symbols = open_store(open_database(os.environ.get("DATABASE_URL"))).list_symbols("demo")
         for entry in store.list_symbols("demo"):
@@ -183,12 +251,11 @@ def main() -> int:
         print(f"사전: 앱 DB 의 demo 사전 {len(symbols)}개 항목 — " + ", ".join(
             f"{e.code}" + (f"({'/'.join(e.aliases)})" if e.aliases else "") for e in symbols if e.kind == "text")[:600])
     rows, totals = [], {"errors": 0}
-    for path in truths:
-        truth = json.loads(path.read_text(encoding="utf-8"))
+    for stem, photo, truth, project_id in samples:
+        path = Path(stem)
         if args.texts_only and not any("?" not in t["text"] for t in truth["texts"]):
             print(f"{path.stem}: 글자 정답 없음 — 건너뜀")
             continue
-        photo = args.raw / truth["image"]
         if not photo.is_file():
             print(f"{path.stem}: 사진 없음 ({photo.relative_to(ROOT) if photo.is_relative_to(ROOT) else photo}) — 건너뜀")
             continue
@@ -199,7 +266,7 @@ def main() -> int:
             changed = simulate(load_image(original), condition, path.stem, boxes)
             variants.append((condition, cv2.imencode(".png", changed)[1].tobytes()))
         for condition, data in variants:
-            totals["errors"] += run_photo(store, path, photo, truth, condition, data, rows)
+            totals["errors"] += run_photo(store, path, photo, truth, condition, data, rows, project_id)
     if not rows:
         print("돌린 사진이 없음 — --raw 폴더를 확인")
         return 1
@@ -208,15 +275,17 @@ def main() -> int:
     groups = groups_of(rows)
     groups_path = args.out.with_name(args.out.stem + "_groups.json")
     groups_path.write_text(json.dumps(groups, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 최종':>9}  {'각장 단독':>9} {'각장 최종':>9}  {'복합 단독':>9} {'복합 최종':>9}")
+    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 최종':>9}  {'의미 단독':>9} {'의미 최종':>9}  {'복합 단독':>9} {'복합 최종':>9}")
+    print("  (의미 = 각장 값 + 부재·조립 경로)")
     for name, g in groups.items():
         cells = [f"{g[k]:>8}%" if g[k] is not None else f"{'-':>9}" for k in
-                 ("text_alone_pct", "text_full_pct", "leg_alone_pct", "leg_full_pct", "combined_alone_pct", "combined_full_pct")]
+                 ("text_alone_pct", "text_full_pct", "meaning_alone_pct", "meaning_full_pct", "combined_alone_pct", "combined_full_pct")]
         print(f"{name:16} {g['photos']:>4}  {cells[0]} {cells[1]}  {cells[2]} {cells[3]}  {cells[4]} {cells[5]}")
     whole = groups["원본 전체"]
     print(f"\n원본 합계: 글자 OCR {whole['ocr_exact']}/{whole['texts']} · 최종 {whole['final_exact']}/{whole['texts']} "
           f"(VLM 읽기 포함 {whole['used_exact']}), "
-          f"각장 단독 {whole['legs_ocr']} · 전체 {whole['legs_found']}/{whole['legs']}, 단계 사이 오류 {totals['errors']}건 "
+          f"각장 단독 {whole['legs_ocr']} · 전체 {whole['legs_found']}/{whole['legs']}, "
+          f"부재 단독 {whole['parts_ocr']} · 전체 {whole['parts_found']}/{whole['parts']}, 단계 사이 오류 {totals['errors']}건 "
           f"→ {args.out}, {groups_path.name}")
     return 1 if totals["errors"] else 0
 
