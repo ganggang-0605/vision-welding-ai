@@ -52,8 +52,10 @@ SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 
 # 승인할 수 있는 작업 상태 — 확인 필요(needs_review)는 작업자가 확인 항목을 직접 봤다고 표시해야(acknowledge_review) 승인
 APPROVABLE: frozenset[JobStatus] = frozenset({"awaiting_approval", "needs_review"})
-# 로봇 JSON 에 꼭 필요한 해석 결과 (app/export/robot_json.py) — 비어 있으면 승인하지 않음
+# 로봇 JSON 에 꼭 필요한 해석 결과 (app/export/robot_json.py) — 다 있어야 신뢰도 기준을 넘었을 때 자동으로 완료
 REQUIRED_FOR_APPROVAL = ("assembly_path", "marking", "welding_condition")
+# 신뢰도 기준을 넘어 승인 없이 자동으로 완료한 작업의 approved_by
+AUTO_APPROVER = "auto"
 
 
 class JobStatusConflict(Exception):
@@ -70,14 +72,6 @@ class ReviewNotAcknowledged(Exception):
     def __init__(self, needs_review: list[str]) -> None:
         super().__init__(needs_review)
         self.needs_review = needs_review
-
-
-class MissingForApproval(Exception):
-    """로봇 JSON 에 필요한 해석 결과가 비어 있어 승인할 수 없음 (API 에서는 409)"""
-
-    def __init__(self, missing: list[str]) -> None:
-        super().__init__(missing)
-        self.missing = missing
 
 
 class WorkspaceKindConflict(Exception):
@@ -458,9 +452,9 @@ class Store:
         return self.save_job(job.model_copy(update={"analysis_error": error, "analysis_stage": None, "analysis_stage_at": None}))
 
     def approve_job(self, workspace_id: str, job_id: str, approved_by: str, acknowledge_review: bool = False) -> Job | None:
-        """승인 대기 상태, 또는 작업자가 확인 항목을 봤다고 표시한(acknowledge_review) 확인 필요 상태만 승인한다.
-        상태가 안 맞으면 JobStatusConflict, 확인 표시가 없으면 ReviewNotAcknowledged, 로봇 JSON 에 필요한 값이 비어 있으면
-        MissingForApproval. 없는 작업이면 None.
+        """승인 대기 상태, 또는 작업자가 확인 항목을 봤다고 표시한(acknowledge_review) 확인 필요 상태만 승인한다 (= 작업 완료).
+        상태가 안 맞으면 JobStatusConflict, 확인 표시가 없으면 ReviewNotAcknowledged. 없는 작업이면 None.
+        로봇 JSON 에 필요한 값이 비어 있어도 승인은 된다 — 내보내기(export)만 409.
 
         상태 확인과 저장을 한 잠금 안에서 해 동시에 여러 번 승인해도 하나만 성공한다.
         """
@@ -470,8 +464,6 @@ class Store:
                 return None
             if job.status not in APPROVABLE:
                 raise JobStatusConflict(job.status)
-            if missing := [name for name in REQUIRED_FOR_APPROVAL if getattr(job, name) is None]:
-                raise MissingForApproval(missing)
             if job.status == "needs_review" and not acknowledge_review:
                 raise ReviewNotAcknowledged(job.needs_review)
             return self.save_job(

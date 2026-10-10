@@ -1,5 +1,5 @@
 import { Check, Copy, DownloadSimple, WarningCircle } from '@phosphor-icons/react'
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { isApiError } from '../api/client'
 import { approveJob, exportJob } from '../api/jobs'
 import type { Confidence, Job } from '../api/types'
@@ -7,7 +7,7 @@ import { AsyncView } from '../components/AsyncView'
 import { JobFrame } from '../components/JobFrame'
 import { ErrorNotice } from '../components/Notice'
 import { useAsync } from '../hooks/useAsync'
-import { useWorkspace } from '../hooks/useWorkspace'
+import { useWorkspace, useWorkspaceContext } from '../hooks/useWorkspace'
 import { downloadJson } from '../lib/download'
 import { formatDateTime, formatScore } from '../lib/format'
 import { APPROVABLE_STATUSES, cellSideLabel, jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
@@ -19,6 +19,9 @@ const STATS: { key: keyof Confidence; label: string }[] = [
   { key: 'vlm_reasoning', label: 'VLM 추론' },
   { key: 'overall', label: '종합' },
 ]
+
+/** 신뢰도 기준을 넘어 승인 없이 자동으로 완료한 작업의 approved_by (backend app/store.py AUTO_APPROVER) */
+const AUTO_APPROVER = 'auto'
 
 /** '복사됨' 표시를 유지하는 시간 */
 const COPIED_MS = 1600
@@ -49,7 +52,9 @@ function Summary({ job }: { job: Job }) {
         {job.marking && <p className={styles.resultDesc}>{job.marking.interpretation}</p>}
         {job.approved_by && (
           <p className={styles.approved}>
-            {job.approved_by}님이 {formatDateTime(job.approved_at)}에 승인했어요.
+            {job.approved_by === AUTO_APPROVER
+              ? `신뢰도가 기준을 넘어 ${formatDateTime(job.approved_at)}에 승인 없이 작업이 완료됐어요.`
+              : `${job.approved_by}님이 ${formatDateTime(job.approved_at)}에 승인해 작업이 완료됐어요.`}
           </p>
         )}
 
@@ -142,22 +147,16 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) {
-  const workspace = useWorkspace()
-  const inputId = useId()
-  // TODO(인증): 로그인 기능이 생기면 현재 사용자로 채운다.
-  const [approvedBy, setApprovedBy] = useState('')
-  // 확인 필요 작업은 작업자가 확인 항목을 직접 봤다고 표시해야 승인된다 (백엔드 acknowledge_review)
-  const needsReview = job.status === 'needs_review'
-  const [acknowledged, setAcknowledged] = useState(false)
+  const { workspace, me } = useWorkspaceContext()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<unknown>()
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  // 버튼을 누르는 것이 확인 항목을 봤다는 뜻 (확인 필요 작업은 백엔드 acknowledge_review). 승인자는 지금 계정
+  const approve = async () => {
     setSubmitting(true)
     setError(undefined)
     try {
-      await approveJob(workspace.id, job.id, { approved_by: approvedBy.trim(), acknowledge_review: needsReview && acknowledged })
+      await approveJob(workspace.id, job.id, { approved_by: me?.name ?? '작업자', acknowledge_review: true })
       onApproved()
     } catch (err) {
       setError(err)
@@ -171,38 +170,16 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
       <h2 id="approve-title" className="section-title">
         승인
       </h2>
-      <p className="section-desc">승인하면 이 해석이 로봇 연계 데이터로 나가요.</p>
-      {needsReview && (
-        <div className={styles.acknowledge}>
-          <p className="section-desc">신뢰도가 기준에 못 미친 작업이에요. 위의 확인 필요 항목을 직접 확인한 뒤에 승인해 주세요.</p>
-          <label className={styles.checkbox}>
-            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
-            확인 항목을 직접 확인했고, 이대로 로봇에 보내도 돼요
-          </label>
-        </div>
-      )}
-      <form className={styles.approve} onSubmit={onSubmit}>
-        <div className="field">
-          <label htmlFor={inputId} className="field-label">
-            승인하는 사람
-          </label>
-          <input
-            id={inputId}
-            className="input"
-            required
-            autoComplete="name"
-            value={approvedBy}
-            onChange={(event) => setApprovedBy(event.target.value)}
-          />
-        </div>
-        <button
-          type="submit"
-          className="btn btn--primary"
-          disabled={submitting || !approvedBy.trim() || (needsReview && !acknowledged)}
-        >
+      <p className="section-desc">
+        {job.status === 'needs_review'
+          ? '신뢰도가 기준에 못 미쳐 작업자 승인이 필요해요. 위의 확인 필요 항목을 보고 승인하면 작업이 완료돼요.'
+          : '승인하면 작업이 완료돼요.'}
+      </p>
+      <p className="button-row">
+        <button type="button" className="btn btn--primary" onClick={approve} disabled={submitting}>
           {submitting ? '승인하는 중' : '승인'}
         </button>
-      </form>
+      </p>
       {error !== undefined && <ErrorNotice error={error} />}
     </section>
   )
@@ -221,7 +198,7 @@ function ExportSection({ job }: { job: Job }) {
 }
 
 function ExportPending() {
-  return <p className="section-desc">승인한 뒤에 JSON으로 내보낼 수 있어요.</p>
+  return <p className="section-desc">작업이 완료되면 JSON으로 내보낼 수 있어요.</p>
 }
 
 function ExportedJson({ job }: { job: Job }) {
@@ -237,7 +214,7 @@ function ExportedJson({ job }: { job: Job }) {
   }, [copied])
 
   return isApiError(exported.error, 409) ? (
-    <ExportPending />
+    <p className="section-desc">조립 경로·표기·용접 조건 중 비어 있는 값이 있어 로봇 JSON 을 만들 수 없어요. 작업자 확인에서 채워 주세요.</p>
   ) : (
     <AsyncView state={exported}>
       {(data) => {

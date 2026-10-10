@@ -221,12 +221,26 @@ def test_approve_needs_review_requires_acknowledgement(client):
     assert client.get(f"{JOBS}/job_demo_p1").json()["status"] == "needs_review"
 
 
-def test_approve_requires_robot_fields(client, fresh_store):
-    """조립 경로 · 표기 · 용접 조건이 비어 있으면 로봇 JSON 을 만들 수 없어 승인하지 않음 (확인 표시가 있어도)"""
+def test_approve_without_robot_fields_completes_but_cannot_export(client, fresh_store):
+    """승인 버튼을 누르면 값이 비어 있어도 작업 완료 — 로봇 JSON 을 만들 수 없어 내보내기만 409"""
     job = fresh_store.get_job("demo", "job_demo_p1")
     fresh_store.save_job(job.model_copy(update={"welding_condition": None}))
     res = client.post(f"{JOBS}/job_demo_p1/approve", json={"approved_by": "김용접", "acknowledge_review": True})
-    assert res.status_code == 409 and "welding_condition" in res.json()["detail"]
+    assert res.status_code == 200 and res.json()["status"] == "approved"
+    assert client.get(f"{JOBS}/job_demo_p1/export").status_code == 409
+
+
+def test_passed_job_completes_without_approval(fresh_store):
+    """신뢰도 기준을 넘은 작업(awaiting_approval)은 해석이 끝나면 승인 없이 완료 (approved_by: auto), 값이 비면 그대로"""
+    from app.api.jobs import _auto_completed
+
+    passed = fresh_store.get_job("demo", "job_demo_p3")
+    assert passed.status == "awaiting_approval"
+    done = _auto_completed(passed)
+    assert (done.status, done.approved_by) == ("approved", "auto") and done.approved_at is not None
+    assert _auto_completed(passed.model_copy(update={"welding_condition": None})).status == "awaiting_approval"
+    review = fresh_store.get_job("demo", "job_demo_p1")
+    assert _auto_completed(review) == review
 
 
 def test_approve_draft_conflict(client):

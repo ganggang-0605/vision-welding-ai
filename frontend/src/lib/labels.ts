@@ -29,7 +29,7 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   analyzing: '해석 중',
   needs_review: '확인 필요',
   awaiting_approval: '승인 대기',
-  approved: '승인됨',
+  approved: '작업 완료',
 }
 
 /** 작업자가 손을 대야 하는 상태. 화면에서 이 상태만 주황 글자로 강조한다. */

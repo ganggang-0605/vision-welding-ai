@@ -26,7 +26,7 @@ from app.pipeline import (
     review_analysis,
 )
 from app.schemas import AnalysisStage, AnalyzeRequest, ApproveRequest, Job, JobCreate, JobImage, JobStatus, ReviewRequest, RobotOutput
-from app.store import JobStatusConflict, MissingForApproval, ReviewNotAcknowledged, Store
+from app.store import AUTO_APPROVER, REQUIRED_FOR_APPROVAL, JobStatusConflict, ReviewNotAcknowledged, Store, utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(responses=NOT_FOUND)  # 모든 경로가 워크스페이스(·작업) 하위 — 없으면 404
@@ -233,13 +233,20 @@ def _run(store: Store, before: Job, interpret: Callable[[OnStage], dict]) -> Non
         store.finish_failed_analysis(before, f"해석 중 오류가 났습니다: {type(e).__name__}: {e}"[:1000])
         return
     store.add_analysis(before.id, analysis)
-    store.save_job(_reanalyzed(updated))
+    store.save_job(_auto_completed(_reanalyzed(updated)))
 
 
 @router.get("/{job_id}/analyses")
 def list_analyses(job: JobDep, store: StoreDep) -> list[dict]:
     """해석 결과 (shared/schemas/analysis.schema.json) 전체, 만든 순서. 사진 위 bbox·후보를 그릴 때 쓴다."""
     return store.list_analyses(job.id)
+
+
+def _auto_completed(job: Job) -> Job:
+    """신뢰도 기준을 넘은 작업(awaiting_approval)은 승인 없이 바로 완료 — 로봇 JSON 에 필요한 값이 다 있을 때만"""
+    if job.status != "awaiting_approval" or any(getattr(job, name) is None for name in REQUIRED_FOR_APPROVAL):
+        return job
+    return job.model_copy(update={"status": "approved", "approved_at": utcnow(), "approved_by": AUTO_APPROVER})
 
 
 def _reanalyzed(job: Job) -> Job:
@@ -249,17 +256,15 @@ def _reanalyzed(job: Job) -> Job:
 
 # ── 승인 · 내보내기 ──
 
-@router.post("/{job_id}/approve", responses={409: error_response("승인할 수 없는 상태 · 확인 항목 미확인 · 필수 값 없음")})
+@router.post("/{job_id}/approve", responses={409: error_response("승인할 수 없는 상태 · 확인 항목 미확인")})
 def approve_job(job: JobDep, body: ApproveRequest, store: StoreDep) -> Job:
-    """승인 대기 작업은 바로, 확인 필요 작업은 acknowledge_review: true 일 때만 승인한다 (작업자가 확인 항목을 직접 봄).
-    조립 경로 · 표기 · 용접 조건이 비어 있으면 로봇 JSON 을 만들 수 없어 승인하지 않는다."""
+    """승인 대기 작업은 바로, 확인 필요 작업은 acknowledge_review: true 일 때만 승인한다 (작업자가 확인 항목을 직접 봄) → 작업 완료.
+    신뢰도 기준을 넘은 작업은 해석이 끝나면 승인 없이 자동으로 완료된다 (approved_by: auto)."""
     # job 은 요청 시작 시점의 스냅샷 — 상태 확인은 저장소가 최신 상태로 다시 한다.
     try:
         approved = store.approve_job(job.workspace_id, job.id, body.approved_by, body.acknowledge_review)
     except JobStatusConflict as e:
         raise HTTPException(409, f"승인 대기·확인 필요 상태의 작업만 승인할 수 있습니다 (현재: {e.status})") from e
-    except MissingForApproval as e:
-        raise HTTPException(409, f"로봇 JSON 에 필요한 값이 비어 있어 승인할 수 없습니다: {', '.join(e.missing)}") from e
     except ReviewNotAcknowledged as e:
         raise HTTPException(409, f"확인 필요 항목 {len(e.needs_review)}개를 확인했다고 표시해야 승인할 수 있습니다 "
                                  "(acknowledge_review: true)") from e

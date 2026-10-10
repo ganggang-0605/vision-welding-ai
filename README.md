@@ -120,12 +120,12 @@
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진, `{"image_ids": [...]}` 면 여러 장을 순서대로 해석하고 작업에는 마지막 사진의 결과. **202 로 바로 끝나고 백그라운드에서 해석** — 그동안 상태 `analyzing` 이고 `analysis_stage`(`vision` → `context` → `confidence`)·`analysis_stage_at` 으로 지금 단계를 알림, 실패하면 해석 전 상태 + `analysis_error`. 사진이 없거나 이미 해석 중이면 409 |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 → 가장 최근 Analysis 에서 2단계부터 다시 해석(revision + 1, `analyze` 처럼 202 + 백그라운드). `reinterpret` + `context` \| `manual` + `values`(키: `t*`·`s*`·`v*`·`part`·`interpretation`·`welding_condition`·`cell`·`leg_lengths`). 해석 전·해석 중이면 409, 잘못된 값·없는 표기면 바로 422 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/analyses` | 해석 결과([`analysis.schema.json`](shared/schemas/analysis.schema.json)) 전체, 만든 순서 — 사진 위 bbox·후보 표시용 |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "...", "acknowledge_review": false}` → `approved`. `awaiting_approval` 은 바로, `needs_review` 는 작업자가 확인 항목을 봤다는 `acknowledge_review: true` 가 있어야 승인. 그 밖의 상태, 확인 표시 없음, 조립 경로·표기·용접 조건이 비어 있으면 409 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "...", "acknowledge_review": false}` → `approved`. `awaiting_approval` 은 바로, `needs_review` 는 작업자가 확인 항목을 봤다는 `acknowledge_review: true` 가 있어야 승인. 그 밖의 상태, 확인 표시가 없으면 409. 조립 경로·표기·용접 조건이 비어 있어도 승인(작업 완료)은 되고 내보내기만 409 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/export` | 로봇 연계 JSON ([`shared/schemas/robot_output.schema.json`](shared/schemas/robot_output.schema.json), `project_id` 포함). 승인 전이면 409 |
 | GET | `/welding-standards` | 표준 용접 기준 (공통, 읽기 전용) |
 | GET | `/pipeline/status` | 해석 파이프라인 연결 상태 — 1단계 OCR 모델 설치 여부·모델 이름, 기호 검출기 연결, 2단계 VLM provider·모델·추론 횟수·SDK 설치·API 키 설정 여부(키 값은 돌려주지 않음)·최근 호출 실패 이유(`vlm_last_error`), 3단계 통과 기준 |
 
-- 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달) / `awaiting_approval` → `approved`
+- 작업 상태: `draft` → `analyzing` → `needs_review`(신뢰도 기준 미달, 작업자 승인 필요) → `approved`(화면: 작업 완료). 신뢰도 기준을 넘으면 해석이 끝나자마자 승인 없이 `approved`(`approved_by: "auto"`, 로봇 JSON 필수 값이 비어 있으면 `awaiting_approval` 에 머묾)
 - **데모 다중 계정** (Notion 식 계정 전환): 요청 헤더 `X-User-Id: <user_id>` 가 로그인 세션을 대신해 현재 사용자를 고른다.
   헤더가 없거나 비어 있으면 시드의 현재 사용자(`user_kkm`), `GET /users` 에 없는 id 면 401 이다.
   시드 계정: `user_kkm`(`demo`, `personal`, `yeongam`), `user_ldh`(`demo`, `ldh`, `yeongam`), `user_lmh`(`demo`).
