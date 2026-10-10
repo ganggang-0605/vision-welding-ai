@@ -1,16 +1,15 @@
 import { Check, Copy, DownloadSimple, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { isApiError } from '../api/client'
-import { approveJob, exportJob } from '../api/jobs'
+import { exportJob } from '../api/jobs'
 import type { Confidence, Job } from '../api/types'
 import { AsyncView } from '../components/AsyncView'
 import { JobFrame } from '../components/JobFrame'
-import { ErrorNotice } from '../components/Notice'
 import { useAsync } from '../hooks/useAsync'
-import { useWorkspace, useWorkspaceContext } from '../hooks/useWorkspace'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { downloadJson } from '../lib/download'
 import { formatDateTime, formatScore } from '../lib/format'
-import { APPROVABLE_STATUSES, cellSideLabel, jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
+import { cellSideLabel, jointTypeLabel, positionLabel, withUnit } from '../lib/labels'
 import styles from './JobSummaryPage.module.css'
 
 const STATS: { key: keyof Confidence; label: string }[] = [
@@ -30,10 +29,9 @@ const COPIED_MS = 1600
 export function JobSummaryPage() {
   return (
     <JobFrame section="요약본">
-      {(job, reload) => (
+      {(job) => (
         <div className={styles.document}>
           <Summary job={job} />
-          {APPROVABLE_STATUSES.includes(job.status) && <ApproveForm job={job} onApproved={reload} />}
           <ExportSection job={job} />
         </div>
       )}
@@ -143,45 +141,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>
-  )
-}
-
-function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) {
-  const { workspace, me } = useWorkspaceContext()
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<unknown>()
-
-  // 버튼을 누르는 것이 확인 항목을 봤다는 뜻 (확인 필요 작업은 백엔드 acknowledge_review). 승인자는 지금 계정
-  const approve = async () => {
-    setSubmitting(true)
-    setError(undefined)
-    try {
-      await approveJob(workspace.id, job.id, { approved_by: me?.name ?? '작업자', acknowledge_review: true })
-      onApproved()
-    } catch (err) {
-      setError(err)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <section className="section" aria-labelledby="approve-title">
-      <h2 id="approve-title" className="section-title">
-        승인
-      </h2>
-      <p className="section-desc">
-        {job.status === 'needs_review'
-          ? '신뢰도가 기준에 못 미쳐 작업자 승인이 필요해요. 위의 확인 필요 항목을 보고 승인하면 작업이 완료돼요.'
-          : '승인하면 작업이 완료돼요.'}
-      </p>
-      <p className="button-row">
-        <button type="button" className="btn btn--primary" onClick={approve} disabled={submitting}>
-          {submitting ? '승인하는 중' : '승인'}
-        </button>
-      </p>
-      {error !== undefined && <ErrorNotice error={error} />}
-    </section>
   )
 }
 

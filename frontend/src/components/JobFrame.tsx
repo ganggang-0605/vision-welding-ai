@@ -1,17 +1,18 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { isApiError } from '../api/client'
-import { getJob } from '../api/jobs'
+import { approveJob, getJob } from '../api/jobs'
 import type { Job } from '../api/types'
 import { useAsync } from '../hooks/useAsync'
 import { useRequiredParam } from '../hooks/useRequiredParam'
-import { useWorkspace } from '../hooks/useWorkspace'
+import { useWorkspaceContext } from '../hooks/useWorkspace'
 import { formatDateTime } from '../lib/format'
+import { APPROVABLE_STATUSES } from '../lib/labels'
 import { paths } from '../lib/paths'
 import { AnalysisProgress } from './AnalysisProgress'
 import { AsyncView } from './AsyncView'
 import { JobNav } from './JobNav'
-import { Notice } from './Notice'
+import { ErrorNotice, Notice } from './Notice'
 import { PageHeader } from './PageHeader'
 import styles from './JobFrame.module.css'
 import { StatusLabel } from './StatusLabel'
@@ -34,12 +35,29 @@ export function JobFrame(props: JobFrameProps) {
 }
 
 function JobFrameContent({ section, children }: JobFrameProps) {
-  const workspace = useWorkspace()
+  const { workspace, me } = useWorkspaceContext()
   const jobId = useRequiredParam('jobId')
   const job = useAsync((signal) => getJob(workspace.id, jobId, signal), [workspace.id, jobId])
   const home = paths.workspaceHome(workspace.id)
   const analyzing = job.data?.status === 'analyzing'
   const { reload } = job
+  const [approving, setApproving] = useState(false)
+  const [approveError, setApproveError] = useState<unknown>()
+
+  // 신뢰도 기준 미만(확인 필요)·승인 대기 작업은 어느 탭에서든 [승인] 한 번으로 작업 완료.
+  // 버튼을 누르는 것이 확인 항목을 봤다는 뜻 (백엔드 acknowledge_review). 승인자는 지금 계정
+  const approve = async () => {
+    setApproving(true)
+    setApproveError(undefined)
+    try {
+      await approveJob(workspace.id, jobId, { approved_by: me?.name ?? '작업자', acknowledge_review: true })
+      reload()
+    } catch (err) {
+      setApproveError(err)
+    } finally {
+      setApproving(false)
+    }
+  }
 
   // 해석이 끝날 때까지 작업을 다시 읽는다 (다시 읽을 때마다 job.data 가 바뀌어 다음 타이머가 걸림).
   useEffect(() => {
@@ -63,6 +81,13 @@ function JobFrameContent({ section, children }: JobFrameProps) {
               breadcrumb={[{ label: '작업', to: home }, { label: data.name }]}
               title={data.name}
               documentTitle={`${data.name} ${section}`}
+              actions={
+                APPROVABLE_STATUSES.includes(data.status) && (
+                  <button type="button" className="btn btn--primary" onClick={approve} disabled={approving}>
+                    {approving ? '승인하는 중' : '승인'}
+                  </button>
+                )
+              }
               description={
                 <span className={styles.meta}>
                   <StatusLabel status={data.status} />
@@ -72,6 +97,11 @@ function JobFrameContent({ section, children }: JobFrameProps) {
               }
             />
             <JobNav workspaceId={workspace.id} jobId={data.id} />
+            {approveError !== undefined && (
+              <div className={styles.notice}>
+                <ErrorNotice error={approveError} />
+              </div>
+            )}
             {data.status === 'analyzing' ? (
               <div className={styles.notice}>
                 <AnalysisProgress job={data} />
