@@ -95,7 +95,8 @@ def build_context_input(
         "project_id": job.project_id,
         "job_assembly_path": job.assembly_path,
         "symbols": [s.model_dump(mode="json") for s in store.list_symbols(job.workspace_id)],
-        "assembly_tree": [n.model_dump(mode="json") for n in store.get_assembly_tree(job.workspace_id, job.project_id)],
+        # 조립 트리는 워크스페이스에 하나 (조립 경로 사전) — 작업이 어느 프로젝트에 저장됐든 전체와 대조
+        "assembly_tree": [n.model_dump(mode="json") for n in store.get_workspace_assembly_tree(job.workspace_id)],
         "welding_standards": [w.model_dump(mode="json") for w in store.welding_standards],
         "user_context": user_context,
         "corrections": corrections,

@@ -86,16 +86,15 @@ def test_stage2_follows_workspace_dictionary(client):
     assert "dictionary_unmatched" in [c["type"] for c in context["conflicts"]]
 
 
-def test_stage2_follows_project_assembly_tree(client, fresh_store):
-    """다른 프로젝트(빈 조립 트리)의 작업이면 P-1 이 트리에 없음"""
+def test_stage2_uses_workspace_assembly_tree(client, fresh_store):
+    """조립 트리는 워크스페이스에 하나 — 빈 트리 프로젝트의 작업이어도 워크스페이스 트리(A1 블록)와 대조"""
     project = client.post("/workspaces/demo/projects", json={"name": "빈 블록"}).json()
     job = client.post("/workspaces/demo/jobs", json={"name": "빈 블록 작업", "project_id": project["id"]}).json()
     path = f"/workspaces/demo/jobs/{job['id']}"
     client.post(f"{path}/images", files={"file": ("cell.png", _png(), "image/png")})
     assert client.post(f"{path}/analyze").status_code == 202
     context = client.get(f"{path}/analyses").json()[-1]["context"]
-    assert context["part"]["found_in_tree"] is False and context["part"]["assembly_path"] is None
-    assert "part_not_in_tree" in [c["type"] for c in context["conflicts"]]
+    assert context["part"]["found_in_tree"] is True and context["part"]["assembly_path"] == "A1/L1/M2/S1/P-1"
 
 
 def test_vlm_gets_uploaded_photo_and_db(client, fake_vlm):

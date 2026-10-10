@@ -415,14 +415,15 @@ export interface PipelineStatus {
   confidence_threshold: number
 }
 
-/** POST .../analyze 본문. image_id 를 빼면 가장 최근에 올린 사진 */
+/** POST .../analyze 본문. image_id 를 빼면 가장 최근에 올린 사진. image_ids 면 순서대로 모두 해석하고 작업에는 마지막 사진의 결과 */
 export interface AnalyzeRequest {
   image_id?: string
+  image_ids?: string[]
 }
 
 export interface JobCreate {
-  /** 같은 워크스페이스의 프로젝트 (아니면 422) */
-  project_id: string
+  /** 같은 워크스페이스의 프로젝트 (아니면 422). 빼면 워크스페이스의 기본 프로젝트 — 화면은 워크스페이스 → 작업 */
+  project_id?: string
   name: string
   assembly_path?: string | null
   /** 같은 워크스페이스의 과거 작업 id (없는 id 면 422). 기본값 [] */

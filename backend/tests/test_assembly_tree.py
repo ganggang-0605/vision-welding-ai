@@ -34,6 +34,9 @@ def test_assembly_tree_per_project(client):
     assert client.get(f"{PROJECTS}/{project['id']}/assembly-tree").json() == []
 
 
-def test_workspace_assembly_tree_route_removed(client):
-    """예전 워크스페이스 단위 경로는 없다 — 프로젝트 하위로 이동"""
-    assert client.get("/workspaces/demo/assembly-tree").status_code == 404
+def test_workspace_assembly_tree(client):
+    """조립 경로 사전은 워크스페이스에 하나 — 블록별로 나눠 저장된 트리를 합친 것 (트리가 빈 워크스페이스는 빈 목록)"""
+    nodes = client.get("/workspaces/demo/assembly-tree").json()
+    assert [n["node_id"] for n in nodes] == ["A1", "L1", "M2", "S1", "S2", "P-1", "P-2", "P-3"]
+    assert client.get("/workspaces/personal/assembly-tree").json() == []
+    assert client.get("/workspaces/nope/assembly-tree").status_code == 404

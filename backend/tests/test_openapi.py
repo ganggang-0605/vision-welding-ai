@@ -22,7 +22,7 @@ def test_response_fields_required(name):
 
 
 def test_request_defaults_optional():
-    assert SCHEMAS["JobCreate"]["required"] == ["name", "project_id"]
+    assert SCHEMAS["JobCreate"]["required"] == ["name"]
     assert SCHEMAS["WorkspaceCreate"]["required"] == ["name"]
     assert SCHEMAS["ProjectCreate"]["required"] == ["name"]
     assert SCHEMAS["MemberInvite"]["required"] == ["name", "email"]

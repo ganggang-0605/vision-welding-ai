@@ -1,26 +1,22 @@
 /**
  * 라우트 정의 (React Router 데이터 라우터).
- * 워크스페이스 → 프로젝트(블록) → 작업 순서로 주소가 깊어진다. 화면 ↔ 와이어프레임 대응은 frontend/README.md 의 '라우트' 표 참고.
+ * 워크스페이스 → 작업 순서로 주소가 깊어진다 (작업 하나에 사진 여러 장). 화면 ↔ 와이어프레임 대응은 frontend/README.md 의 '라우트' 표 참고.
  */
 import { createBrowserRouter, redirect } from 'react-router'
-import { ProjectLayout } from './layouts/ProjectLayout'
 import { SettingsLayout } from './layouts/SettingsLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { getActiveAccountId } from './lib/accounts'
 import { DEFAULT_WORKSPACE_ID, paths, readLastWorkspaceId } from './lib/paths'
 import { AssemblyPathsPage } from './pages/AssemblyPathsPage'
-import { AssemblyTreePage } from './pages/AssemblyTreePage'
 import { JobProcessPage } from './pages/JobProcessPage'
 import { JobResultPage } from './pages/JobResultPage'
 import { JobReviewPage } from './pages/JobReviewPage'
 import { JobSummaryPage } from './pages/JobSummaryPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewJobPage } from './pages/NewJobPage'
-import { NewProjectPage } from './pages/NewProjectPage'
 import { NewWorkspacePage } from './pages/NewWorkspacePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PreferencesPage } from './pages/PreferencesPage'
-import { ProjectPage } from './pages/ProjectPage'
 import { RouteErrorPage } from './pages/RouteErrorPage'
 import { SymbolsPage } from './pages/SymbolsPage'
 import { WeldingStandardsPage } from './pages/WeldingStandardsPage'
@@ -61,20 +57,11 @@ export const router = createBrowserRouter([
           { path: 'symbols', Component: SymbolsPage },
           { path: 'standards', Component: WeldingStandardsPage },
           { path: 'assembly', Component: AssemblyPathsPage },
-          { path: 'projects/new', Component: NewProjectPage },
-          {
-            path: 'p/:projectId',
-            Component: ProjectLayout,
-            children: [
-              { index: true, Component: ProjectPage },
-              { path: 'assembly-tree', Component: AssemblyTreePage },
-              { path: 'jobs/new', Component: NewJobPage },
-              { path: 'jobs/:jobId', Component: JobResultPage },
-              { path: 'jobs/:jobId/review', Component: JobReviewPage },
-              { path: 'jobs/:jobId/process/:stage?', Component: JobProcessPage },
-              { path: 'jobs/:jobId/summary', Component: JobSummaryPage },
-            ],
-          },
+          { path: 'jobs/new', Component: NewJobPage },
+          { path: 'jobs/:jobId', Component: JobResultPage },
+          { path: 'jobs/:jobId/review', Component: JobReviewPage },
+          { path: 'jobs/:jobId/process/:stage?', Component: JobProcessPage },
+          { path: 'jobs/:jobId/summary', Component: JobSummaryPage },
           // 워크스페이스 안의 없는 주소는 사이드바를 유지한 채 404
           { path: '*', Component: NotFoundPage },
         ],

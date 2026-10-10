@@ -97,7 +97,7 @@ function GeneralSection({ workspace, onSaved }: { workspace: Workspace; onSaved:
 
 const KIND_OPTIONS: { value: WorkspaceKind; label: string; description: string }[] = [
   { value: 'personal', label: '개인', description: '혼자 쓰는 워크스페이스예요.' },
-  { value: 'team', label: '팀', description: '멤버와 함께 써요. 블록과 사전을 같이 보고 고쳐요.' },
+  { value: 'team', label: '팀', description: '멤버와 함께 써요. 작업과 사전을 같이 보고 고쳐요.' },
 ]
 
 function KindSection({ workspace, onChanged }: { workspace: Workspace; onChanged: () => void }) {

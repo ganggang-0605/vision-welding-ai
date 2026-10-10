@@ -12,7 +12,7 @@
 
 ## 주요 기능
 
-서비스는 Notion 처럼 **워크스페이스 단위**로 동작한다. 워크스페이스(조선소·공정 하나)는 **개인**(기본) 또는 **팀**이며,
+서비스는 Notion 처럼 **워크스페이스 단위**로 동작한다. 화면에서는 **워크스페이스 → 작업 → 사진 여러 장** 구조이고(작업 이름 예: `S1 블록`), 조립 트리는 워크스페이스에 하나(조립 경로 사전)다. 아래의 프로젝트는 저장소 안에서 작업을 묶는 단위로만 남아 있다. 워크스페이스(조선소·공정 하나)는 **개인**(기본) 또는 **팀**이며,
 개인 워크스페이스에 멤버를 초대하면 팀 워크스페이스로 바뀐다. 워크스페이스 안에는 블록(배 전체가 아닐 수도 있는 조립 단위) 하나를 뜻하는 **프로젝트**가 있고,
 **조립 트리와 작업은 프로젝트에 속한다**. **문자/기호 사전**은 워크스페이스 단위로 프로젝트들이 함께 쓰고,
 **표준 용접 기준**은 모든 워크스페이스가 공유하는 공통(읽기 전용) 데이터다. 검색·내보내기는 워크스페이스 안에서 이뤄진다.
@@ -108,13 +108,14 @@
 | GET · POST | `/workspaces/{workspace_id}/projects` | 프로젝트(블록) 목록(생성 순) · 생성 (201, 빈 조립 트리) |
 | GET | `/workspaces/{workspace_id}/projects/{project_id}` | 프로젝트 조회 |
 | GET | `/workspaces/{workspace_id}/projects/{project_id}/assembly-tree` | 프로젝트의 조립 트리 노드 목록 |
+| GET | `/workspaces/{workspace_id}/assembly-tree` | 워크스페이스의 조립 트리 하나 (조립 경로 사전) — 프로젝트별 트리를 합친 것. 2단계는 이것과 대조 |
 | GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
-| POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 필수 — 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
+| POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 를 빼면 워크스페이스의 기본 프로젝트(화면은 워크스페이스 → 작업) — 주면 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}` | 작업 조회 |
 | POST · GET | `/workspaces/{workspace_id}/jobs/{job_id}/images` | 사진 올리기 (multipart `file`, 201 `{image_id, filename, content_type, width, height, created_at, preprocessed}`, 20MB 넘으면 413, 이미지가 아니면 422) · 올린 순서 목록 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/file` | 올린 사진 파일 그대로 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/images/{image_id}/preprocessed` | 1단계가 보정한 사진(PNG, OCR 이 본 사진 — 작은 사진 키우기·노이즈 제거). 보정하지 않았거나 해석 전이면 404 (`preprocessed: false`) |
-| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진. **202 로 바로 끝나고 백그라운드에서 해석** — 그동안 상태 `analyzing` 이고 `analysis_stage`(`vision` → `context` → `confidence`)·`analysis_stage_at` 으로 지금 단계를 알림, 실패하면 해석 전 상태 + `analysis_error`. 사진이 없거나 이미 해석 중이면 409 |
+| POST | `/workspaces/{workspace_id}/jobs/{job_id}/analyze` | 사진 한 장을 1·2·3단계로 해석(`backend/app/pipeline.py`) → Analysis 저장, Job 반영. 본문 `{"image_id"}` 생략 시 가장 최근 사진, `{"image_ids": [...]}` 면 여러 장을 순서대로 해석하고 작업에는 마지막 사진의 결과. **202 로 바로 끝나고 백그라운드에서 해석** — 그동안 상태 `analyzing` 이고 `analysis_stage`(`vision` → `context` → `confidence`)·`analysis_stage_at` 으로 지금 단계를 알림, 실패하면 해석 전 상태 + `analysis_error`. 사진이 없거나 이미 해석 중이면 409 |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/review` | 작업자 확인 → 가장 최근 Analysis 에서 2단계부터 다시 해석(revision + 1, `analyze` 처럼 202 + 백그라운드). `reinterpret` + `context` \| `manual` + `values`(키: `t*`·`s*`·`v*`·`part`·`interpretation`·`welding_condition`·`cell`·`leg_lengths`). 해석 전·해석 중이면 409, 잘못된 값·없는 표기면 바로 422 |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}/analyses` | 해석 결과([`analysis.schema.json`](shared/schemas/analysis.schema.json)) 전체, 만든 순서 — 사진 위 bbox·후보 표시용 |
 | POST | `/workspaces/{workspace_id}/jobs/{job_id}/approve` | 승인 `{"approved_by": "...", "acknowledge_review": false}` → `approved`. `awaiting_approval` 은 바로, `needs_review` 는 작업자가 확인 항목을 봤다는 `acknowledge_review: true` 가 있어야 승인. 그 밖의 상태, 확인 표시 없음, 조립 경로·표기·용접 조건이 비어 있으면 409 |

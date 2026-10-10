@@ -276,14 +276,17 @@ class PipelineStatus(ApiModel):
 
 
 class AnalyzeRequest(ApiModel):
-    """POST .../analyze 본문 (생략 가능). image_id 를 빼면 가장 최근에 올린 사진을 해석한다."""
+    """POST .../analyze 본문 (생략 가능). image_id 를 빼면 가장 최근에 올린 사진을 해석한다.
+    image_ids 를 주면 그 사진들을 순서대로 해석하고, 작업에는 마지막 사진의 결과를 반영한다 (새 작업에서 여러 장 올릴 때)."""
 
     image_id: str | None = None
+    image_ids: list[str] | None = None
 
 
 class JobCreate(ApiModel):
     name: NonEmptyStr
-    project_id: NonEmptyStr  # 같은 워크스페이스의 프로젝트만 (아니면 422)
+    # 같은 워크스페이스의 프로젝트만 (아니면 422). 빼면 워크스페이스의 기본 프로젝트 — 화면은 워크스페이스 → 작업 (블록 층 없음)
+    project_id: NonEmptyStr | None = None
     assembly_path: str | None = None
     related_job_ids: list[str] = []
 

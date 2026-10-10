@@ -331,9 +331,24 @@ class Store:
             Project(id=new_id("prj"), workspace_id=workspace_id, created_at=utcnow(), **data.model_dump())
         )
 
+    def default_project(self, workspace_id: str) -> Project:
+        """작업을 담는 기본 프로젝트 — 화면에는 블록 층이 없어서(워크스페이스 → 작업) 작업을 만들 때 프로젝트를 고르지 않는다.
+        가장 오래된 프로젝트, 없으면 하나 만든다"""
+        with self._lock:
+            existing = self.list_projects(workspace_id)
+            return existing[0] if existing else self.create_project(workspace_id, ProjectCreate(name="작업"))
+
     # ── 조립 트리 ──
     def get_assembly_tree(self, workspace_id: str, project_id: str) -> list[AssemblyNode]:
         return list(self.assembly_trees[workspace_id][project_id])
+
+    def get_workspace_assembly_tree(self, workspace_id: str) -> list[AssemblyNode]:
+        """워크스페이스의 조립 트리 하나 (조립 경로 사전) — 프로젝트별로 나눠 저장된 트리를 합침, 같은 경로는 한 번만"""
+        nodes: dict[str, AssemblyNode] = {}
+        for project in self.list_projects(workspace_id):
+            for node in self.assembly_trees[workspace_id][project.id]:
+                nodes.setdefault(node.path, node)
+        return list(nodes.values())
 
     # ── 작업 ──
     def list_jobs(

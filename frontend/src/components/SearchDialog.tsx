@@ -2,7 +2,6 @@ import { FileText, MagnifyingGlass } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { listJobs } from '../api/jobs'
-import type { Project } from '../api/types'
 import { useAsync } from '../hooks/useAsync'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { paths } from '../lib/paths'
@@ -15,17 +14,15 @@ const MAX_RESULTS = 20
 
 interface SearchDialogProps {
   workspaceId: string
-  /** 결과에 블록 이름을 붙이는 데 쓴다. */
-  projects: Project[]
   open: boolean
   onClose: () => void
 }
 
 /**
- * 검색 ⌘K 모달 (와이어프레임 2, 맥 Spotlight 모양). 현재 워크스페이스의 모든 프로젝트에서 작업을 검색한다.
+ * 검색 ⌘K 모달 (와이어프레임 2, 맥 Spotlight 모양). 현재 워크스페이스의 작업을 검색한다.
  * 네이티브 <dialog> 의 showModal() 을 써서 포커스 가두기·Esc 닫기를 브라우저에 맡긴다.
  */
-export function SearchDialog({ workspaceId, projects, open, onClose }: SearchDialogProps) {
+export function SearchDialog({ workspaceId, open, onClose }: SearchDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -47,18 +44,17 @@ export function SearchDialog({ workspaceId, projects, open, onClose }: SearchDia
       }}
     >
       {/* 열 때마다 검색어를 비우도록 열려 있을 때만 마운트 */}
-      {open && <SearchPanel workspaceId={workspaceId} projects={projects} onNavigate={onClose} />}
+      {open && <SearchPanel workspaceId={workspaceId} onNavigate={onClose} />}
     </dialog>
   )
 }
 
 interface SearchPanelProps {
   workspaceId: string
-  projects: Project[]
   onNavigate: () => void
 }
 
-function SearchPanel({ workspaceId, projects, onNavigate }: SearchPanelProps) {
+function SearchPanel({ workspaceId, onNavigate }: SearchPanelProps) {
   const navigate = useNavigate()
   const inputId = useId()
   const resultsId = useId()
@@ -72,7 +68,7 @@ function SearchPanel({ workspaceId, projects, onNavigate }: SearchPanelProps) {
     event.preventDefault()
     const first = jobs?.[0]
     if (!first) return
-    navigate(paths.job(workspaceId, first.project_id, first.id))
+    navigate(paths.job(workspaceId, first.id))
     onNavigate()
   }
 
@@ -110,7 +106,7 @@ function SearchPanel({ workspaceId, projects, onNavigate }: SearchPanelProps) {
               <li key={job.id}>
                 <Link
                   className={styles.item}
-                  to={paths.job(workspaceId, job.project_id, job.id)}
+                  to={paths.job(workspaceId, job.id)}
                   onClick={onNavigate}
                   // Enter 로 열리는 첫 결과를 미리 강조한다 (Spotlight 와 같은 동작).
                   data-default={index === 0 || undefined}
@@ -121,8 +117,7 @@ function SearchPanel({ workspaceId, projects, onNavigate }: SearchPanelProps) {
                   <span className={styles.itemText}>
                     <span className={styles.itemName}>{job.name}</span>
                     <span className={styles.itemMeta}>
-                      {projects.find((project) => project.id === job.project_id)?.name}
-                      {job.assembly_path && <span className={styles.metaPath}>{job.assembly_path}</span>}
+                      {job.assembly_path ?? '조립 경로 없음'}
                     </span>
                   </span>
                   <StatusLabel status={job.status} />

@@ -35,7 +35,7 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
           tone="warning"
           title={`확인이 필요한 항목이 ${job.needs_review.length}개 있어요`}
           action={
-            <Link className="btn" to={paths.jobReview(workspace.id, job.project_id, job.id)}>
+            <Link className="btn" to={paths.jobReview(workspace.id, job.id)}>
               검토하기
             </Link>
           }
@@ -171,8 +171,8 @@ function JobResult({ job, onChange }: { job: Job; onChange: () => void }) {
           <ul className="group">
             {job.related_job_ids.map((id) => (
               <li key={id} className="group-row">
-                {/* 다른 프로젝트의 작업일 수도 있다. 주소가 다르면 JobFrame 이 맞는 프로젝트로 옮긴다. */}
-                <Link to={paths.job(workspace.id, job.project_id, id)}>{id}</Link>
+                {/* 같은 워크스페이스의 다른 작업 */}
+                <Link to={paths.job(workspace.id, id)}>{id}</Link>
                 <span />
               </li>
             ))}

@@ -1,6 +1,7 @@
 /** 워크스페이스, 멤버, 워크스페이스별 문자/기호 사전 API */
 import { apiFetch, apiPath, asUser, jsonInit } from './client'
 import type {
+  AssemblyNode,
   Member,
   MemberInvite,
   SymbolEntry,
@@ -10,6 +11,11 @@ import type {
   WorkspaceCreate,
   WorkspaceUpdate,
 } from './types'
+
+/** GET /workspaces/{workspace_id}/assembly-tree — 워크스페이스의 조립 트리 하나 (조립 경로 사전) */
+export function getWorkspaceAssemblyTree(workspaceId: string, signal?: AbortSignal): Promise<AssemblyNode[]> {
+  return apiFetch<AssemblyNode[]>(apiPath`/workspaces/${workspaceId}/assembly-tree`, { signal })
+}
 
 /** GET /workspaces — 계정(X-User-Id)이 멤버인 워크스페이스만. userId 를 주면 그 계정으로 묻는다. */
 export function listWorkspaces(signal?: AbortSignal, userId?: string): Promise<Workspace[]> {

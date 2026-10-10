@@ -57,7 +57,7 @@ function Process({ job }: { job: Job }) {
       <Notice
         title="아직 해석하지 않은 작업이에요"
         action={
-          <Link className="btn" to={paths.job(workspace.id, job.project_id, job.id)}>
+          <Link className="btn" to={paths.job(workspace.id, job.id)}>
             사진 올리러 가기
           </Link>
         }
@@ -73,7 +73,7 @@ function Process({ job }: { job: Job }) {
   const imageIndex = images.data ? images.data.findIndex((i) => i.image_id === analysis.image_id) + 1 : 0
   const stageLink = (key: ProcessStage) => {
     const query = searchParams.toString()
-    return paths.jobProcess(workspace.id, job.project_id, job.id, key) + (query ? `?${query}` : '')
+    return paths.jobProcess(workspace.id, job.id, key) + (query ? `?${query}` : '')
   }
 
   return (

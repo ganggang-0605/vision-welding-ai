@@ -1,7 +1,7 @@
 """1. 워크스페이스 생성·수정, 멤버 초대, 문자/기호 체계 등록
 
 워크스페이스는 개인(personal) 또는 팀(team). 개인 워크스페이스에 멤버를 초대하면 팀으로 바뀐다.
-프로젝트(블록)·조립 트리는 api/projects.py, 작업은 api/jobs.py.
+조립 경로 사전(워크스페이스의 조립 트리)은 여기, 블록별 트리는 api/projects.py, 작업은 api/jobs.py.
 TODO(인증): 로그인 없음 — X-User-Id 헤더(없으면 데모 사용자)가 현재 사용자다. 목록(GET /workspaces)만 멤버로 거르고,
 TODO(권한): 그 밖의 경로는 권한 검사 없이 누구나 모든 워크스페이스를 조회·수정할 수 있다.
 """
@@ -19,6 +19,7 @@ from app.api.deps import (
 from app.schemas import (
     Member,
     MemberInvite,
+    AssemblyNode,
     SymbolEntry,
     SymbolEntryCreate,
     SymbolEntryUpdate,
@@ -94,6 +95,14 @@ def invite_member(body: MemberInvite, workspace: WorkspaceDep, store: StoreDep) 
         return store.invite_member(workspace.id, body.name, body.email)
     except MemberAlreadyExists as e:
         raise HTTPException(409, f"이미 이 워크스페이스의 멤버입니다: {e.email}") from e
+
+
+# ── 조립 경로 사전 ──
+
+@router.get("/{workspace_id}/assembly-tree", responses=NOT_FOUND)
+def get_workspace_assembly_tree(workspace: WorkspaceDep, store: StoreDep) -> list[AssemblyNode]:
+    """워크스페이스의 조립 트리 하나 — 해석할 때 부재 번호를 이것과 대조한다"""
+    return store.get_workspace_assembly_tree(workspace.id)
 
 
 # ── 문자/기호 사전 ──

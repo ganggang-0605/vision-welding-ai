@@ -28,15 +28,58 @@
   color: var(--accent-text);
 }
 
-.preview {
-  display: block;
-  max-width: 100%;
-  max-height: 360px;
+/* 사진을 고른 뒤에는 '더 고르기' 칸을 낮게 */
+.captureMore {
+  min-height: 72px;
+}
+
+/* 고른 사진 미리보기 (여러 장) */
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
   border-radius: var(--radius-row);
+  background: var(--fill);
+}
+
+.thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: rgb(0 0 0 / 0.75);
 }
 
 @media (max-width: 767.98px) {
-  .capture {
+  .capture:not(.captureMore) {
     min-height: 52dvh;
   }
 }

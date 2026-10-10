@@ -63,7 +63,9 @@ def list_jobs(
 
 @router.post("", status_code=201)
 def create_job(body: JobCreate, workspace: WorkspaceDep, store: StoreDep) -> Job:
-    """project_id 는 같은 워크스페이스의 프로젝트, related_job_ids 는 같은 워크스페이스에 있는 작업만 (아니면 422)"""
+    """project_id 는 같은 워크스페이스의 프로젝트(빼면 기본 프로젝트), related_job_ids 는 같은 워크스페이스에 있는 작업만 (아니면 422)"""
+    if body.project_id is None:
+        body = body.model_copy(update={"project_id": store.default_project(workspace.id).id})
     errors = []
     if store.get_project(workspace.id, body.project_id) is None:
         errors.append({"type": "value_error", "loc": ("body", "project_id"), "input": body.project_id,
@@ -130,18 +132,40 @@ def preprocessed_file(image_id: str, job: JobDep, store: StoreDep) -> Response:
 @router.post("/{job_id}/analyze", status_code=202,
              responses={409: error_response("올린 사진이 없음 · 이미 해석 중")})
 def analyze_job(job: JobDep, store: StoreDep, background: BackgroundTasks, body: AnalyzeRequest | None = None) -> Job:
-    """사진 한 장을 1·2·3단계로 해석 (revision 1) → Analysis 저장, Job 에 반영. image_id 를 빼면 가장 최근 사진.
+    """사진을 1·2·3단계로 해석 (revision 1) → Analysis 저장, Job 에 반영. image_id 를 빼면 가장 최근 사진.
+    image_ids 면 여러 장을 순서대로 해석하고 Job 에는 마지막 사진의 결과를 반영한다.
     바로 analyzing 상태의 작업을 돌려주고 백그라운드에서 해석한다."""
     images = store.list_images(job.id)
     if not images:
         raise HTTPException(409, "먼저 사진을 올려 주세요")
-    image_id = body.image_id if body and body.image_id else images[-1].image_id
-    found = store.get_image(job.id, image_id)
-    if found is None:
-        raise HTTPException(404, f"사진을 찾을 수 없습니다: {image_id}")
+    if body and body.image_ids:
+        image_ids = list(dict.fromkeys(body.image_ids))
+    else:
+        image_ids = [body.image_id if body and body.image_id else images[-1].image_id]
+    photos = []
+    for image_id in image_ids:
+        found = store.get_image(job.id, image_id)
+        if found is None:
+            raise HTTPException(404, f"사진을 찾을 수 없습니다: {image_id}")
+        photos.append((image_id, found[1]))
     started = _start(store, job, "vision")
-    background.add_task(_run, store, job, lambda on_stage: analyze_image(store, job, load_image(found[1]), image_id, on_stage))
+    background.add_task(_run_photos, store, job, photos)
     return started
+
+
+def _run_photos(store: Store, before: Job, photos: list[tuple[str, bytes]]) -> None:
+    """여러 장을 순서대로 해석: 앞 사진들은 Analysis 만 저장하고(작업은 계속 analyzing), 마지막 사진의 결과를 작업에 반영.
+    앞 사진이 실패하면 기록만 하고 다음 사진으로 넘어감"""
+    *earlier, (last_id, last_data) = photos
+    for image_id, data in earlier:
+        try:
+            analysis = analyze_image(store, before, load_image(data), image_id,
+                                     lambda stage: store.set_analysis_stage(before.workspace_id, before.id, stage))
+        except Exception:
+            log.exception("여러 장 해석 중 실패 (%s, %s) — 다음 사진으로 넘어감", before.id, image_id)
+            continue
+        store.add_analysis(before.id, analysis)
+    _run(store, before, lambda on_stage: analyze_image(store, before, load_image(last_data), last_id, on_stage))
 
 
 @router.post("/{job_id}/review", status_code=202,

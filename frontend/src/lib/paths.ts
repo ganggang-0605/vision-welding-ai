@@ -27,8 +27,7 @@ export function rememberWorkspaceId(accountId: string, workspaceId: string): voi
 export type ProcessStage = 'vision' | 'context' | 'confidence'
 
 type W = { workspaceId: string }
-type P = W & { projectId: string }
-type J = P & { jobId: string }
+type J = W & { jobId: string }
 
 export const paths = {
   login: (mode?: 'add') => (mode ? `/login?mode=${mode}` : '/login'),
@@ -43,24 +42,18 @@ export const paths = {
     generatePath('/w/:workspaceId/settings/preferences', { workspaceId } satisfies W),
   symbols: (workspaceId: string) => generatePath('/w/:workspaceId/symbols', { workspaceId } satisfies W),
   standards: (workspaceId: string) => generatePath('/w/:workspaceId/standards', { workspaceId } satisfies W),
-  /** 워크스페이스 사전 > 조립 경로 사전 (모든 블록의 조립 트리) */
+  /** 워크스페이스 사전 > 조립 경로 사전 (워크스페이스에 하나인 조립 트리) */
   assemblyPaths: (workspaceId: string) => generatePath('/w/:workspaceId/assembly', { workspaceId } satisfies W),
-  newProject: (workspaceId: string) => generatePath('/w/:workspaceId/projects/new', { workspaceId } satisfies W),
+  /** 새 작업 (사진 여러 장) */
+  newJob: (workspaceId: string) => generatePath('/w/:workspaceId/jobs/new', { workspaceId } satisfies W),
 
-  project: (workspaceId: string, projectId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId', { workspaceId, projectId } satisfies P),
-  assemblyTree: (workspaceId: string, projectId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId/assembly-tree', { workspaceId, projectId } satisfies P),
-  newJob: (workspaceId: string, projectId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId/jobs/new', { workspaceId, projectId } satisfies P),
-
-  job: (workspaceId: string, projectId: string, jobId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId', { workspaceId, projectId, jobId } satisfies J),
-  jobReview: (workspaceId: string, projectId: string, jobId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/review', { workspaceId, projectId, jobId } satisfies J),
+  job: (workspaceId: string, jobId: string) =>
+    generatePath('/w/:workspaceId/jobs/:jobId', { workspaceId, jobId } satisfies J),
+  jobReview: (workspaceId: string, jobId: string) =>
+    generatePath('/w/:workspaceId/jobs/:jobId/review', { workspaceId, jobId } satisfies J),
   /** 해석 과정: 1 시각 인식(vision) · 2 DB 기반 맥락 해석(context) · 3 신뢰도 산출(confidence). stage 를 빼면 1단계 */
-  jobProcess: (workspaceId: string, projectId: string, jobId: string, stage?: ProcessStage) =>
-    generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/process/:stage?', { workspaceId, projectId, jobId, stage }),
-  jobSummary: (workspaceId: string, projectId: string, jobId: string) =>
-    generatePath('/w/:workspaceId/p/:projectId/jobs/:jobId/summary', { workspaceId, projectId, jobId } satisfies J),
+  jobProcess: (workspaceId: string, jobId: string, stage?: ProcessStage) =>
+    generatePath('/w/:workspaceId/jobs/:jobId/process/:stage?', { workspaceId, jobId, stage }),
+  jobSummary: (workspaceId: string, jobId: string) =>
+    generatePath('/w/:workspaceId/jobs/:jobId/summary', { workspaceId, jobId } satisfies J),
 }

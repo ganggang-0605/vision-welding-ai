@@ -141,9 +141,3 @@
     display: none;
   }
 }
-
-.project {
-  margin-right: 8px;
-  font-family: inherit;
-  color: var(--label);
-}

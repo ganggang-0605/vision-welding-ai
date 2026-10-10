@@ -1,11 +1,10 @@
 import { useEffect, type ReactNode } from 'react'
-import { Link, Navigate, useLocation } from 'react-router'
+import { Link } from 'react-router'
 import { isApiError } from '../api/client'
 import { getJob } from '../api/jobs'
 import type { Job } from '../api/types'
 import { useAsync } from '../hooks/useAsync'
 import { useRequiredParam } from '../hooks/useRequiredParam'
-import { useProject } from '../hooks/useProject'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { formatDateTime } from '../lib/format'
 import { paths } from '../lib/paths'
@@ -36,11 +35,9 @@ export function JobFrame(props: JobFrameProps) {
 
 function JobFrameContent({ section, children }: JobFrameProps) {
   const workspace = useWorkspace()
-  const project = useProject()
-  const { pathname } = useLocation()
   const jobId = useRequiredParam('jobId')
   const job = useAsync((signal) => getJob(workspace.id, jobId, signal), [workspace.id, jobId])
-  const projectHome = paths.project(workspace.id, project.id)
+  const home = paths.workspaceHome(workspace.id)
   const analyzing = job.data?.status === 'analyzing'
   const { reload } = job
 
@@ -51,14 +48,9 @@ function JobFrameContent({ section, children }: JobFrameProps) {
     return () => clearTimeout(timer)
   }, [analyzing, job.data, reload])
 
-  // 없는 작업이거나 다른 워크스페이스의 작업 (백엔드 404): 다시 시도해도 같으므로 프로젝트로 안내한다.
+  // 없는 작업이거나 다른 워크스페이스의 작업 (백엔드 404): 다시 시도해도 같으므로 작업 목록으로 안내한다.
   if (!job.loading && isApiError(job.error, 404)) {
-    return <JobNotFound projectName={project.name} projectHome={projectHome} jobId={jobId} />
-  }
-  // 주소의 프로젝트와 작업의 프로젝트가 다르면 (옛 링크 등) 작업이 속한 프로젝트 주소로 옮긴다.
-  if (job.data && job.data.id === jobId && job.data.project_id !== project.id) {
-    const prefix = paths.project(workspace.id, project.id)
-    return <Navigate replace to={paths.project(workspace.id, job.data.project_id) + pathname.slice(prefix.length)} />
+    return <JobNotFound workspaceName={workspace.name} home={home} jobId={jobId} />
   }
 
   return (
@@ -68,7 +60,7 @@ function JobFrameContent({ section, children }: JobFrameProps) {
         {(data) => (
           <>
             <PageHeader
-              breadcrumb={[{ label: project.name, to: projectHome }, { label: data.name }]}
+              breadcrumb={[{ label: '작업', to: home }, { label: data.name }]}
               title={data.name}
               documentTitle={`${data.name} ${section}`}
               description={
@@ -79,7 +71,7 @@ function JobFrameContent({ section, children }: JobFrameProps) {
                 </span>
               }
             />
-            <JobNav workspaceId={workspace.id} projectId={project.id} jobId={data.id} />
+            <JobNav workspaceId={workspace.id} jobId={data.id} />
             {data.status === 'analyzing' ? (
               <div className={styles.notice}>
                 <AnalysisProgress job={data} />
@@ -102,21 +94,21 @@ function JobFrameContent({ section, children }: JobFrameProps) {
 }
 
 interface JobNotFoundProps {
-  projectName: string
-  projectHome: string
+  workspaceName: string
+  home: string
   jobId: string
 }
 
-function JobNotFound({ projectName, projectHome, jobId }: JobNotFoundProps) {
+function JobNotFound({ workspaceName, home, jobId }: JobNotFoundProps) {
   return (
     <div className="page">
       <PageHeader
-        breadcrumb={[{ label: projectName, to: projectHome }, { label: jobId }]}
+        breadcrumb={[{ label: workspaceName, to: home }, { label: jobId }]}
         title="작업을 찾을 수 없어요"
         description={`'${jobId}' 작업이 이 워크스페이스에 없어요.`}
       />
       <p className="button-row">
-        <Link className="btn btn--primary" to={projectHome}>
+        <Link className="btn btn--primary" to={home}>
           작업 목록으로
         </Link>
       </p>

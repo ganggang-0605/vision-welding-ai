@@ -124,13 +124,21 @@ def test_job_in_other_project_filter(client):
     assert _names(client.get(JOBS)) == ["3202 첫 작업", P3, P2, P1]
 
 
-@pytest.mark.parametrize("project_id", [None, "", "  ", "nope", "practice"])  # 누락·빈 값·없는 id·다른 워크스페이스
-def test_create_job_requires_project(client, project_id):
-    body = {"name": "x"} if project_id is None else {"name": "x", "project_id": project_id}
-    res = client.post(JOBS, json=body)
+@pytest.mark.parametrize("project_id", ["", "  ", "nope", "practice"])  # 빈 값·없는 id·다른 워크스페이스
+def test_create_job_rejects_bad_project(client, project_id):
+    res = client.post(JOBS, json={"name": "x", "project_id": project_id})
     assert res.status_code == 422
     assert [e["loc"] for e in res.json()["detail"]] == [["body", "project_id"]]
     assert _names(client.get(JOBS)) == [P3, P2, P1]
+
+
+def test_create_job_without_project_uses_default(client):
+    """화면은 워크스페이스 → 작업 (블록 층 없음) — project_id 를 빼면 가장 오래된 프로젝트, 프로젝트가 없으면 새로 만듦"""
+    job = client.post(JOBS, json={"name": "S1 블록"}).json()
+    assert job["project_id"] == "block_a1"
+    workspace = client.post("/workspaces", json={"name": "새 현장"}).json()
+    job = client.post(f"/workspaces/{workspace['id']}/jobs", json={"name": "S2 블록"}).json()
+    assert [p["id"] for p in client.get(f"/workspaces/{workspace['id']}/projects").json()] == [job["project_id"]]
 
 
 def test_create_job_reports_project_and_related_errors_together(client):

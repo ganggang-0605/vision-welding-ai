@@ -86,6 +86,17 @@ def test_analyze_chosen_image(client):
     assert client.post(f"{JOB}/analyze", json={"image_id": "img_nope"}).status_code == 404
 
 
+def test_analyze_several_images_in_order(client):
+    """새 작업에서 여러 장 올리면 모두 순서대로 해석, 작업에는 마지막 사진의 결과"""
+    first, second, third = (_upload(client).json() for _ in range(3))
+    job = _analyze(client, json={"image_ids": [first["image_id"], third["image_id"], second["image_id"]]})
+    assert job["status"] == "needs_review" and job["analysis_stage"] is None
+    analyses = client.get(f"{JOB}/analyses").json()
+    assert [a["image_id"] for a in analyses] == [first["image_id"], third["image_id"], second["image_id"]]
+    res = client.post(f"{JOB}/analyze", json={"image_ids": [first["image_id"], "img_nope"]})
+    assert res.status_code == 404 and client.get(JOB).json()["status"] == "needs_review"  # 하나라도 없으면 시작하지 않음
+
+
 def test_reanalyze_clears_approval(client):
     path = f"{JOBS}/job_demo_p2"  # 승인된 작업
     _upload(client, path)
