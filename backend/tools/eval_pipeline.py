@@ -9,6 +9,8 @@
   옵션: --raw <사진 폴더> (기본 data/raw) · --out <결과 json> (기본 data/eval/pipeline.json)
         --simulate dark,glare,stain,skewed (또는 all) : 사진마다 촬영 조건을 인위적으로 입힌 사진도 돌림 (backend/tools/conditions.py)
         --texts-only : 글자 정답이 없는 사진은 건너뜀
+        --dictionary-from-db : 앱 DB(.env 의 DATABASE_URL)의 demo 문자·기호 사전으로 바꿔서 돌림 — 화면에서 사전을 고친 뒤
+                               다시 재 볼 때 (조립 트리·작업 등 나머지는 시드 그대로, 앱 DB 에는 쓰지 않음)
 
 재는 것: 글자 정답 중 1단계(OCR) · 최종 표기(작업에 남는 값)와 같은 것(참고: 2단계가 본 OCR·VLM 읽기 중 하나라도 맞은 것),
 각장(F·V·S) 정답 중 맞힌 것
@@ -19,6 +21,7 @@
 """
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -37,7 +40,8 @@ from vw_shared import schema_errors, semantic_errors  # noqa: E402
 
 from app.pipeline import analyze_image, job_with_analysis  # noqa: E402
 from app.schemas import JobCreate  # noqa: E402
-from app.store import reset_store  # noqa: E402
+from app.db.connect import open_database  # noqa: E402
+from app.store import open_store, reset_store  # noqa: E402
 
 from conditions import LABELS, simulate  # noqa: E402 — 같은 폴더 (backend/tools)
 
@@ -159,6 +163,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "eval" / "pipeline.json")
     parser.add_argument("--simulate", default="", help="dark,glare,stain,skewed 중 쉼표로 (all = 넷 다)")
     parser.add_argument("--texts-only", action="store_true", help="글자 정답이 없는 사진(셀 기호만 있는 것)은 건너뜀 — VLM 호출 아낌")
+    parser.add_argument("--dictionary-from-db", action="store_true", help="앱 DB 의 demo 문자·기호 사전을 씀 (화면에서 고친 사전)")
     args = parser.parse_args()
     simulated = list(LABELS) if args.simulate == "all" else [c for c in args.simulate.split(",") if c]
     if unknown := [c for c in simulated if c not in LABELS]:
@@ -169,6 +174,14 @@ def main() -> int:
         print(f"정답이 없음: data/annotations/{args.prefix}*.json")
         return 1
     store = reset_store()  # 메모리만 (DATABASE_URL 파일을 건드리지 않음)
+    if args.dictionary_from_db:  # 사전만 앱 DB 에서 읽어 메모리 저장소에 덮어씀
+        symbols = open_store(open_database(os.environ.get("DATABASE_URL"))).list_symbols("demo")
+        for entry in store.list_symbols("demo"):
+            store.delete_symbol("demo", entry.id)
+        for entry in symbols:
+            store.save_symbol("demo", entry)
+        print(f"사전: 앱 DB 의 demo 사전 {len(symbols)}개 항목 — " + ", ".join(
+            f"{e.code}" + (f"({'/'.join(e.aliases)})" if e.aliases else "") for e in symbols if e.kind == "text")[:600])
     rows, totals = [], {"errors": 0}
     for path in truths:
         truth = json.loads(path.read_text(encoding="utf-8"))
