@@ -10,7 +10,8 @@
         --simulate dark,glare,stain,skewed (또는 all) : 사진마다 촬영 조건을 인위적으로 입힌 사진도 돌림 (backend/tools/conditions.py)
         --texts-only : 글자 정답이 없는 사진은 건너뜀
 
-재는 것: 글자 정답 중 1단계(OCR) · 2단계가 해석에 쓴 읽기(OCR + VLM)와 같은 것, 각장(F·V·S) 정답 중 맞힌 것
+재는 것: 글자 정답 중 1단계(OCR) · 최종 표기(작업에 남는 값)와 같은 것(참고: 2단계가 본 OCR·VLM 읽기 중 하나라도 맞은 것),
+각장(F·V·S) 정답 중 맞힌 것
 (1단계 단독 = 1단계가 읽은 글자 토큰이 화살표·기호만 떼면 각장 표기 그대로인 것, 전체 = 2단계가 확정한 각장), 셀 형태 기호 수,
 단계 사이 스키마·규칙 오류, 신뢰도 · 상태 · 시간.
 묶음별 합계(<out>_groups.json): 원본 전체, 정답 파일의 conditions 별(실제로 그 조건에서 찍은 사진), --simulate 조건별(합성)
@@ -59,18 +60,29 @@ def ocr_legs(texts: list[dict]) -> set[tuple[str, float]]:
     return {leg for t in texts for token in t["text"].upper().split() if (leg := leg_value(NOT_MARKING.sub("", token)))}
 
 
+def final_hits(truth_texts: list[str], raw_text: str | None) -> int:
+    """최종 표기(작업에 남는 marking.raw_text — 작업자가 보고 승인하는 값)에 그대로 있는 글자 정답 수.
+    'Face 350'처럼 띄어 쓴 정답은 이어진 토큰(3개까지)을 붙여 비교"""
+    tokens = [norm(t) for t in (raw_text or "").split()]
+    joined = {"".join(tokens[i:j]) for i in range(len(tokens)) for j in range(i + 1, min(len(tokens), i + 3) + 1)}
+    return sum(t in joined for t in truth_texts)
+
+
 def percent(part: int, whole: int) -> float | None:
     return round(100 * part / whole, 1) if whole else None
 
 
 def group_totals(rows: list[dict]) -> dict:
-    """묶음 합계 — 글자(문자 인식)와 각장(의미 해석) 각각 1단계 단독 vs 전체, 복합 = (맞힌 글자 + 맞힌 각장) ÷ (글자 + 각장 정답)"""
-    t = {key: sum(r[key] for r in rows) for key in ("texts", "ocr_exact", "used_exact", "legs", "legs_ocr", "legs_found")}
+    """묶음 합계 — 글자(문자 인식)와 각장(의미 해석) 각각 1단계 단독 vs 전체(최종 표기·확정 각장),
+    복합 = (맞힌 글자 + 맞힌 각장) ÷ (글자 + 각장 정답). used_exact(2단계가 본 읽기 중 하나라도 맞음)는 참고용 —
+    VLM이 맞게 읽었어도 최종 값으로 1단계 읽기를 고르면 틀린 것이라 발표 숫자에는 final_exact 를 씀"""
+    t = {key: sum(r[key] for r in rows) for key in ("texts", "ocr_exact", "used_exact", "final_exact", "legs", "legs_ocr", "legs_found")}
     return {"photos": len(rows), **t,
-            "text_alone_pct": percent(t["ocr_exact"], t["texts"]), "text_full_pct": percent(t["used_exact"], t["texts"]),
+            "text_alone_pct": percent(t["ocr_exact"], t["texts"]), "text_full_pct": percent(t["final_exact"], t["texts"]),
+            "text_any_reading_pct": percent(t["used_exact"], t["texts"]),
             "leg_alone_pct": percent(t["legs_ocr"], t["legs"]), "leg_full_pct": percent(t["legs_found"], t["legs"]),
             "combined_alone_pct": percent(t["ocr_exact"] + t["legs_ocr"], t["texts"] + t["legs"]),
-            "combined_full_pct": percent(t["used_exact"] + t["legs_found"], t["texts"] + t["legs"])}
+            "combined_full_pct": percent(t["final_exact"] + t["legs_found"], t["texts"] + t["legs"])}
 
 
 def groups_of(rows: list[dict]) -> dict[str, dict]:
@@ -113,6 +125,7 @@ def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None
         "texts": len(truth_texts),
         "ocr_exact": sum(t in ocr for t in truth_texts),
         "used_exact": sum(t in used for t in truth_texts),
+        "final_exact": final_hits(truth_texts, filled.marking.raw_text if filled.marking else None),
         "legs": len(truth_legs),
         "legs_ocr": sum(leg in alone_legs for leg in truth_legs),
         "legs_found": sum(leg in found_legs for leg in truth_legs),
@@ -133,7 +146,8 @@ def run_photo(store, path: Path, photo: Path, truth: dict, condition: str | None
     }
     rows.append(row)
     legs = f"각장 단독 {row['legs_ocr']} · 전체 {row['legs_found']}/{row['legs']}" if row["legs"] else "각장 -"
-    print(f"{name:36} {seconds:5.1f}초  글자 OCR {row['ocr_exact']}/{row['texts']} · 해석 {row['used_exact']}/{row['texts']}  "
+    print(f"{name:36} {seconds:5.1f}초  글자 OCR {row['ocr_exact']}/{row['texts']} · 최종 {row['final_exact']}/{row['texts']} "
+          f"(VLM 읽기 포함 {row['used_exact']})  "
           f"{legs}  신뢰도 {confidence['overall']:g}  {filled.status}  {'오류 ' + str(len(errors)) if errors else ''}", flush=True)
     return len(errors)
 
@@ -181,13 +195,14 @@ def main() -> int:
     groups = groups_of(rows)
     groups_path = args.out.with_name(args.out.stem + "_groups.json")
     groups_path.write_text(json.dumps(groups, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 전체':>9}  {'각장 단독':>9} {'각장 전체':>9}  {'복합 단독':>9} {'복합 전체':>9}")
+    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 최종':>9}  {'각장 단독':>9} {'각장 최종':>9}  {'복합 단독':>9} {'복합 최종':>9}")
     for name, g in groups.items():
         cells = [f"{g[k]:>8}%" if g[k] is not None else f"{'-':>9}" for k in
                  ("text_alone_pct", "text_full_pct", "leg_alone_pct", "leg_full_pct", "combined_alone_pct", "combined_full_pct")]
         print(f"{name:16} {g['photos']:>4}  {cells[0]} {cells[1]}  {cells[2]} {cells[3]}  {cells[4]} {cells[5]}")
     whole = groups["원본 전체"]
-    print(f"\n원본 합계: 글자 OCR {whole['ocr_exact']}/{whole['texts']} · 해석 {whole['used_exact']}/{whole['texts']}, "
+    print(f"\n원본 합계: 글자 OCR {whole['ocr_exact']}/{whole['texts']} · 최종 {whole['final_exact']}/{whole['texts']} "
+          f"(VLM 읽기 포함 {whole['used_exact']}), "
           f"각장 단독 {whole['legs_ocr']} · 전체 {whole['legs_found']}/{whole['legs']}, 단계 사이 오류 {totals['errors']}건 "
           f"→ {args.out}, {groups_path.name}")
     return 1 if totals["errors"] else 0
