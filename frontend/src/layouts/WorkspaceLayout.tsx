@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  FileText,
   House,
   List,
   MagnifyingGlass,
@@ -9,8 +10,9 @@ import {
   TreeStructure,
 } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useState, type MouseEvent } from 'react'
-import { Link, Navigate, NavLink, Outlet } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { isApiError } from '../api/client'
+import { listJobs } from '../api/jobs'
 import { getMe } from '../api/users'
 import { getWorkspace } from '../api/workspaces'
 import { AccountMenu } from '../components/AccountMenu'
@@ -30,6 +32,8 @@ const IS_APPLE = /Mac|iPhone|iPad/.test(navigator.userAgent)
 const SEARCH_SHORTCUT = IS_APPLE ? '⌘K' : 'Ctrl K'
 const SIDEBAR_SHORTCUT = IS_APPLE ? '⌘\\' : 'Ctrl \\'
 const SIDEBAR_COLLAPSED_KEY = 'vwa:sidebar-collapsed'
+/** 사이드바 '작업'에 보여 줄 최근 작업 수 (나머지는 홈의 작업 목록에서) */
+const SIDEBAR_JOB_COUNT = 15
 
 /** 데스크톱 사이드바를 접어 둔 상태는 이 브라우저에 기억한다 (노션처럼 다시 열어도 그대로). */
 function readCollapsed(): boolean {
@@ -54,7 +58,11 @@ export function WorkspaceLayout() {
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [searchOpen, setSearchOpen] = useState(false)
 
+  const { pathname } = useLocation()
   const workspace = useAsync((signal) => getWorkspace(workspaceId, signal), [workspaceId])
+  // 사이드바 작업 목록. 화면을 옮길 때마다 다시 읽어 새로 만든 작업·바뀐 이름이 바로 보이게 한다.
+  const jobs = useAsync((signal) => listJobs(workspaceId, {}, signal), [workspaceId, pathname])
+  const jobList = jobs.data?.every((job) => job.workspace_id === workspaceId) ? jobs.data : undefined
   // 계정을 바꾸면(전환 메뉴) 현재 사용자를 다시 불러온다.
   const me = useAsync((signal) => getMe(signal), [activeId])
   // useAsync 는 다시 불러오는 동안 직전 값을 유지하므로, 워크스페이스를 바꾼 직후에는 이전 워크스페이스 값을 쓰지 않는다.
@@ -202,7 +210,25 @@ export function WorkspaceLayout() {
                   새 작업
                 </NavLink>
               </li>
+              {jobList?.slice(0, SIDEBAR_JOB_COUNT).map((job) => (
+                <li key={job.id}>
+                  <NavLink to={paths.job(workspaceId, job.id)} className={styles.navItem}>
+                    <FileText aria-hidden="true" />
+                    <span className={styles.ellipsis}>{job.name}</span>
+                  </NavLink>
+                </li>
+              ))}
             </ul>
+            {jobs.error !== undefined ? (
+              <p className={styles.navHint}>작업을 불러오지 못했어요</p>
+            ) : (
+              jobList &&
+              jobList.length > SIDEBAR_JOB_COUNT && (
+                <Link className={styles.navHint} to={paths.workspaceHome(workspaceId)}>
+                  작업 {jobList.length}개 모두 보기
+                </Link>
+              )
+            )}
           </nav>
         )}
 
