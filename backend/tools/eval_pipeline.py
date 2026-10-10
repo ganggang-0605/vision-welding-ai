@@ -8,9 +8,10 @@
   backend/.venv/bin/python backend/tools/eval_pipeline.py pac_handwriting  # 이름이 이걸로 시작하는 정답만
   옵션: --raw <사진 폴더> (기본 data/raw) · --out <결과 json> (기본 data/eval/pipeline.json)
         --simulate dark,glare,stain,skewed (또는 all) : 사진마다 촬영 조건을 인위적으로 입힌 사진도 돌림 (backend/tools/conditions.py)
+        --texts-only : 글자 정답이 없는 사진은 건너뜀
 
 재는 것: 글자 정답 중 1단계(OCR) · 2단계가 해석에 쓴 읽기(OCR + VLM)와 같은 것, 각장(F·V·S) 정답 중 맞힌 것
-(1단계 단독 = 1단계가 읽은 글자 안에 각장 표기가 그대로 있는 것, 전체 = 2단계가 확정한 각장), 셀 형태 기호 수,
+(1단계 단독 = 1단계가 읽은 글자 토큰이 화살표·기호만 떼면 각장 표기 그대로인 것, 전체 = 2단계가 확정한 각장), 셀 형태 기호 수,
 단계 사이 스키마·규칙 오류, 신뢰도 · 상태 · 시간.
 묶음별 합계(<out>_groups.json): 원본 전체, 정답 파일의 conditions 별(실제로 그 조건에서 찍은 사진), --simulate 조건별(합성)
 — 발표의 "Vision AI 단독 vs Vision AI + DB + VLM" 비교 숫자
@@ -40,7 +41,7 @@ from app.store import reset_store  # noqa: E402
 from conditions import LABELS, simulate  # noqa: E402 — 같은 폴더 (backend/tools)
 
 LEG = re.compile(r"^[FVS][0-9]+(?:\.[0-9]+)?$")
-LEG_IN = re.compile(r"[FVS][0-9]+(?:\.[0-9]+)?")  # 1단계 글자 안의 각장 표기 (→F7.5 → F7.5, 값 보정 없음)
+NOT_MARKING = re.compile(r"[^A-Z0-9.]")  # 화살표·기호 (→F7.5 의 →) — 글자는 남김 (PF5.0 은 각장이 아님)
 
 
 def norm(text: str) -> str:
@@ -53,8 +54,9 @@ def leg_value(text: str) -> tuple[str, float] | None:
 
 
 def ocr_legs(texts: list[dict]) -> set[tuple[str, float]]:
-    """1단계 단독 의미 해석: 1단계가 읽은 글자에 각장 표기가 그대로 들어 있는 것만 (2단계의 값 보정·DB·VLM 없이)"""
-    return {leg for t in texts for m in LEG_IN.findall(norm(t["text"])) if (leg := leg_value(m))}
+    """1단계 단독 의미 해석: 1단계가 읽은 글자 토큰이 화살표·기호만 떼면 각장 표기 그대로인 것 (2단계의 값 보정·DB·VLM 없이).
+    PF5.0(화살표를 P로 읽음)처럼 다른 글자가 붙으면 각장으로 치지 않음 — 2단계도 그대로는 각장으로 못 씀"""
+    return {leg for t in texts for token in t["text"].upper().split() if (leg := leg_value(NOT_MARKING.sub("", token)))}
 
 
 def percent(part: int, whole: int) -> float | None:
@@ -62,11 +64,13 @@ def percent(part: int, whole: int) -> float | None:
 
 
 def group_totals(rows: list[dict]) -> dict:
-    """묶음 합계 — 글자(문자 인식)와 각장(의미 해석) 각각 1단계 단독 vs 전체"""
+    """묶음 합계 — 글자(문자 인식)와 각장(의미 해석) 각각 1단계 단독 vs 전체, 복합 = (맞힌 글자 + 맞힌 각장) ÷ (글자 + 각장 정답)"""
     t = {key: sum(r[key] for r in rows) for key in ("texts", "ocr_exact", "used_exact", "legs", "legs_ocr", "legs_found")}
     return {"photos": len(rows), **t,
             "text_alone_pct": percent(t["ocr_exact"], t["texts"]), "text_full_pct": percent(t["used_exact"], t["texts"]),
-            "leg_alone_pct": percent(t["legs_ocr"], t["legs"]), "leg_full_pct": percent(t["legs_found"], t["legs"])}
+            "leg_alone_pct": percent(t["legs_ocr"], t["legs"]), "leg_full_pct": percent(t["legs_found"], t["legs"]),
+            "combined_alone_pct": percent(t["ocr_exact"] + t["legs_ocr"], t["texts"] + t["legs"]),
+            "combined_full_pct": percent(t["used_exact"] + t["legs_found"], t["texts"] + t["legs"])}
 
 
 def groups_of(rows: list[dict]) -> dict[str, dict]:
@@ -140,6 +144,7 @@ def main() -> int:
     parser.add_argument("--raw", type=Path, default=ROOT / "data" / "raw")
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "eval" / "pipeline.json")
     parser.add_argument("--simulate", default="", help="dark,glare,stain,skewed 중 쉼표로 (all = 넷 다)")
+    parser.add_argument("--texts-only", action="store_true", help="글자 정답이 없는 사진(셀 기호만 있는 것)은 건너뜀 — VLM 호출 아낌")
     args = parser.parse_args()
     simulated = list(LABELS) if args.simulate == "all" else [c for c in args.simulate.split(",") if c]
     if unknown := [c for c in simulated if c not in LABELS]:
@@ -153,6 +158,9 @@ def main() -> int:
     rows, totals = [], {"errors": 0}
     for path in truths:
         truth = json.loads(path.read_text(encoding="utf-8"))
+        if args.texts_only and not any("?" not in t["text"] for t in truth["texts"]):
+            print(f"{path.stem}: 글자 정답 없음 — 건너뜀")
+            continue
         photo = args.raw / truth["image"]
         if not photo.is_file():
             print(f"{path.stem}: 사진 없음 ({photo.relative_to(ROOT) if photo.is_relative_to(ROOT) else photo}) — 건너뜀")
@@ -173,11 +181,11 @@ def main() -> int:
     groups = groups_of(rows)
     groups_path = args.out.with_name(args.out.stem + "_groups.json")
     groups_path.write_text(json.dumps(groups, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 전체':>9}  {'각장 단독':>9} {'각장 전체':>9}")
+    print(f"\n{'묶음':16} {'사진':>4}  {'글자 단독':>9} {'글자 전체':>9}  {'각장 단독':>9} {'각장 전체':>9}  {'복합 단독':>9} {'복합 전체':>9}")
     for name, g in groups.items():
         cells = [f"{g[k]:>8}%" if g[k] is not None else f"{'-':>9}" for k in
-                 ("text_alone_pct", "text_full_pct", "leg_alone_pct", "leg_full_pct")]
-        print(f"{name:16} {g['photos']:>4}  {cells[0]} {cells[1]}  {cells[2]} {cells[3]}")
+                 ("text_alone_pct", "text_full_pct", "leg_alone_pct", "leg_full_pct", "combined_alone_pct", "combined_full_pct")]
+        print(f"{name:16} {g['photos']:>4}  {cells[0]} {cells[1]}  {cells[2]} {cells[3]}  {cells[4]} {cells[5]}")
     whole = groups["원본 전체"]
     print(f"\n원본 합계: 글자 OCR {whole['ocr_exact']}/{whole['texts']} · 해석 {whole['used_exact']}/{whole['texts']}, "
           f"각장 단독 {whole['legs_ocr']} · 전체 {whole['legs_found']}/{whole['legs']}, 단계 사이 오류 {totals['errors']}건 "
