@@ -24,7 +24,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-from app.db.assembly_tree import load_tree
+from app.db.assembly_tree import LEVELS, load_tree
 from app.db.connect import DocumentDB, open_database
 from app.db.sqlite import Database
 from app.db.symbol_dictionary import load_symbols
@@ -32,6 +32,7 @@ from app.db.welding_standards import load_standards
 from app.schemas import (
     AnalysisStage,
     AssemblyNode,
+    AssemblyNodeCreate,
     Job,
     JobCreate,
     JobImage,
@@ -93,6 +94,14 @@ class MemberAlreadyExists(Exception):
     def __init__(self, email: str) -> None:
         super().__init__(email)
         self.email = email
+
+
+class AssemblyNodeInvalid(Exception):
+    """조립 경로 사전에 넣을 수 없는 노드 — 상위 노드 없음, 단계가 상위보다 위 (API 에서는 422)"""
+
+
+class AssemblyNodeConflict(Exception):
+    """이미 있는 조립 경로, 아래 노드가 있는 노드를 지움 (API 에서는 409)"""
 
 
 def new_id(prefix: str) -> str:
@@ -349,6 +358,49 @@ class Store:
             for node in self.assembly_trees[workspace_id][project.id]:
                 nodes.setdefault(node.path, node)
         return list(nodes.values())
+
+    def add_assembly_node(self, workspace_id: str, data: AssemblyNodeCreate) -> AssemblyNode:
+        """조립 경로 사전에 노드 추가 — 상위 노드가 있는 프로젝트(블록)의 트리에, 최상위면 기본 프로젝트에 넣는다"""
+        with self._lock:
+            tree = {n.path: n for n in self.get_workspace_assembly_tree(workspace_id)}
+            parent = None
+            if data.parent_path is not None:
+                parent = tree.get(data.parent_path)
+                if parent is None:
+                    raise AssemblyNodeInvalid(f"상위 노드가 조립 경로 사전에 없습니다: {data.parent_path}")
+            depth = LEVELS.index(parent.level) + 1 if parent else 0
+            if depth == len(LEVELS):
+                raise AssemblyNodeInvalid("부재(PART) 아래에는 노드를 넣을 수 없습니다")
+            level = data.level or LEVELS[depth]
+            if LEVELS.index(level) < depth:
+                raise AssemblyNodeInvalid(f"{level} 은 상위 노드({parent.level})보다 아래 단계여야 합니다")
+            path = f"{parent.path}/{data.node_id}" if parent else data.node_id
+            if path in tree:
+                raise AssemblyNodeConflict(f"이미 있는 조립 경로입니다: {path}")
+            project = next(
+                (p for p in self.list_projects(workspace_id)
+                 if parent and any(n.path == parent.path for n in self.assembly_trees[workspace_id][p.id])),
+                None,
+            ) or self.default_project(workspace_id)
+            node = AssemblyNode(node_id=data.node_id, parent_id=parent.node_id if parent else None, level=level, path=path)
+            self.assembly_trees[workspace_id][project.id].append(node)
+            self._put_project(project)
+            return node
+
+    def delete_assembly_node(self, workspace_id: str, path: str) -> bool:
+        """조립 경로 사전에서 노드 하나 지우기 (같은 경로가 여러 블록에 있으면 모두). 아래 노드가 있으면 AssemblyNodeConflict"""
+        with self._lock:
+            tree = self.get_workspace_assembly_tree(workspace_id)
+            if not any(n.path == path for n in tree):
+                return False
+            if any(n.path.startswith(f"{path}/") for n in tree):
+                raise AssemblyNodeConflict(f"아래 노드가 있어 지울 수 없습니다. 아래 노드부터 지워 주세요: {path}")
+            for project in self.list_projects(workspace_id):
+                nodes = self.assembly_trees[workspace_id][project.id]
+                if any(n.path == path for n in nodes):
+                    self.assembly_trees[workspace_id][project.id] = [n for n in nodes if n.path != path]
+                    self._put_project(project)
+            return True
 
     # ── 작업 ──
     def list_jobs(

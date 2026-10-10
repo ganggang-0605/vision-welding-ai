@@ -170,6 +170,14 @@ class AssemblyNode(ApiModel):
     path: str
 
 
+class AssemblyNodeCreate(ApiModel):
+    """조립 경로 사전에 노드 추가 — parent_path 를 빼면 최상위(블록). level 을 빼면 상위 노드의 바로 아래 단계"""
+
+    node_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50, pattern=r"^[^/]+$")]
+    parent_path: NonEmptyStr | None = None
+    level: AssemblyLevel | None = None
+
+
 # ── 작업 ──────────────────────────────────────────────────────
 
 class Marking(ApiModel):

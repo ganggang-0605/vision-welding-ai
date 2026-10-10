@@ -1,4 +1,4 @@
-import { CaretDown, Square } from '@phosphor-icons/react'
+import { CaretDown, Square, Trash } from '@phosphor-icons/react'
 import type { CSSProperties } from 'react'
 import type { AssemblyNode } from '../api/types'
 import { ASSEMBLY_LEVEL_LABEL, ASSEMBLY_LEVELS } from '../lib/labels'
@@ -8,10 +8,12 @@ interface AssemblyTreeListProps {
   nodes: AssemblyNode[]
   /** 목록 이름 (스크린 리더용) */
   label?: string
+  /** 주면 줄마다 지우기 버튼 */
+  onDelete?: (node: AssemblyNode) => void
 }
 
 /** 조립 트리 한 블록을 파인더 목록처럼 단계별 들여쓰기로 (블록 → 대조립 → 중조립 → 소조립 → 부재) */
-export function AssemblyTreeList({ nodes, label = '조립 트리' }: AssemblyTreeListProps) {
+export function AssemblyTreeList({ nodes, label = '조립 트리', onDelete }: AssemblyTreeListProps) {
   return (
     <ul className={styles.tree} aria-label={label}>
       {sortByPath(nodes).map((node) => {
@@ -30,6 +32,17 @@ export function AssemblyTreeList({ nodes, label = '조립 트리' }: AssemblyTre
             )}
             <span className={styles.id}>{node.node_id}</span>
             <span className={styles.level}>{ASSEMBLY_LEVEL_LABEL[node.level]}</span>
+            {onDelete && (
+              <button
+                type="button"
+                className={`icon-btn icon-btn--danger ${styles.delete}`}
+                onClick={() => onDelete(node)}
+                title="지우기"
+              >
+                <Trash size={15} aria-hidden="true" />
+                <span className="visually-hidden">{node.path} 지우기</span>
+              </button>
+            )}
           </li>
         )
       })}

@@ -13,7 +13,7 @@ from app.db.connect import describe, open_database
 from app.db.migrate import migrate
 from app.db.postgres import PostgresDatabase
 from app.db.sqlite import BACKEND_DIR, Database, database_path
-from app.schemas import JobCreate, ProjectCreate, SymbolEntryCreate
+from app.schemas import AssemblyNodeCreate, JobCreate, ProjectCreate, SymbolEntryCreate
 from app.store import open_store
 
 PG_URL = os.environ.get("TEST_DATABASE_URL", "")
@@ -99,6 +99,8 @@ def test_changes_survive_restart(reopen):
     entry = store.create_symbol(workspace.id, SymbolEntryCreate(code="F", kind="text", meaning="3F 용접장 각장"))
     removed = store.create_symbol(workspace.id, SymbolEntryCreate(code="X", kind="text", meaning="지울 항목"))
     store.delete_symbol(workspace.id, removed.id)
+    store.add_assembly_node(workspace.id, AssemblyNodeCreate(node_id="B1"))
+    store.add_assembly_node(workspace.id, AssemblyNodeCreate(node_id="P-1", parent_path="B1", level="PART"))
     job = store.create_job(workspace.id, JobCreate(name="셀 사진", project_id=project.id))
     image = store.add_image(job, "cell.png", "image/png", b"\x89PNG-data", 640, 480)
     store.set_preprocessed(job.id, image.image_id, b"\x89PNG-big")
@@ -112,6 +114,7 @@ def test_changes_survive_restart(reopen):
     assert again.find_user_by_email("new@example.com") is not None
     assert again.list_projects(workspace.id) == [project]
     assert again.list_symbols(workspace.id) == [entry]
+    assert [n.path for n in again.get_workspace_assembly_tree(workspace.id)] == ["B1", "B1/P-1"]
     assert again.get_job(workspace.id, job.id).status == "needs_review"
     (stored,) = again.list_images(job.id)
     assert stored.preprocessed is True and again.get_image(job.id, image.image_id)[1] == b"\x89PNG-data"

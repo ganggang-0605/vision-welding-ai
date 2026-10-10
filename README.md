@@ -109,6 +109,8 @@
 | GET | `/workspaces/{workspace_id}/projects/{project_id}` | 프로젝트 조회 |
 | GET | `/workspaces/{workspace_id}/projects/{project_id}/assembly-tree` | 프로젝트의 조립 트리 노드 목록 |
 | GET | `/workspaces/{workspace_id}/assembly-tree` | 워크스페이스의 조립 트리 하나 (조립 경로 사전) — 프로젝트별 트리를 합친 것. 2단계는 이것과 대조 |
+| POST | `/workspaces/{workspace_id}/assembly-tree` | 조립 경로 추가 `{"node_id", "parent_path", "level"}` (201). `parent_path` 를 빼면 최상위(블록), `level` 을 빼면 상위 노드의 바로 아래 단계. 상위 노드가 있는 블록의 트리에, 최상위면 기본 프로젝트에 들어간다. 이미 있는 경로면 409, 상위 노드가 없거나 부재 아래·상위보다 높은 단계면 422 |
+| DELETE | `/workspaces/{workspace_id}/assembly-tree/{path}` | 조립 경로 지우기 (204, `path` 는 `A1/L1` 처럼 그대로). 아래 노드가 있으면 409, 없는 경로면 404 |
 | GET | `/workspaces/{workspace_id}/jobs?q=&status=&project_id=` | 작업 검색 — `q`: 이름·조립 경로·표기 원문/해석(대소문자 무시), `status`·`project_id` 필터(빈 값이면 전체, 없는 프로젝트 id 면 빈 목록), 최신순 |
 | POST | `/workspaces/{workspace_id}/jobs` | 작업 생성 (201, 상태 `draft`). `project_id` 를 빼면 워크스페이스의 기본 프로젝트(화면은 워크스페이스 → 작업) — 주면 같은 워크스페이스의 프로젝트만, `related_job_ids` 는 같은 워크스페이스의 작업만 (아니면 422) |
 | GET | `/workspaces/{workspace_id}/jobs/{job_id}` | 작업 조회 |

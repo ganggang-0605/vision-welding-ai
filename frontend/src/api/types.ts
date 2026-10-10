@@ -130,6 +130,13 @@ export interface AssemblyNode {
   path: string
 }
 
+/** POST /workspaces/{workspace_id}/assembly-tree — parent_path 를 빼면 최상위(블록), level 을 빼면 상위 노드의 바로 아래 단계 */
+export interface AssemblyNodeCreate {
+  node_id: string
+  parent_path?: string | null
+  level?: AssemblyLevel | null
+}
+
 // ── 작업 ──────────────────────────────────────────────────────
 
 export type JobStatus = 'draft' | 'analyzing' | 'needs_review' | 'awaiting_approval' | 'approved'

@@ -34,3 +34,19 @@
   font-size: 0.8125rem;
   color: var(--secondary);
 }
+
+.delete {
+  margin-left: auto;
+  opacity: 0;
+}
+
+.node:hover .delete,
+.delete:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .delete {
+    opacity: 1;
+  }
+}

@@ -20,6 +20,7 @@ from app.schemas import (
     Member,
     MemberInvite,
     AssemblyNode,
+    AssemblyNodeCreate,
     SymbolEntry,
     SymbolEntryCreate,
     SymbolEntryUpdate,
@@ -27,7 +28,7 @@ from app.schemas import (
     WorkspaceCreate,
     WorkspaceUpdate,
 )
-from app.store import MemberAlreadyExists, WorkspaceKindConflict
+from app.store import AssemblyNodeConflict, AssemblyNodeInvalid, MemberAlreadyExists, WorkspaceKindConflict
 
 router = APIRouter()
 
@@ -103,6 +104,34 @@ def invite_member(body: MemberInvite, workspace: WorkspaceDep, store: StoreDep) 
 def get_workspace_assembly_tree(workspace: WorkspaceDep, store: StoreDep) -> list[AssemblyNode]:
     """워크스페이스의 조립 트리 하나 — 해석할 때 부재 번호를 이것과 대조한다"""
     return store.get_workspace_assembly_tree(workspace.id)
+
+
+@router.post(
+    "/{workspace_id}/assembly-tree", status_code=201,
+    responses={**NOT_FOUND, 409: error_response("이미 있는 조립 경로")},
+)
+def add_assembly_node(body: AssemblyNodeCreate, workspace: WorkspaceDep, store: StoreDep) -> AssemblyNode:
+    """노드 추가 — parent_path 를 빼면 최상위(블록). 상위 노드가 없거나 단계가 맞지 않으면 422"""
+    try:
+        return store.add_assembly_node(workspace.id, body)
+    except AssemblyNodeInvalid as e:
+        raise HTTPException(422, str(e)) from e
+    except AssemblyNodeConflict as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@router.delete(
+    "/{workspace_id}/assembly-tree/{path:path}", status_code=204,
+    responses={**NOT_FOUND, 409: error_response("아래 노드가 있음")},
+)
+def delete_assembly_node(path: str, workspace: WorkspaceDep, store: StoreDep) -> None:
+    """노드 지우기 — path 는 조립 경로 그대로 (예: A1/L1). 아래 노드가 있으면 409"""
+    try:
+        removed = store.delete_assembly_node(workspace.id, path)
+    except AssemblyNodeConflict as e:
+        raise HTTPException(409, str(e)) from e
+    if not removed:
+        raise HTTPException(404, f"조립 경로를 찾을 수 없습니다: {path}")
 
 
 # ── 문자/기호 사전 ──

@@ -2,6 +2,7 @@
 import { apiFetch, apiPath, asUser, jsonInit } from './client'
 import type {
   AssemblyNode,
+  AssemblyNodeCreate,
   Member,
   MemberInvite,
   SymbolEntry,
@@ -15,6 +16,21 @@ import type {
 /** GET /workspaces/{workspace_id}/assembly-tree — 워크스페이스의 조립 트리 하나 (조립 경로 사전) */
 export function getWorkspaceAssemblyTree(workspaceId: string, signal?: AbortSignal): Promise<AssemblyNode[]> {
   return apiFetch<AssemblyNode[]>(apiPath`/workspaces/${workspaceId}/assembly-tree`, { signal })
+}
+
+/** POST /workspaces/{workspace_id}/assembly-tree → 201. 이미 있는 경로면 409, 상위 노드가 없거나 단계가 맞지 않으면 422 */
+export function addAssemblyNode(
+  workspaceId: string,
+  body: AssemblyNodeCreate,
+  signal?: AbortSignal,
+): Promise<AssemblyNode> {
+  return apiFetch<AssemblyNode>(apiPath`/workspaces/${workspaceId}/assembly-tree`, jsonInit('POST', body, signal))
+}
+
+/** DELETE /workspaces/{workspace_id}/assembly-tree/{path} → 204. 아래 노드가 있으면 409 */
+export function deleteAssemblyNode(workspaceId: string, path: string, signal?: AbortSignal): Promise<void> {
+  const segments = path.split('/').map(encodeURIComponent).join('/')
+  return apiFetch<void>(`${apiPath`/workspaces/${workspaceId}/assembly-tree`}/${segments}`, { method: 'DELETE', signal })
 }
 
 /** GET /workspaces — 계정(X-User-Id)이 멤버인 워크스페이스만. userId 를 주면 그 계정으로 묻는다. */
