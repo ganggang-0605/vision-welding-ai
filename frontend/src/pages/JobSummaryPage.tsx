@@ -174,17 +174,7 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
       <p className="section-desc">승인하면 이 해석이 로봇 연계 데이터로 나가요.</p>
       {needsReview && (
         <div className={styles.acknowledge}>
-          <p className="section-desc">신뢰도가 기준에 못 미친 작업이에요. 아래 항목을 직접 확인한 뒤에 승인해 주세요.</p>
-          {job.needs_review.length > 0 && (
-            <ul className="check-list check-list--attention">
-              {job.needs_review.map((item) => (
-                <li key={item}>
-                  <WarningCircle size={18} weight="fill" aria-hidden="true" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="section-desc">신뢰도가 기준에 못 미친 작업이에요. 위의 확인 필요 항목을 직접 확인한 뒤에 승인해 주세요.</p>
           <label className={styles.checkbox}>
             <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
             확인 항목을 직접 확인했고, 이대로 로봇에 보내도 돼요
@@ -219,9 +209,25 @@ function ApproveForm({ job, onApproved }: { job: Job; onApproved: () => void }) 
 }
 
 function ExportSection({ job }: { job: Job }) {
+  return (
+    <section className="section" aria-labelledby="export-title">
+      <h2 id="export-title" className="section-title">
+        로봇 연계 데이터
+      </h2>
+      {/* 승인 전에는 내보내기 API 가 409 라 부르지 않는다 */}
+      {job.status === 'approved' ? <ExportedJson job={job} /> : <ExportPending />}
+    </section>
+  )
+}
+
+function ExportPending() {
+  return <p className="section-desc">승인한 뒤에 JSON으로 내보낼 수 있어요.</p>
+}
+
+function ExportedJson({ job }: { job: Job }) {
   const workspace = useWorkspace()
-  // 승인되면(status 변경) 다시 불러온다.
-  const exported = useAsync((signal) => exportJob(workspace.id, job.id, signal), [workspace.id, job.id, job.status])
+  // 다시 승인하면(approved_at 변경) 다시 불러온다.
+  const exported = useAsync((signal) => exportJob(workspace.id, job.id, signal), [workspace.id, job.id, job.approved_at])
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -230,53 +236,46 @@ function ExportSection({ job }: { job: Job }) {
     return () => clearTimeout(timer)
   }, [copied])
 
-  return (
-    <section className="section" aria-labelledby="export-title">
-      <h2 id="export-title" className="section-title">
-        로봇 연계 데이터
-      </h2>
-      {isApiError(exported.error, 409) ? (
-        <p className="section-desc">승인한 뒤에 JSON으로 내보낼 수 있어요.</p>
-      ) : (
-        <AsyncView state={exported}>
-          {(data) => {
-            const json = JSON.stringify(data, null, 2)
-            const copy = async () => {
-              try {
-                await navigator.clipboard.writeText(json)
-                setCopied(true)
-              } catch {
-                // http 로 접속한 휴대폰 등 클립보드를 쓸 수 없는 환경: 내보내기 버튼으로 받으면 된다.
-              }
-            }
-            return (
-              <div className={styles.code}>
-                <div className={styles.codeHeader}>
-                  <span className="mono">{data.job_id}.json</span>
-                  <span className="button-row">
-                    <button type="button" className="btn btn--small" onClick={copy}>
-                      {copied ? <Check size={14} weight="bold" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                      {copied ? '복사됨' : '복사'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--small btn--primary"
-                      onClick={() => downloadJson(`${data.job_id}.json`, data)}
-                    >
-                      <DownloadSimple size={14} aria-hidden="true" />
-                      내보내기
-                    </button>
-                  </span>
-                </div>
-                <pre className="code-block">
-                  <JsonHighlight json={json} />
-                </pre>
-              </div>
-            )
-          }}
-        </AsyncView>
-      )}
-    </section>
+  return isApiError(exported.error, 409) ? (
+    <ExportPending />
+  ) : (
+    <AsyncView state={exported}>
+      {(data) => {
+        const json = JSON.stringify(data, null, 2)
+        const copy = async () => {
+          try {
+            await navigator.clipboard.writeText(json)
+            setCopied(true)
+          } catch {
+            // http 로 접속한 휴대폰 등 클립보드를 쓸 수 없는 환경: 내보내기 버튼으로 받으면 된다.
+          }
+        }
+        return (
+          <div className={styles.code}>
+            <div className={styles.codeHeader}>
+              <span className="mono">{data.job_id}.json</span>
+              <span className="button-row">
+                <button type="button" className="btn btn--small" onClick={copy}>
+                  {copied ? <Check size={14} weight="bold" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                  {copied ? '복사됨' : '복사'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--small btn--primary"
+                  onClick={() => downloadJson(`${data.job_id}.json`, data)}
+                >
+                  <DownloadSimple size={14} aria-hidden="true" />
+                  내보내기
+                </button>
+              </span>
+            </div>
+            <pre className="code-block">
+              <JsonHighlight json={json} />
+            </pre>
+          </div>
+        )
+      }}
+    </AsyncView>
   )
 }
 
