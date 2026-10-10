@@ -379,6 +379,24 @@ def test_corrected_cell_and_leg_lengths():
     assert result["leg_lengths"] == [{"code": "V", "size_mm": 6, "raw_text": "V6", "meaning": "2F 용접장 각장", "ref_ids": []}]
 
 
+def test_vlm_echo_of_corrected_cell_is_not_a_reading(monkeypatch):
+    """작업자가 고친 셀 형태·각장을 VLM이 위치 없이 사진에서 읽은 것처럼 돌려주면 버림 (OCR↔VLM 불일치·marking.symbols로 새지 않게).
+    위치가 있으면 사진에서 실제로 본 것이라 남김"""
+    response = copy.deepcopy(VLM_EXAMPLE)
+    response["symbols"] += [{"label": "slit", "ref_id": "new1", "bbox": None}, {"label": "slot", "ref_id": "new2", "bbox": None},
+                            {"label": "scallop", "ref_id": "new3", "bbox": [5, 5, 40, 40]}]
+    response["texts"].append({"text": "V6", "ref_id": "new4", "bbox": None})
+    fake_vlm(monkeypatch, response, runs=1)
+    result = run(corrections=[
+        {"target": "cell", "value": {"left": ["slit"], "right": ["slot", "scallop"]}},
+        {"target": "leg_lengths", "value": [{"code": "V", "size_mm": 6, "raw_text": "V6"}]},
+    ])
+    reading = result["vlm"]["reading"]
+    assert [x["label"] for x in reading["symbols"]] == ["▲", "scallop"]
+    assert "V6" not in [x["text"] for x in reading["texts"]]
+    assert result["cell"] == {"left": ["slit"], "right": ["slot", "scallop"], "ref_ids": []}
+
+
 # ── 작업에 적은 조립 경로 ──
 
 def test_job_assembly_path_used_when_photo_has_no_part():

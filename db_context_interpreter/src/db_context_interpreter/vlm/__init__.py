@@ -140,6 +140,7 @@ def resolve(out: dict, vision_result: dict, context_input: dict,
         for kind in ("texts", "symbols") for x in previous[kind] if x["ref_id"][0] == "v"
     }
     used = {int(v[1:]) for v in previous_ids.values()}
+    echoes = corrected_values(context_input)
     aliases: dict[str, str] = {}  # 응답의 임시 ID(new1 …) → 붙인 ID
     reading: dict[str, list] = {"texts": [], "symbols": []}
     seen: set[str] = set()
@@ -150,6 +151,8 @@ def resolve(out: dict, vision_result: dict, context_input: dict,
             if not value:
                 continue
             ref = str(item.get("ref_id") or "")
+            if ref not in known[kind] and not valid_bbox(item.get("bbox")) and (kind, normalize(value)) in echoes:
+                continue  # 작업자 수정을 사진에서 읽은 것처럼 옮겨 적은 것 — 위치가 없으면 읽기가 아님
             if ref not in known[kind] or ref in seen:
                 ref = previous_ids.get((kind, normalize(value)))
                 if ref is None or ref in seen:
@@ -158,7 +161,7 @@ def resolve(out: dict, vision_result: dict, context_input: dict,
             seen.add(ref)
             entry = {field: value, "ref_id": ref}
             bbox = item.get("bbox")
-            if isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(n, int | float) and n >= 0 for n in bbox):
+            if valid_bbox(bbox):
                 if scale == (1.0, 1.0):
                     entry["bbox"] = list(bbox)
                 else:
@@ -174,6 +177,21 @@ def resolve(out: dict, vision_result: dict, context_input: dict,
         if ref in seen and isinstance(m.get("meaning"), str) and m["meaning"].strip():
             meanings[ref] = m["meaning"].strip()
     return reading, meanings
+
+
+def valid_bbox(bbox) -> bool:
+    return isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(n, int | float) and n >= 0 for n in bbox)
+
+
+def corrected_values(context_input: dict) -> set[tuple[str, str]]:
+    """작업자가 고친 셀 형태·각장 값 {(texts | symbols, 정규화한 값)} — VLM이 이 값을 사진에서 읽은 것처럼 되돌려주는지 가리는 데 씀"""
+    values = set()
+    for c in context_input["corrections"]:
+        if c["target"] == "cell":
+            values |= {("symbols", normalize(label)) for side in ("left", "right") for label in c["value"][side]}
+        elif c["target"] == "leg_lengths":
+            values |= {("texts", normalize(leg["raw_text"])) for leg in c["value"] if leg.get("raw_text")}
+    return values
 
 
 def keep_corrected_vlm_ids(reading: dict, previous: dict, context_input: dict, seen: set[str]) -> None:
